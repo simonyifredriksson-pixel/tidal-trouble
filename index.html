@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidal Trouble</title>
+<meta name="description" content="A chaotic low-poly fishing adventure for 1-4 players. Catch weird fish, upgrade your boat, hunt the leviathans of Driftwood Bay.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Nunito:wght@400;700;800&family=Alegreya:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/main.css?v=1790183165">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 24 L14 14 L30 12 L40 20 L40 28 L30 36 L14 34Z' fill='%233fa3c4'/%3E%3Cpath d='M40 20 L46 12 L46 36 L40 28Z' fill='%231f6384'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="title" class="gone"></div>
+  <div id="screens"></div>
+</div>
+<div id="loading">
+  <div class="load-box">
+    <div class="load-logo">TIDAL TROUBLE<small>DRIFTWOOD BAY</small></div>
+    <div class="load-bar"><i></i></div>
+    <div class="load-step">Waking up...</div>
+  </div>
+</div>
+<noscript><p style="color:#fff;padding:20px">Tidal Trouble needs JavaScript and WebGL.</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" async></script>
+<script type="module" src="src/main.js?v=1790183165"></script>
+</body>
+</html>
