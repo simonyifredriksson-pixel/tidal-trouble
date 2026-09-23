@@ -5,14 +5,14 @@
    caches the PNG as a data URL. Undiscovered species render as a dark
    silhouette so the journal shows you the SHAPE of what you are missing. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { fishMesh } from '../art/FishArt.js?v=1790185859';
-import { buildRod } from '../art/RodArt.js?v=1790185859';
-import { buildBoat } from '../art/BoatArt.js?v=1790185859';
-import { buildLeviathan } from '../art/CreatureArt.js?v=1790185859';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790185859';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790185859';
-import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { fishMesh } from '../art/FishArt.js?v=1790192871';
+import { buildRod } from '../art/RodArt.js?v=1790192871';
+import { buildBoat } from '../art/BoatArt.js?v=1790192871';
+import { buildLeviathan } from '../art/CreatureArt.js?v=1790192871';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790192871';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790192871';
+import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790192871';
 
 let R = null, scene, cam, sun, hemi;
 const cache = new Map();
@@ -95,6 +95,17 @@ export function boatThumb(cfg) {
   b.group.rotation.y = 0.9;
   frame(b.group, 1.2, [0.6, 0.35, 1]);
   const url = shoot(b.group);
+  cache.set(key, url);
+  return url;
+}
+
+/** Any model, framed and cached by `key`. */
+export function objThumb(key, make, dir = [0.4, 0.35, 1], dist = 1.15) {
+  if (cache.has(key)) return cache.get(key);
+  if (!init()) return '';
+  const obj = make();
+  frame(obj, dist, dir);
+  const url = shoot(obj);
   cache.set(key, url);
   return url;
 }

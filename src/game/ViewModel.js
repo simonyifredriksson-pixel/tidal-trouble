@@ -9,11 +9,11 @@
    Poses are spring-blended targets per tool and action, so a cast is a
    wind-up and a whip, reeling turns the crank, and a hammer swings. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790185859';
-import { MAT } from '../art/Materials.js?v=1790185859';
-import { buildRod } from '../art/RodArt.js?v=1790185859';
-import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790192871';
+import { MAT } from '../art/Materials.js?v=1790192871';
+import { buildRod } from '../art/RodArt.js?v=1790192871';
+import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790192871';
 
 function handMesh(skin, sleeve, side) {
   const b = new MeshBuilder(rng(side > 0 ? 3 : 4));
@@ -68,6 +68,12 @@ function toolMesh(id) {
     b.color(0x3a6aa0).box(0.4, 0.05, 0.05, 0, 0.5, 0);
     b.color(0x9aa0a8).cyl(0.02, 0.02, -0.4, 0.5, 6, true);
     for (let k = 0; k < 8; k++) b.color(0xb8bec4).beam([Math.cos(k) * 0.05, -0.35 + k * 0.08, Math.sin(k) * 0.05], [Math.cos(k + 1) * 0.05, -0.31 + k * 0.08, Math.sin(k + 1) * 0.05], 0.03, 0.01);
+  } else if (id === 'axe') {
+    b.color(0x7a5836).cyl(0.022, 0.027, -0.22, 0.56, 6, true);
+    b.color(0x5a3e28).cyl(0.03, 0.03, -0.22, -0.12, 6, true);
+    b.color(0x8a9098).box(0.03, 0.13, 0.2, 0, 0.5, 0.09);
+    b.color(0xd8dce0).box(0.034, 0.17, 0.035, 0, 0.5, 0.2);
+    b.color(0x5a5e64).box(0.052, 0.08, 0.08, 0, 0.5, -0.02);
   } else if (id === 'trap') {
     b.color(0x5a4230);
     for (const [x, z] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.12], [0.18, 0.12]]) b.box(0.025, 0.24, 0.025, x, 0.12, z);
@@ -207,6 +213,9 @@ export class ViewModel {
       R = { x: 0.1, y: -0.35, z: -0.62, rx: 0.3, ry: 0, rz: 0 };
       Lh = { x: -0.1, y: -0.35, z: -0.62, rx: 0.3, ry: 0, rz: 0, show: true };
       if (s.busy && this.tools.auger) this.tools.auger.rotation.y += dt * 20;
+    } else if (tool === 'axe') {
+      R = { x: 0.27, y: -0.3, z: -0.48, rx: -0.55, ry: 0.15, rz: 0.15 };
+      if (this.action === 'chop') { const k = clamp(this.actT / 0.42, 0, 1); const up = k < 0.35 ? k / 0.35 : 1 - (k - 0.35) / 0.65; R.rx = -0.55 - up * 1.2 + (k > 0.35 ? (k - 0.35) * 1.8 : 0); R.y += up * 0.12; R.z -= (k > 0.35 ? (1 - k) * 0.25 : 0); }
     } else if (tool === 'trap') {
       R = { x: 0.14, y: -0.38, z: -0.5, rx: 0, ry: 0.3, rz: 0 };
       Lh = { x: -0.14, y: -0.38, z: -0.5, rx: 0, ry: -0.3, rz: 0, show: true };
@@ -230,6 +239,19 @@ export class ViewModel {
       this.lastP = p;
     }
     this.toolHolder.visible = this.swimW < 0.5;
+    // the walkie-talkie: held up to your mouth in the left hand while C is down
+    if (!this.walkieMesh) {
+      const wb = new MeshBuilder(rng(8));
+      wb.color(0x2a2e34).box(0.07, 0.15, 0.04, 0, 0.08, 0.02);
+      wb.color(0x3a3e44).box(0.06, 0.05, 0.005, 0, 0.12, 0.042);
+      wb.color(0xe8b030).box(0.03, 0.02, 0.01, 0, 0.05, 0.045);
+      wb.color(0x1a1a1a).cyl(0.006, 0.005, 0.15, 0.3, 4, true, 0.022, 0.02);
+      wb.color(0xe04a2a).box(0.012, 0.012, 0.012, -0.02, 0.165, 0.02);
+      this.walkieMesh = new THREE.Mesh(wb.build(), MAT.solid);
+      this.left.add(this.walkieMesh);
+    }
+    this.walkieMesh.visible = !!s.walkie;
+    if (s.walkie) Lh = { x: -0.12, y: -0.2, z: -0.34, rx: 0.1, ry: 0.35, rz: 0.1, show: true };
     const sw = this.switchT > 0 ? this.switchT / 0.35 : 0;
     const k = 1 - Math.exp(-14 * dt);
     const apply = (grp, T, bobK) => {

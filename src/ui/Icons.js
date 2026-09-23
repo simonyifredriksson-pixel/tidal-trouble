@@ -38,6 +38,9 @@ const I = {
   grapple: [P('M22 26 L26 26 L26 44 L22 44Z', M2), P('M12 16 L22 26 L22 30 L10 18Z', M1), P('M36 16 L26 26 L26 30 L38 18Z', M3), P('M20 8 L28 8 L28 26 L20 26Z', M2), P('M20 8 L24 8 L24 26 L20 26Z', M1), P('M10 18 L8 12 L13 15Z', M1), P('M38 18 L40 12 L35 15Z', M3), P('M22 4 L26 4 L28 8 L20 8Z', M1)],
   auger: [P('M8 8 L40 8 L40 13 L8 13Z', B3), P('M8 8 L40 8 L40 10 L8 10Z', B2), P('M22 13 L26 13 L26 34 L22 34Z', M2),
     P('M18 20 L30 17 L30 21 L18 24Z', M1), P('M18 26 L30 23 L30 27 L18 30Z', M1), P('M18 32 L30 29 L30 33 L18 36Z', M1), P('M22 36 L26 36 L24 44Z', M3)],
+  axe: [P('M26 12 L30 12 L34 44 L30 44Z', W2), P('M26 12 L28 12 L32 44 L30 44Z', W1), P('M10 6 L30 10 L30 22 L10 26 L6 16Z', M2), P('M10 6 L30 10 L30 14 L8 12Z', M1), P('M6 16 L10 26 L8 26 L4 16Z', M3)],
+  tentacle: [P('M6 44 Q4 24 16 16 Q28 8 34 18 Q38 26 30 28 Q24 28 26 22 Q20 20 16 28 Q12 36 14 44Z', '#8a2e3a'), P('M16 16 Q28 8 34 18 L30 20 Q26 14 18 20Z', '#b0485a'), P('M14 34 L17 33 L17 36Z', '#f4d8cc'), P('M18 26 L21 25 L21 28Z', '#f4d8cc'), P('M26 20 L29 20 L28 23Z', '#f4d8cc')],
+  leviathan: [P('M2 30 Q12 18 26 18 Q40 18 46 26 L40 28 Q34 24 26 26 Q14 28 8 34Z', K1), P('M2 30 Q12 18 26 18 L26 22 Q14 24 6 32Z', M3), P('M14 20 L18 12 L21 20Z', K2), P('M24 18 L28 10 L31 18Z', K2), P('M34 19 L38 13 L40 21Z', K2), P('M36 22 L39 22 L38 25Z', G1), P('M2 36 Q14 32 24 38 Q34 44 46 36 L46 44 L2 44Z', B2)],
   hands: [P('M12 22 L22 18 L26 26 L24 38 L14 38 L10 30Z', C2), P('M12 22 L22 18 L20 24 L12 26Z', C1), P('M24 38 L14 38 L14 42 L24 42Z', B2), P('M26 20 L36 22 L38 32 L34 38 L26 36Z', C3), P('M26 36 L34 38 L34 42 L26 40Z', B3)],
   // bait
   worm: [P('M8 34 Q14 22 22 30 Q30 38 38 26 L42 28 Q32 44 22 36 Q14 30 12 36Z', R1), P('M12 36 Q14 30 22 36 Q32 44 42 28 L42 31 Q32 46 22 39 Q14 33 12 38Z', R2), P('M38 26 L42 28 L43 25Z', R3), P('M40 26 L41 26 L41 27 L40 27Z', K3)],
@@ -120,8 +123,8 @@ export function ic(name, cls = '') {
 export const ICON_NAMES = Object.keys(I);
 
 /* Which icon stands for what. */
-export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger' };
+export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe' };
 export const EVENT_ICON = { storm: 'storm', migration: 'school', giant: 'fin', thief: 'mask', whirlpool: 'whirl', meteor: 'meteor' };
-export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss' };
+export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light' };
 export const CLUE_ICON = { mark: 'eye', scale: 'scale', sound: 'ear', sonar: 'ping', catch: 'hook' };
 export const PART_ICON = { engine: 'engine', hull: 'shield', storage: 'box', lights: 'light', mount: 'harpoon', sonar: 'sonar', holders: 'rod' };

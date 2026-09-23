@@ -1,11 +1,20 @@
-/* NPCs.js - the people of Driftwood Bay standing where Settlement put them,
-   plus villagers strolling between the lamps. NPCs look at you when you
-   come near and gesture while they talk. */
+/* NPCs.js - the people of Driftwood Bay and beyond, standing where
+   Settlement put them, plus villagers strolling between the lamps. NPCs
+   look at you when you come near and gesture while they talk.
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { Character, randomLook } from '../art/Character.js?v=1790185859';
-import { NPCS, VILLAGERS } from '../data/NPCData.js?v=1790185859';
-import { damp, wrapAngle } from '../core/Util.js?v=1790185859';
+   The fishermen of Vigil's End sit or stand on their cliffs with a rod in
+   their hands and a line running down into the fog; they turn their heads
+   to you, never their bodies - they have not taken their eyes off the
+   water in years. */
+
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { Character, randomLook } from '../art/Character.js?v=1790192871';
+import { buildRod } from '../art/RodArt.js?v=1790192871';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790192871';
+import { NPCS, VILLAGERS } from '../data/NPCData.js?v=1790192871';
+import { damp, wrapAngle } from '../core/Util.js?v=1790192871';
+
+const _v = new THREE.Vector3();
 
 export class NPCs {
   constructor(game) {
@@ -17,11 +26,24 @@ export class NPCs {
       if (!a) continue;
       const pos = (a.pos || a).clone();
       const c = new Character(def.look, def.id.length * 17);
-      c.setName(def.name);
+      c.setName(def.full.replace(/ (of the|the) .*$/, ''));
       c.root.position.copy(pos);
       c.root.rotation.y = a.face || 0;
       game.scene.add(c.root);
-      this.list.push({ def, c, pos, face: a.face || 0, talking: 0, line: 0 });
+      const n = { def, c, pos, face: a.face || 0, talking: 0, line: 0 };
+      if (def.pose === 'fish' || def.pose === 'sitfish') {
+        // an old rod, and a line all the way down to the water
+        const rod = buildRod(ROD_BY_ID[['basic', 'reinforced', 'deepwater'][def.id.length % 3]]);
+        rod.group.scale.setScalar(0.85);
+        rod.group.rotation.x = Math.PI / 2 - 0.35;
+        c.hold(rod.group);
+        rod.bend(0.12, 0);
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xd8d8d0, transparent: true, opacity: 0.6 }));
+        line.frustumCulled = false;
+        game.scene.add(line);
+        n.rod = rod; n.fline = line; n.lineTo = a.line ? a.line.clone() : pos.clone().add(new THREE.Vector3(Math.sin(n.face) * 20, -10, Math.cos(n.face) * 20));
+      }
+      this.list.push(n);
     }
     this.walkers = [];
     const pts = S.anchors.wander || [];
@@ -47,19 +69,29 @@ export class NPCs {
     const me = G.player.pos;
     for (const n of this.list) {
       const d = n.pos.distanceTo(me);
-      n.c.root.visible = d < 160;
+      n.c.root.visible = d < 170;
+      if (n.fline) n.fline.visible = n.c.root.visible;
       if (!n.c.root.visible) continue;
       n.talking = Math.max(0, n.talking - dt);
-      const pose = n.def.pose === 'sit' ? 'sit' : n.talking > 0 ? 'talk' : 'idle';
-      // turn to face you when you are close (not the sitter, he is comfy)
-      if (d < 9 && n.def.pose !== 'sit') {
+      const P = n.def.pose;
+      const still = P === 'sit' || P === 'sitfish' || P === 'fish';
+      const pose = P === 'sit' ? 'sit' : P === 'sitfish' ? 'sitfish' : P === 'fish' ? 'fish' : n.talking > 0 ? 'talk' : 'idle';
+      // turn to face you when you are close (the sitters and the fishermen only turn their heads)
+      if (d < 9 && !still) {
         const want = Math.atan2(me.x - n.pos.x, me.z - n.pos.z);
         n.c.root.rotation.y += wrapAngle(want - n.c.root.rotation.y) * Math.min(1, dt * 3);
-      } else if (n.def.pose !== 'sit') n.c.root.rotation.y += wrapAngle(n.face - n.c.root.rotation.y) * Math.min(1, dt);
+      } else if (!still) n.c.root.rotation.y += wrapAngle(n.face - n.c.root.rotation.y) * Math.min(1, dt);
       const hy = Math.atan2(me.x - n.pos.x, me.z - n.pos.z) - n.c.root.rotation.y;
-      n.c.lookYaw = d < 9 ? wrapAngle(hy) : 0;
-      n.c.lookPitch = d < 9 ? -Math.atan2(G.player.eye.y - (n.pos.y + 1.6), d) * 0.6 : 0;
+      n.c.lookYaw = d < 9 ? wrapAngle(hy) * (still ? 0.8 : 1) : 0;
+      n.c.lookPitch = d < 9 ? -Math.atan2(G.player.eye.y - (n.pos.y + 1.6), d) * 0.6 : (still ? 0.25 : 0);
       n.c.update(dt, pose, 0);
+      if (n.fline) {
+        n.rod.tip.getWorldPosition(_v);
+        const to = n.lineTo;
+        to.y = G.world.sea(to.x, to.z);
+        n.fline.geometry.setFromPoints([_v.clone(), to.clone()]);
+        n.rod.bend(0.12 + Math.sin(G.world.time * 0.7 + n.pos.x) * 0.03, 0);
+      }
     }
     for (const w of this.walkers) {
       const d0 = w.pos.distanceTo(me);
@@ -85,6 +117,7 @@ export class NPCs {
     }
   }
 
+  /** The next line in this person's conversation (they tell their story in order). */
   talk(n) {
     n.talking = 4;
     const line = n.def.lines[n.line % n.def.lines.length];

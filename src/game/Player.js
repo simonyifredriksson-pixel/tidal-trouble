@@ -15,9 +15,9 @@
    turning is added to your yaw, so standing on a turning boat turns you
    with it instead of making the world spin round you. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790185859';
-import { Bus } from '../core/Bus.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790192871';
+import { Bus } from '../core/Bus.js?v=1790192871';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -137,7 +137,7 @@ export class Player {
       mz = input.axis('KeyS', 'KeyW');
       jump = input.pressed('Space');
       sprint = input.held('ShiftLeft') || input.held('ShiftRight');
-      dive = input.held('ControlLeft') || input.held('KeyC');
+      dive = input.held('KeyQ');
     }
     this.sprint = sprint;
     const heavy = this.held && G.loot.get(this.held)?.kg > 40;

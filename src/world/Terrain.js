@@ -12,11 +12,11 @@
    3 m skirt on every edge so the seam between a detailed and a coarse
    chunk is a wall of ground, never a crack you can see the sky through. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { Noise2D } from '../core/Noise.js?v=1790185859';
-import { smoothstep, clamp, lerp, hash3 } from '../core/Util.js?v=1790185859';
-import { hexToLinear, mixHex } from '../art/Geo.js?v=1790185859';
-import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights } from './MapData.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { Noise2D } from '../core/Noise.js?v=1790192871';
+import { smoothstep, clamp, lerp, hash3 } from '../core/Util.js?v=1790192871';
+import { hexToLinear, mixHex } from '../art/Geo.js?v=1790192871';
+import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights } from './MapData.js?v=1790192871';
 
 const N = new Noise2D(WORLD.seed);
 const N2 = new Noise2D(WORLD.seed + 101);
@@ -166,8 +166,8 @@ export function colourAt(x, z, h, ny) {
   if (h < -0.35) {
     // under water
     const deep = smoothstep(-0.3, -14, h);
-    const sand = rw.tropic > 0.5 ? 0xe8d49c : rw.black > 0.5 ? 0x2e333a : rw.frost > 0.5 ? 0x8d9aa0 : (inLake ? 0x7a6d4c : 0xc8b384);
-    c = mixHex(sand, rw.black > 0.5 ? 0x14181e : 0x3f5a58, deep * 0.85);
+    const sand = rw.tropic > 0.5 ? 0xe8d49c : rw.black > 0.5 ? 0x2e333a : rw.reach > 0.5 ? 0x4e5256 : rw.frost > 0.5 ? 0x8d9aa0 : (inLake ? 0x7a6d4c : 0xc8b384);
+    c = mixHex(sand, rw.black > 0.5 || rw.reach > 0.5 ? 0x14181e : 0x3f5a58, deep * 0.85);
     return c;
   }
   const rock = ny < 0.72;
@@ -178,6 +178,11 @@ export function colourAt(x, z, h, ny) {
   } else if (rw.black > 0.5) {
     c = rock ? mixHex(0x2a2d33, 0x1f2226, 0.5 + v) : mixHex(0x353b3a, 0x2b3530, 0.5 + v);
     if (h < 1.2) c = 0x3a3c40;
+  } else if (rw.reach > 0.5) {
+    // Vigil's End: wet grey stone, dark shingle, tired grey-green turf
+    if (rock) c = mixHex(0x5f646a, 0x464a50, 0.5 + v);
+    else if (h < 1.7) c = mixHex(0x545659, 0x67686a, 0.5 + v);
+    else c = mixHex(0x707862, 0x5b6352, 0.5 + v);
   } else if (rw.tropic > 0.5) {
     if (rock) c = mixHex(0x8a7b66, 0x6f604e, 0.5 + v);
     else if (h < 1.9) c = mixHex(0xf3e0a8, 0xe7cf8e, 0.5 + v);
@@ -194,7 +199,7 @@ export function colourAt(x, z, h, ny) {
   }
   if (!rock && h > 0.6) {
     const pa = pathAt(x, z);
-    if (pa > 0) c = mixHex(c, rw.frost > 0.5 ? 0xc6c0b0 : rw.tropic > 0.5 ? 0xd8c08a : 0xb59566, pa * 0.95);
+    if (pa > 0) c = mixHex(c, rw.frost > 0.5 ? 0xc6c0b0 : rw.tropic > 0.5 ? 0xd8c08a : rw.reach > 0.5 ? 0x8a8676 : 0xb59566, pa * 0.95);
     const pd = padAt(x, z);
     if (pd > 0 && rw.frost < 0.5) c = mixHex(c, rw.tropic > 0.5 ? 0xe5d19c : 0x9f9a60, pd * 0.35);
   }

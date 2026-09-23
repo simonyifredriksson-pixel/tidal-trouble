@@ -75,7 +75,7 @@ export const LEVIATHANS = [
     ],
     story: 'Old Shellback was mistaken for an island by the first sailors to reach the coast. They built a hut on him. He did not notice for eleven years.' },
 
-  { id: 'tentacula', name: 'Queen Tentacula', title: 'The Kraken', region: 'open', kind: 'kraken', size: 30,
+  { id: 'tentacula', name: 'Queen Tentacula', title: 'The Arms Below the Lighthouse', region: 'open', kind: 'kraken', size: 30,
     colors: { back: 0x8a2a3a, belly: 0xf0b0b0, fin: 0x6a1a2a, glow: 0xff6a8a },
     lure: { x: -980, z: -260, r: 60, time: 'any', water: 'sea' }, rod: 4, hp: 130, stamina: 200, power: 5.5, reward: 14000,
     clues: [

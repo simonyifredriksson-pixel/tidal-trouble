@@ -19,16 +19,17 @@
      bottle  a message; reading it adds a page to the story
      slap    handled at landing: it goes for your face */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790185859';
-import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790185859';
-import { MAT } from '../art/Materials.js?v=1790185859';
-import { clamp, uid } from '../core/Util.js?v=1790185859';
-import { Bus } from '../core/Bus.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790192871';
+import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790192871';
+import { MAT } from '../art/Materials.js?v=1790192871';
+import { MeshBuilder } from '../art/Geo.js?v=1790192871';
+import { clamp, uid } from '../core/Util.js?v=1790192871';
+import { Bus } from '../core/Bus.js?v=1790192871';
 
 const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
-let chestGeo = null;
+let chestGeo = null, starGeo = null;
 
 export class Loot {
   constructor(game) {
@@ -49,7 +50,7 @@ export class Loot {
       yaw: o.yaw ?? Math.random() * 6.28, roll: 0, spinY: (Math.random() - 0.5) * 6, spinR: (Math.random() - 0.5) * 8,
       boat: null, local: new THREE.Vector3(), held: null, state: 'free', t: 0, flop: o.flop ?? (sp.junk ? 0 : 22),
       inWater: 0, fuse: -1, puff: 0, mimic: sp.beh === 'mimic', opened: false, shockT: 0, stunned: !!o.stunned,
-      caughtBy: o.by || null, grounded: false, owner: o.owner || null, v: o.v || null, zone: o.zone || 0,
+      caughtBy: o.by || null, grounded: false, owner: o.owner || null, v: o.v || null, zone: o.zone || 0, fav: !!o.fav,
     };
     it.r = sp.junk ? 0.3 : clamp(it.cm / 200, 0.12, 2.5);
     this._mesh(it);
@@ -83,6 +84,7 @@ export class Loot {
   remove(it, fx = null) {
     if (!it) return;
     this.group.remove(it.mesh);
+    if (it.star) this.group.remove(it.star);
     this.items.delete(it.id);
     if (fx === 'splash') this.game.fx.splash(it.pos.x, it.pos.y, it.pos.z, 0.6);
   }
@@ -166,6 +168,7 @@ export class Loot {
     for (const it of [...this.items.values()]) {
       it.t += dt;
       it.shockT = Math.max(0, it.shockT - dt);
+      this._star(it);
       if (it.held) { this._held(it); continue; }
       if (it.state === 'cooler') { it.mesh.visible = false; continue; }
       it.mesh.visible = true;
@@ -337,21 +340,21 @@ export class Loot {
     const out = [];
     for (const it of this.items.values()) {
       out.push([it.id, it.sp, +it.kg.toFixed(2), Math.round(it.cm), +it.pos.x.toFixed(2), +it.pos.y.toFixed(2), +it.pos.z.toFixed(2), +it.yaw.toFixed(2), +it.roll.toFixed(2),
-        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone]);
+        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone, it.fav ? 1 : 0]);
     }
     return out;
   }
   applySnapshot(arr) {
     const seen = new Set();
     for (const a of arr) {
-      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone] = a;
+      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone, fav] = a;
       seen.add(id);
       let it = this.items.get(id);
       if (!it) it = this.spawn({ id, sp, kg, cm, pos: _v.set(x, y, z), flop: 0, v: v || null, mult: mult || 1, zone: zone || 0 });
       if (!it) continue;
       it.pos.lerp(_w.set(x, y, z), 0.5);
       it.yaw = yaw; it.roll = roll; it.boat = boatId ? this.game.boatById(boatId) : null;
-      it.held = held || null; it.state = cool ? 'cooler' : 'free'; it.puff = puff; it.stunned = !!stunned;
+      it.held = held || null; it.state = cool ? 'cooler' : 'free'; it.puff = puff; it.stunned = !!stunned; it.fav = !!fav;
       if (!!opened !== it.opened) { it.opened = !!opened; this._mesh(it); }
       if (fuse && Math.random() < 0.5) this.game.fx.sparks(x, y + 0.2, z, 1, 0xffd24a);
     }
@@ -360,11 +363,11 @@ export class Loot {
 
   /* ---------------- persistence (host) ---------------- */
   saveOnBoat(boat) {
-    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone }));
+    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0 }));
   }
   loadOnBoat(boat, list) {
     for (const o of list || []) {
-      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn });
+      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f });
       if (!it) continue;
       it.boat = boat; it.local.set(o.x, Math.max(o.y, boat.deck + 0.05), o.z); it.vel.set(0, 0, 0);
       if (o.c) { it.state = 'cooler'; it.mesh.visible = false; }
@@ -373,4 +376,29 @@ export class Loot {
   }
 
   value(it) { return fishValue(FISH_BY_ID[it.sp], it.kg, it.mult); }
+
+  /* a favourite wears a little gold star that floats above it */
+  _star(it) {
+    const show = it.fav && it.state !== 'cooler' && !it.held;
+    if (!show) { if (it.star) it.star.visible = false; return; }
+    if (!it.star) {
+      if (!starGeo) {
+        const b = new MeshBuilder();
+        b.color(0xf2c14a);
+        const P = [];
+        for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.07 : 0.16; P.push([Math.cos(a) * r, Math.sin(a) * r, 0]); }
+        for (let i = 0; i < 10; i++) b.card([0, 0, 0], P[i], P[(i + 1) % 10]);
+        b.color(0x9a6a1a);
+        for (let i = 0; i < 10; i++) b.card([0, 0, -0.012], [P[i][0] * 1.2, P[i][1] * 1.2, -0.012], [P[(i + 1) % 10][0] * 1.2, P[(i + 1) % 10][1] * 1.2, -0.012]);
+        starGeo = b.build();
+      }
+      it.star = new THREE.Mesh(starGeo, MAT.glow);
+      this.group.add(it.star);
+    }
+    const S = it.star, cam = this.game.camera;
+    S.visible = true;
+    S.position.copy(it.pos).add(_v.set(0, 0.35 + it.r * 0.6 + Math.sin(it.t * 2.2) * 0.05, 0));
+    S.quaternion.copy(cam.quaternion);
+    S.rotateZ(it.t * 1.2);
+  }
 }

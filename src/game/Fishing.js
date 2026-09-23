@@ -19,14 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790185859';
-import { zoneAt } from '../world/MapData.js?v=1790185859';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790185859';
-import { buildBobber } from '../art/RodArt.js?v=1790185859';
-import { fishMesh } from '../art/FishArt.js?v=1790185859';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790185859';
-import { Bus } from '../core/Bus.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790192871';
+import { zoneAt } from '../world/MapData.js?v=1790192871';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790192871';
+import { buildBobber } from '../art/RodArt.js?v=1790192871';
+import { fishMesh } from '../art/FishArt.js?v=1790192871';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790192871';
+import { Bus } from '../core/Bus.js?v=1790192871';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -161,6 +161,10 @@ export class Fishing {
 
     switch (this.state) {
       case 'idle': {
+        // playtest AFK mode: cast by itself every few seconds
+        let auto = false;
+        if (G.admin?.autoCast && useHeld && hasBait) { this.autoT = (this.autoT || 0) + dt; if (this.autoT > 2.5) { this.autoT = 0; auto = true; } }
+        if (auto) { this.charge = 0.8; this.state = 'charge'; this._autoRelease = true; break; }
         if (click && useHeld) {
           if (!hasBait) { this.msg('Out of ' + (BAIT_BY_ID[G.state.s.bait]?.name || 'bait') + '. Press B to pick another.', 'warn'); break; }
           // ice fishing: drop straight into a hole
@@ -179,7 +183,8 @@ export class Fishing {
       }
       case 'charge': {
         this.charge = Math.min(1, this.charge + dt / 1.1);
-        if (unclick || !lmb) {
+        if (unclick || !lmb || this._autoRelease) {
+          this._autoRelease = false;
           const f = P.forward(_v).clone();
           const sp = rod.cast * (0.3 + 0.7 * this.charge);
           this.bpos.copy(this.tip);
@@ -253,7 +258,7 @@ export class Fishing {
         const s = this.water === 'ice' ? 0.05 : sea(this.bpos);
         this.bpos.y = s - 0.35;
         if (Math.random() < dt * 20) G.fx.splash(this.bpos.x, s, this.bpos.z, 0.25);
-        if (click) { this._hook(); break; }
+        if (click || G.admin?.autoCatch) { this._hook(); break; }
         if (this.biteT <= 0) {
           if (Math.random() < 0.5) { G.state.useBait(G.state.s.bait); this.msg('Too slow - it took the bait.', 'warn'); }
           else this.msg('Too slow - it got away.', 'warn');
@@ -293,7 +298,17 @@ export class Fishing {
   _bite() {
     const G = this.game;
     // giants and leviathans get first refusal of a line near them
-    const big = G.creatures?.claimBite(this.bpos, this);
+    // then the monsters at the top of the food chain, who mostly say no
+    const mon = G.great?.claim(this.bpos);
+    if (mon && mon.refused) {
+      G.state.useBait(G.state.s.bait);
+      this.msg(mon.text, 'warn');
+      G.fx.eruption(this.bpos.x, G.world.sea(this.bpos.x, this.bpos.z), this.bpos.z, 3);
+      G.audio.roar(0.4);
+      this._startWait();
+      return;
+    }
+    const big = mon || G.creatures?.claimBite(this.bpos, this);
     if (big) { this.pending = big; }
     else {
       const sp = pickSpecies(this._ctx());
@@ -329,6 +344,7 @@ export class Fishing {
     // how hard it fights, against how much the rod can hold
     let fight = fightOf(sp, c.kg, c.v);
     if (sp.lev) fight = (RODS.find(r => r.tier === (c.rod || 3)) || rod).rating - 0.05;
+    if (sp.great) { fight = c.fight; tier = 7; }
     if (sp.junk) { fight = 0.5; tier = 0; }
     const er = F.erratic;
     this.fish = {
@@ -348,7 +364,9 @@ export class Fishing {
       bearing: Math.atan2(this.bpos.x - this.player.pos.x, this.bpos.z - this.player.pos.z), dir: 0,
       jumpT: 2 + Math.random() * 4, phaseT: 3 + Math.random() * 3, phased: false, grown: false,
       reqTier: c.rod || sp.rod || 0, rnd: rng((Math.random() * 1e9) | 0),
+      pace: c.pace || 1, cap: c.cap || (sp.lev ? 150 : 75), great: c.great || null,
     };
+    if (sp.great) Object.assign(this.fish.move, { speed: 0.82, restless: 3, dart: 0.6, pause: 0.06, drift: 0.2, drain: 1.3 });
     if (c.power) this.fish.power = c.power;
     // you start ON the fish with a little line in hand; the first second is a grace period
     this.bar = { zone: 0.5, vel: 0, catch: 0.35, fought: 0, tired: 0, held: 0, on: 0 };
@@ -358,8 +376,9 @@ export class Fishing {
     G.audio.hook();
     Bus.emit('fish:hooked', { fish: this.fish });
     const over = this.fish.fight - rod.rating;
-    if (this.fish.giant || this.fish.lev) G.ui.banner(this.fish.lev ? 'IT IS HOOKED!' : 'GIANT ON THE LINE!', 'Hold to lift the catch zone. Keep it on the fish.');
-    if (over > 0.25 && !sp.lev) {
+    if (this.fish.great) G.ui.banner(sp.name.toUpperCase() + ' IS ON THE LINE', over > 0.3 ? 'Your ' + rod.name + ' cannot hold this for long. Hang on anyway.' : 'This will take minutes, not seconds. Keep the zone on it.', 'leviathan', 4);
+    else if (this.fish.giant || this.fish.lev) G.ui.banner(this.fish.lev ? 'IT IS HOOKED!' : 'GIANT ON THE LINE!', 'Hold to lift the catch zone. Keep it on the fish.');
+    if (over > 0.25 && !sp.lev && !sp.great) {
       const need = RODS.find(r => r.rating >= this.fish.fight);
       G.ui.toast('This one is too strong for your ' + rod.name + (need ? ' - you need a ' + need.name + '.' : '.'), 'bad');
       Bus.emit('fish:toostrong', { need: need && need.id });
@@ -407,14 +426,17 @@ export class Fishing {
     const on = Math.abs(F.fishPos - B.zone) <= half && !F.phased;
     B.on = on ? Math.min(1, B.on + dt * 6) : Math.max(0, B.on - dt * 6);
     if (on) B.fought += dt;
-    B.tired = clamp(B.fought / 30, 0, 1);
+    B.tired = clamp(B.fought * F.pace / 30, 0, 1);
     B.held += dt;
-    if (on) B.catch += 0.52 * (1 + B.tired * 1.2) * dt;
-    else B.catch -= 0.30 * F.move.drain * Math.min(1, B.held / 1.5) * dt;
+    if (G.admin?.autoCatch) { B.catch += dt / 3; F.fishPos = B.zone; }     // playtest: every fight wins itself
+    // a monster fights on a slower clock: everything moves `pace` as fast
+    const pdt = dt * F.pace;
+    if (on) B.catch += 0.52 * (1 + B.tired * 1.2) * pdt;
+    else B.catch -= 0.30 * F.move.drain * Math.min(1, B.held / 1.5) * pdt;
     const over = F.fight - rod.rating;
     // OVER THE ROD'S RATING the meter bleeds even when you track it perfectly,
     // and it bleeds hard: a little over is a fight, a lot over is impossible.
-    if (over > 0) B.catch -= (over * 0.55 + over * over * 1.2) * dt;
+    if (over > 0 && !G.admin?.autoCatch) B.catch -= (over * 0.55 + over * over * 1.2) * pdt;
     B.catch = clamp(B.catch, 0, 1);
     // --- what the rod, the reel and the line feel ---
     const pull = clamp(F.fight / rod.rating, 0.2, 2);
@@ -454,7 +476,7 @@ export class Fishing {
       if (F.reqTier > rod.tier && Math.random() < 0.6) return this._yank();
       return this._lose(over > 0.2 ? 'SNAP! Too strong for this rod.' : 'It shook the hook and got away.');
     }
-    if (B.held > (F.lev ? 150 : 75)) return this._lose('After all that, the line finally parts.');
+    if (B.held > F.cap) return this._lose('After all that, the line finally parts.');
   }
 
   /** The fish on the bar: picks a spot and swims at it, changing its mind

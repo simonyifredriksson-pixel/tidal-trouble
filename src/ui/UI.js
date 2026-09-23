@@ -9,16 +9,17 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790185859';
-import { fishThumb, rodThumb, boatThumb, levThumb } from './Thumbs.js?v=1790185859';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, valueBreakdown } from '../data/FishData.js?v=1790185859';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID } from '../data/GearData.js?v=1790185859';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790185859';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790185859';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790185859';
-import { heightAt } from '../world/Terrain.js?v=1790185859';
-import { worldMapCanvas } from './MapArt.js?v=1790185859';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790185859';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790192871';
+import { fishThumb, rodThumb, boatThumb, levThumb } from './Thumbs.js?v=1790192871';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790192871';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790192871';
+import { GREAT } from '../data/GreatData.js?v=1790192871';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790192871';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790192871';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790192871';
+import { heightAt } from '../world/Terrain.js?v=1790192871';
+import { worldMapCanvas } from './MapArt.js?v=1790192871';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790192871';
 
 const $ = (s, r = document) => r.querySelector(s);
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
@@ -36,6 +37,14 @@ export class UI {
     this._buildHUD();
     $('#screens').addEventListener('click', e => this._click(e));
     $('#screens').addEventListener('input', e => this._input(e));
+    // right-click a fish in any list to favourite it
+    $('#screens').addEventListener('contextmenu', e => {
+      const row = e.target.closest('[data-fav]');
+      e.preventDefault();
+      if (!row) return;
+      this.game.uiAct('favToggle', row.dataset.fav);
+      this.render();
+    });
     $('#title').addEventListener('click', e => this._click(e));
     this.root.addEventListener('click', e => { if (e.target.closest('.talk')) this._click(e); });
   }
@@ -123,10 +132,9 @@ export class UI {
       <div class="radios"></div>
       <div class="banner"><div class="bi"></div><h2></h2><p></p></div>
       <div class="catchcard"><div class="frame"><div class="panel"></div></div></div>
-      <div class="chat"></div>
+      <div class="voicehud hide"><div class="vtalk"></div><span class="chip vme"></span></div>
       <div class="sub hide"></div>
-      <div class="fade"></div>
-      <div class="shouts"></div>`;
+      <div class="fade"></div>`;
     this.root.appendChild(h);
     this.hud = h;
     this.el = sel => h.querySelector(sel);
@@ -188,7 +196,7 @@ export class UI {
     else if (F.state === 'charge') ht = `Release to cast`;
     else if (P.mode === 'drive') ht = `<span class="key">W</span><span class="key">S</span> throttle  <span class="key">A</span><span class="key">D</span> steer  <span class="key">X</span> stop  <span class="key">E</span> leave the helm`;
     else if (P.mode === 'mount') ht = `<span class="key">LMB</span> fire harpoon  <span class="key">E</span> leave the gun`;
-    else if (P.mode === 'swim') ht = P.exhausted ? 'Exhausted - drift to the shore or a boat and press E' : `<span class="key">SPACE</span> up  <span class="key">CTRL</span> dive  <span class="key">E</span> climb out`;
+    else if (P.mode === 'swim') ht = P.exhausted ? 'Exhausted - drift to the shore or a boat and press E' : `<span class="key">SPACE</span> up  <span class="key">Q</span> dive  <span class="key">E</span> climb out`;
     else if (P.held) { const it = G.loot.get(P.held); ht = it ? `<span class="key">LMB</span> throw  <span class="key">F</span> drop  <span class="key">E</span> ${it.kg > 40 ? 'drag it somewhere' : 'store / mount'}` : ''; }
     hint.innerHTML = ht;
     hint.classList.toggle('hide', !ht);
@@ -254,7 +262,8 @@ export class UI {
     this.el('.radar').classList.toggle('hide', !sonar);
     if (sonar) this._radar();
     this.el('.cross').classList.toggle('dot', F.state !== 'idle' || !!P.held);
-    this.el('.clickplay').classList.toggle('hide', G.input.locked || this.isOpen || !!this.talkEl || !G.input.requireLock);
+    this.el('.clickplay').classList.toggle('hide', G.input.locked || this.isOpen || !!this.talkEl || !G.input.requireLock || G.chat.open);
+    this._voiceHud();
   }
 
   _levBar() {
@@ -351,33 +360,33 @@ export class UI {
     this._ccT = setTimeout(() => el.classList.remove('on'), 5200);
   }
 
-  chat(name, text, color = '#fff') {
-    const box = this.el('.chat');
-    const d = document.createElement('div');
-    d.className = 'm';
-    d.innerHTML = `<span style="color:${color}">${esc(name)}:</span> ${esc(text)}`;
-    box.appendChild(d);
-    while (box.children.length > 6) box.firstChild.remove();
-    setTimeout(() => d.remove(), 12000);
-  }
-  chatInput(onSend) {
-    const box = this.el('.chat');
-    if (box.querySelector('input')) return;
-    const inp = document.createElement('input');
-    inp.placeholder = 'Say something... (Enter)';
-    inp.maxLength = 90;
-    box.appendChild(inp);
-    inp.focus();
-    this.game.input.blocked = true;
-    const done = send => { if (send && inp.value.trim()) onSend(inp.value.trim()); inp.remove(); this.game.input.blocked = !!this.screen; };
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
-    inp.addEventListener('blur', () => done(false));
-  }
-
-  /* shouted lines over people's heads */
-  shouts(list) {
-    const box = this.el('.shouts');
-    box.innerHTML = list.map(s => `<div class="shout" style="left:${s.x}px;top:${s.y}px">${esc(s.text)}</div>`).join('');
+  /* voice: who is talking, and whether your walkie-talkie is up */
+  _voiceHud() {
+    const G = this.game, V = G.voice, box = this.el('.voicehud');
+    const on = !!G.net?.isOnline;
+    box.classList.toggle('hide', !on);
+    if (!on) return;
+    const talk = V.talking();
+    const key = JSON.stringify([talk, V.walkie, V.muted, V.status]);
+    if (key === this._vKey) return;
+    this._vKey = key;
+    const vt = box.querySelector('.vtalk');
+    vt.textContent = '';
+    for (const t of talk) {
+      const d = document.createElement('span');
+      d.className = 'chip vt' + (t.radio ? ' radio' : '');
+      d.innerHTML = ic(t.radio ? 'radio' : 'ear');
+      const n = document.createElement('b'); n.textContent = t.name; n.style.color = t.color;
+      d.appendChild(n);
+      if (t.radio) { const s = document.createElement('small'); s.textContent = 'RADIO'; d.appendChild(s); }
+      vt.appendChild(d);
+    }
+    const me = box.querySelector('.vme');
+    me.classList.toggle('walkie', V.walkie);
+    me.innerHTML = V.walkie ? `${ic('radio')}<b>WALKIE-TALKIE</b><small>everyone can hear you</small>`
+      : V.muted ? `${ic('cross')}<b>MIC MUTED</b><small><span class="key">V</span> unmute</small>`
+      : V.mic ? `${ic('ear')}<b>VOICE: NEARBY</b><small>hold <span class="key">C</span> walkie-talkie  <span class="key">V</span> mute  <span class="key">CTRL</span> chat</small>`
+      : `${ic('ear')}<b>LISTEN ONLY</b><small>${esc(V.status === 'unavailable' ? 'voice needs a real connection' : 'no microphone')}  <span class="key">CTRL</span> chat</small>`;
   }
 
   /* ================= talk panel ================= */
@@ -396,13 +405,128 @@ export class UI {
     this.game.input.blocked = true;
     this.game.input.unlock();
   }
-  closeTalk() { if (this.talkEl) { this.talkEl.remove(); this.talkEl = null; this.game.input.blocked = !!this.screen; } }
+  closeTalk() {
+    if (this.talkEl) { this.talkEl.remove(); this.talkEl = null; this.talkNpc = null; this.game.input.blocked = !!this.screen; }
+    this.root.classList.remove('talking');
+    clearTimeout(this._byeT);
+  }
+
+  /* ================= conversations =================
+     The person on the left, what they said, and what you can say back as
+     numbered lines on the right - click one or press its number. ESC is
+     always "never mind". Nothing here is a shop window. */
+  dialogue(npc, line, opts) {
+    const keep = this.talkEl && this.talkNpc === npc ? this.talkEl.querySelector('.dlg-card')?.innerHTML : '';
+    this.closeTalk();
+    const d = document.createElement('div');
+    d.className = 'dlg live';
+    const pr = npc.def.pr === 'they' ? 'they/them' : npc.def.pr === 'she' ? 'she/her' : 'he/him';
+    d.innerHTML = `<div class="dlg-talk"><div class="dlg-name"><span></span><small>${esc(pr)}</small></div><div class="dlg-line"></div><div class="dlg-card"></div></div>
+      <div class="dlg-opts"></div>`;
+    d.querySelector('.dlg-name span').textContent = npc.def.full;
+    d.querySelector('.dlg-line').textContent = line;
+    const box = d.querySelector('.dlg-opts');
+    opts.forEach((o, i) => {
+      const b = document.createElement('button');
+      b.className = 'dopt' + (o.bye ? ' bye' : '') + (o.dim ? ' dim' : '');
+      b.innerHTML = `<i>${i + 1}.)</i>${o.icon ? ic(o.icon) : ''}<span></span>`;
+      b.querySelector('span').textContent = o.label;
+      b.addEventListener('click', e => { e.stopPropagation(); this._choose(npc, o); });
+      b.addEventListener('mouseenter', () => { this.game.audio.hover(); if (o.rod) this._rodCard(d, o.rod); });
+      box.appendChild(b);
+    });
+    this.root.appendChild(d);
+    this.root.classList.add('talking');
+    this.talkEl = d; this.talkNpc = npc; this._talkOpts = opts;
+    if (keep) d.querySelector('.dlg-card').innerHTML = keep;
+    const firstRod = opts.find(o => o.rod);
+    if (firstRod) this._rodCard(d, firstRod.rod);
+    this.game.input.blocked = true;
+    this.game.input.unlock();
+    if (!this._dlgKeys) {
+      this._dlgKeys = e => {
+        if (!this.talkEl || this.game.chat?.open || !this._talkOpts) return;
+        const m = /^(Digit|Numpad)([1-9])$/.exec(e.code);
+        if (m) { const o = this._talkOpts[+m[2] - 1]; if (o) { e.preventDefault(); this._choose(this.talkNpc, o); } }
+      };
+      document.addEventListener('keydown', this._dlgKeys);
+    }
+  }
+  _choose(npc, o) {
+    this.game.audio.click();
+    if (o.bye) {
+      // they say goodbye, then the conversation closes on its own
+      const say = npc.def.say;
+      const line = o.line || (say ? say.bye[Math.floor(Math.random() * say.bye.length)] : ['Mind how you go.', 'Tight lines.', 'See you on the water.'][Math.floor(Math.random() * 3)]);
+      this.dialogue(npc, line, []);
+      this._byeT = setTimeout(() => this.closeTalk(), 1500);
+      return;
+    }
+    if (o.cb) o.cb();
+  }
+  _rodCard(d, id) {
+    const R = ROD_BY_ID[id], cur = ROD_BY_ID[this.game.state.s.rod];
+    const card = d.querySelector('.dlg-card');
+    if (!card || !R) return;
+    const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v}</span></div>`;
+    card.innerHTML = `<div class="rodcard"><img src="${rodThumb(id)}" alt=""><div><b>${esc(R.name)}</b><p>${esc(R.blurb)}</p>
+      ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Catch zone', Math.round(R.band * 100), 26, Math.round(cur.band * 100))}
+      <small>Best for: ${esc(ZONES[Math.min(4, R.tier - 1)].name)}${R.tier >= 5 ? ' - and leviathans' : ''}</small></div></div>`;
+  }
+  /** The seller counts it out: a compact receipt inside the conversation. */
+  dialogueReceipt(e) {
+    const card = this.talkEl?.querySelector('.dlg-card');
+    if (!card) return;
+    const rows = e.rows.slice(0, 5).map(r => {
+      const sp = FISH_BY_ID[r.sp], V = r.v && VARIANT_BY_ID[r.v];
+      return `<div class="drow"><img src="${fishThumb(r.sp)}" alt=""><span>${esc(catchName(sp, r.v))}<small>${r.base} x ${r.size.toFixed(2)} x ${r.zm}${V ? ' x ' + r.vm : ''}</small></span><b>${ic('coin')}${fmtInt(r.value)}</b></div>`;
+    }).join('');
+    const more = e.rows.length - 5 + (e.more || 0);
+    card.innerHTML = `<div class="dreceipt">${rows}${more > 0 ? `<div class="dmore">...and ${more} more</div>` : ''}<div class="dtotal"><span>${e.rows.length + (e.more || 0)} fish</span><b>${ic('coin')}<em class="countup" data-to="${e.total}">0</em></b></div></div>`;
+    const cu = card.querySelector('.countup');
+    const to = +cu.dataset.to, t0 = performance.now();
+    const step = () => { const f = Math.min(1, (performance.now() - t0) / 900); cu.textContent = fmtInt(to * (1 - Math.pow(1 - f, 3))); if (f < 1 && cu.isConnected) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+
+  /* ================= a world event: once in a long while ================= */
+  worldEvent(title, sub, name = '', gold = false) {
+    let w = this.el('.worldev');
+    if (!w) { w = document.createElement('div'); w.className = 'worldev'; this.hud.appendChild(w); }
+    w.className = 'worldev' + (gold ? ' gold' : '');
+    w.innerHTML = `<div class="wbar top"></div><div class="wbar bot"></div><div class="wcore">
+      <svg class="wline" viewBox="0 0 400 12" preserveAspectRatio="none"><path d="M0 6 L170 6 L186 1 L200 6 L214 11 L230 6 L400 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      <h2></h2><p></p><h3></h3>
+      <svg class="wline" viewBox="0 0 400 12" preserveAspectRatio="none"><path d="M0 6 L170 6 L186 11 L200 6 L214 1 L230 6 L400 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></div>`;
+    w.querySelector('h2').textContent = title;
+    w.querySelector('p').textContent = sub;
+    w.querySelector('h3').textContent = name;
+    void w.offsetWidth;
+    w.classList.add('on');
+    clearTimeout(this._weT);
+    this._weT = setTimeout(() => w.classList.remove('on'), 8500);
+  }
+
+  /** A trophy earned: a small card that points you home. */
+  trophyToast(T) {
+    const box = this.el('.toasts');
+    const d = document.createElement('div');
+    d.className = 'toast trophy-toast';
+    d.innerHTML = `<span class="chip">${ic('trophy')}<span><b>TROPHY EARNED</b></span></span>`;
+    const sp = document.createElement('span'); sp.className = 'tt'; sp.textContent = T.name + ' - put it on the bookcase in your hut';
+    d.querySelector('.chip span').appendChild(sp);
+    box.appendChild(d);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => d.classList.add('out'), 4800);
+    setTimeout(() => d.remove(), 5400);
+  }
 
   /* ================= screens ================= */
   get isOpen() { return !!this.screen; }
 
   open(name, data = {}) {
     this.closeTalk();
+    this.game.chat?.forceClose();
     this.screen = name;
     this.data = data;
     const s = $('#screens');
@@ -525,10 +649,11 @@ export class UI {
   _controls() {
     const k = s => s.split(' ').map(x => `<span class="key">${x}</span>`).join('');
     const rows = [
-      ['Move', k('W A S D')], ['Look', 'Mouse'], ['Jump / swim up', k('SPACE')], ['Sprint', k('SHIFT')], ['Dive', k('CTRL')],
+      ['Move', k('W A S D')], ['Look', 'Mouse'], ['Jump / swim up', k('SPACE')], ['Sprint', k('SHIFT')], ['Dive', k('Q')],
       ['Use tool / cast (hold)', k('LMB')], ['Strike when it bites', k('CLICK')], ['Reel in (hold)', k('LMB')], ['Pull against the fish', k('A D')],
       ['Interact / drive / talk', k('E')], ['Pick up / drop', k('F')], ['Throw what you hold', k('LMB')], ['Tools', k('1 - 9') + ' or wheel'],
-      ['Change bait', k('B')], ['Journal', k('J')], ['Map', k('M')], ['Chat (co-op)', k('T')], ['Shout', k('Z X C V')], ['Pause', k('ESC')],
+      ['Your catch (favourites)', k('TAB') + ' / ' + k('I')], ['Favourite the fish in your hands', k('RMB')], ['Hand axe (kraken arms)', k('0')], ['Talk: pick an answer', k('1 - 9') + ' or click'],
+      ['Change bait', k('B')], ['Journal', k('J')], ['Map', k('M')], ['Text chat', k('CTRL') + ' (tap)'], ['Walkie-talkie (co-op voice)', k('C') + ' (hold)'], ['Mute microphone', k('V')], ['Pause', k('ESC')],
       ['Boat: throttle', k('W S')], ['Boat: steer', k('A D')], ['Boat: full stop', k('X')],
     ];
     return this._wrap(`${this._head('keyE', 'Controls', 'Fishing, boating and general chaos', false)}
@@ -549,9 +674,9 @@ export class UI {
         const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
           <h3>${esc(R.name)}</h3><p>${esc(R.blurb)}</p>
-          ${bar('Strength', R.rating, 3.3, cur.rating)}${bar('Control', R.control, 2.1, cur.control)}${bar('Zone', Math.round(R.band * 100), 25, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 260, cur.line)}
+          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Zone', Math.round(R.band * 100), 26, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 320, cur.line)}
           <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(4, R.tier - 1)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
-          <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
+          <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : R.shop === 'home' ? `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>` : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><span class="soldby">${ic('map')}Sold by ${esc(SHOPS[R.shop].seller)}</span>`}</div></div>`;
       }).join('')}</div>`;
     } else if (t.cur === 'bait') {
       body = `<div class="grid">${BAITS.map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}"><h3>${ic(B.id)}${esc(B.name)}</h3><p>${esc(B.blurb)}</p>
@@ -572,7 +697,8 @@ export class UI {
           <div class="row">${own ? '<span class="price">Owned</span>' : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span><button class="btn gold" data-act="buyGear" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
       }).join('')}</div>`;
     }
-    return this._wrap(`${this._head('rod', "Melvin's Bait & Tackle", 'Everything is on sale. Nothing is refundable.')}${t.html}<div class="sbody">${body}</div>`);
+    const shopName = { frost: "Ingrid's Ice Gear", tropic: "Coco's Trading Post" }[this.data?.shop] || "Melvin's Bait & Tackle";
+    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : 'Everything is on sale. Nothing is refundable.')}${t.html}<div class="sbody">${body}</div>`);
   }
 
   /* ---------- boatyard (Marge) ---------- */
@@ -641,6 +767,59 @@ export class UI {
       <div class="sbody">${body}</div>
       <div class="foot"><span class="spacer"></span><span class="price" style="font:400 20px var(--display);color:#8a5a10">${ic('coin')} ${fmtInt(total)}</span>
       <button class="btn gold" data-act="sellAll" ${items.length ? '' : 'disabled'}>Sell everything</button></div>`);
+  }
+
+  /* ---------- your catch: everything you are carrying, favourites first ---------- */
+  _catch() {
+    const G = this.game, P = G.player, b = G.boats[0];
+    const mine = [];
+    for (const it of G.loot.items.values()) {
+      const sp = FISH_BY_ID[it.sp];
+      if (!sp || sp.beh === 'chest' || (sp.beh === 'mimic' && !it.opened)) continue;
+      const where = it.held && it.held === P.id ? 'In your hands' : it.boat && it.boat === b ? (it.state === 'cooler' ? 'In the cooler' : 'On the deck') : !it.held && it.pos.distanceTo(P.pos) < 12 ? 'Right here' : null;
+      if (where) mine.push({ it, sp, where, v: G.loot.value(it) });
+    }
+    mine.sort((a, c) => (c.it.fav - a.it.fav) || (c.v - a.v));
+    const favs = mine.filter(m => m.it.fav), total = mine.filter(m => !m.it.fav).reduce((a, m) => a + m.v, 0);
+    const body = mine.length ? `<div class="list catchlist">${mine.map(({ it, sp, where, v }) => {
+      const R = RARITY[sp.rarity], V = it.v && VARIANT_BY_ID[it.v], Z = ZONES[it.zone || 0];
+      return `<div class="li ${it.fav ? 'fav' : ''}" data-fav="${it.id}">
+        <button class="favbtn ${it.fav ? 'on' : ''}" data-act="favToggle" data-arg="${it.id}" title="Favourite">${ic('star')}</button>
+        <img src="${fishThumb(it.sp)}" alt="">
+        <span>${esc(catchName(sp, it.v))} <span class="rar" style="background:${R.css}">${R.name}</span>${V ? `<span class="rar" style="background:${V.css};color:#2a1a0a">${V.name}</span>` : ''}
+          <small>${fmtKg(it.kg)}  ${fmtCm(it.cm)}  -  ${esc(Z.name)}  -  ${where}${it.fav ? '  -  FAVOURITE, never sold' : ''}</small></span>
+        <span class="price ${it.fav ? 'kept' : ''}">${ic('coin')}${fmtInt(v)}</span></div>`;
+    }).join('')}</div>` : `<div class="empty">Nothing in your hands, on your boat or at your feet. Go catch something weird.</div>`;
+    return this._wrap(`${this._head('fish', 'Your Catch', 'Right-click a fish to make it a favourite. Favourites are never sold - not even by "sell all".')}
+      <div class="sbody">${body}</div>
+      <div class="foot"><span>${mine.length} fish  -  ${favs.length} favourite${favs.length === 1 ? '' : 's'}</span><span class="spacer"></span>
+        <span style="font-weight:800;color:var(--ink2)">Worth selling:</span><span class="price" style="font:400 20px var(--display);color:#8a5a10">${ic('coin')} ${fmtInt(total)}</span>
+        <button class="btn gold" data-act="close">Done</button></div>`);
+  }
+
+  /* ---------- the playtest panel (L + J + M + 3) ---------- */
+  _admin() {
+    const G = this.game, s = G.state.s, A = G.admin;
+    const btn = (label, arg, cls = '') => `<button class="btn ${cls}" data-act="adm" data-arg="${arg}">${esc(label)}</button>`;
+    const tog = (label, key) => `<button class="btn ${A[key] ? 'gold' : 'dark'}" data-act="adm" data-arg="toggle:${key}">${A[key] ? ic('check') : ic('cross')} ${esc(label)}</button>`;
+    const species = [...FISH, ...GIANTS].filter(f => !f.junk || f.id === 'chest');
+    return this._wrap(`${this._head('gear', 'Playtest Panel', 'Press L + J + M + 3 again to close. Not part of the game.', true)}
+      <div class="sbody admin">
+        <section><h3>${ic('leviathan')}Leviathans at Vigil's End</h3><div class="row">${GREAT.map(D => btn(`${D.name} (${Math.round(D.chance * 100)}%)`, 'spawnGreat:' + D.id)).join('')}${btn('Random (60/30/10)', 'spawnGreat:', 'dark')}</div>
+          <p class="note">${G.great.lev ? 'Up right now: ' + esc(G.great.lev.def.name) + ' (' + G.great.lev.phase + ')' : 'None up.'}  Hook chance near one: 15%.</p></section>
+        <section><h3>${ic('tentacle')}The Kraken</h3><div class="row">${btn('Start the kraken attack on my boat', 'spawnKraken', 'red')}</div>
+          <p class="note">${G.great.kraken ? 'Encounter: ' + G.great.kraken.phase : 'No encounter.'}  Normally only in the Offshore zone. Hook chance after it dives: 10%.</p></section>
+        <section><h3>${ic('hook')}Fishing</h3><div class="row">${tog('Catch every fish (auto-win fights)', 'autoCatch')}${tog('Auto-cast (AFK fishing)', 'autoCast')}</div></section>
+        <section><h3>${ic('rod')}Give rod</h3><div class="row">${RODS.map(R => btn(R.name, 'giveRod:' + R.id, s.rod === R.id ? 'gold' : '')).join('')}${btn('All rods', 'allRods', 'dark')}</div></section>
+        <section><h3>${ic('fish')}Give fish</h3><div class="row">
+          <select id="admFish">${species.map(f => `<option value="${f.id}">${esc(f.name)} (${f.rarity})</option>`).join('')}</select>
+          <select id="admVar"><option value="">Normal</option>${VARIANTS.map(v => `<option value="${v.id}">${v.name}</option>`).join('')}</select>
+          ${btn('Give fish', 'giveFish', 'gold')}${btn('Spawn a random test fish', 'testFish')}${btn('Clear inventory', 'clearInv', 'red')}</div></section>
+        <section><h3>${ic('coin')}Money</h3><div class="row"><input id="admMoney" type="number" value="10000" min="0" step="1000">${btn('Add', 'moneyAdd', 'gold')}${btn('Set', 'moneySet')}<span class="note">You have ${fmtInt(s.money)}.</span></div></section>
+        <section><h3>${ic('map')}Teleport</h3><div class="row">${G.constructor.TELEPORTS.map(T => btn(T.name, 'tp:' + T.id)).join('')}</div></section>
+        <section><h3>${ic('wrench')}World</h3><div class="row">${btn('Reset boat', 'resetBoat')}${btn('Reset character', 'resetChar')}${btn('Every tool and gear', 'tools')}${btn('Earn and place all trophies', 'allTrophies')}${btn('Clear trophies', 'clearTrophies', 'dark')}</div>
+          <div class="row">${[['Dawn', 0.26], ['Noon', 0.5], ['Dusk', 0.745], ['Night', 0.92]].map(([l, v]) => btn(l, 'tod:' + v, 'dark')).join('')}${['storm', 'giant', 'migration', 'meteor'].map(k => btn('Event: ' + k, 'event:' + k, 'dark')).join('')}</div></section>
+      </div>`);
   }
 
   /* ---------- the receipt: fish caught -> fish value -> total ---------- */

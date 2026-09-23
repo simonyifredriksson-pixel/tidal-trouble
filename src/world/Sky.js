@@ -7,9 +7,9 @@
    trees do not go solid black. The Blackwater is the one place the game is
    allowed to be properly dark, and there it is the fog that closes in. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790185859';
-import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790192871';
+import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790192871';
 
 const KEYS = [
   // t,    top,      horizon,  fog,      sun,      sunI, hemiSky,  hemiGnd,  hemiI
@@ -188,6 +188,15 @@ export class Sky {
     S.top.lerp(bw, dark * 0.85); S.hor.lerp(new THREE.Color(0x1a2028), dark * 0.85); S.fog.lerp(new THREE.Color(0x0e1218), dark * 0.9);
     S.sunI *= 1 - dark * 0.7;
     hemiI *= 1 - dark * 0.45;
+    // Vigil's End: the colour drains out of everything and the fog closes in
+    const mist = env.mist || 0;
+    if (mist > 0) {
+      const des = (c, k, lift = 1) => { const l = (c.r * 0.3 + c.g * 0.55 + c.b * 0.15) * lift; c.lerp(new THREE.Color(l * 0.96, l, l * 1.04), k); };
+      des(S.top, mist * 0.82, 0.9); des(S.hor, mist * 0.88, 0.95); des(S.fog, mist * 0.92, 0.92); des(S.sunCol, mist * 0.7);
+      des(hs, mist * 0.7); des(hg, mist * 0.6);
+      S.sunI *= 1 - mist * 0.45;
+      hemiI *= 1 - mist * 0.08;
+    }
 
     // sun and moon positions
     const ang = (t - 0.25) * Math.PI * 2;
@@ -235,6 +244,7 @@ export class Sky {
     this.fog.color.copy(fogCol);
     let dens = 0.0019 + storm * 0.0045 + dark * 0.0105 + (env.frost || 0) * 0.0006;
     if (env.edge) dens += env.edge * 0.01;
+    dens += mist * 0.0038;
     if (env.underwater) dens = dark > 0.5 ? 0.09 : 0.045;
     if (env.lights && dark > 0) dens -= env.lights * dark * 0.004;
     this.fog.density = dens;
@@ -254,7 +264,7 @@ export class Sky {
       if (c.position.z - cam.z > 1500) c.position.z -= 3000;
       if (c.position.z - cam.z < -1500) c.position.z += 3000;
     }
-    this.cloudMat.color.setRGB(1, 1, 1).lerp(new THREE.Color(0x5a626c), storm * 0.8);
+    this.cloudMat.color.setRGB(1, 1, 1).lerp(new THREE.Color(0x5a626c), Math.max(storm * 0.8, mist * 0.6));
     this.cloudMat.opacity = 0.96 * (1 - dark * 0.85);
     this.cloudMat.emissive.copy(S.hor).lerp(S.top, 0.3).multiplyScalar(0.62 * (1 - storm * 0.5) * (1 - dark * 0.8));
 

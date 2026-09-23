@@ -319,6 +319,76 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .legend { display: grid; gap: 6px; align-content: start; font-weight: 800; font-size: 13px; }
 .legend div { display: flex; align-items: center; gap: 8px; }
 .legend .gi { font-size: 22px; }
+/* ---------------- conversations: bold outlined lines on dark slanted bars ---------------- */
+#ui.talking .baitchip, #ui.talking .hand-label, #ui.talking .hint, #ui.talking .prompt, #ui.talking .cross { display: none; }
+.dlg { position: absolute; inset: 0; pointer-events: none; animation: toastin 0.18s; }
+.dlg .dlg-talk { position: absolute; left: 50%; bottom: 128px; transform: translateX(-68%); width: min(560px, 60vw); pointer-events: auto; }
+.dlg-name { display: inline-flex; align-items: baseline; gap: 10px; padding: 4px 16px 6px; margin-left: 10px; background: #1a232c; clip-path: var(--cut-s); }
+.dlg-name span { font: 400 26px 'Luckiest Guy', var(--display); color: #fff; letter-spacing: 0.02em; -webkit-text-stroke: 1.2px #000; text-shadow: 0 3px 0 #000; }
+.dlg-name small { font: 800 12px var(--body); color: #9aa8b4; }
+.dlg-line { margin-top: -2px; padding: 16px 20px 18px; background: linear-gradient(135deg, rgba(14,22,30,0.9) 0 62%, rgba(24,34,44,0.9) 62%); clip-path: var(--cut); color: #fbf4e2; font: 700 18px/1.45 var(--body); text-shadow: 0 1px 2px #000; }
+.dlg-line::before { content: '\201C'; color: var(--gold); font: 400 30px var(--display); margin-right: 4px; vertical-align: -6px; }
+.dlg-line::after { content: '\201D'; color: var(--gold); font: 400 30px var(--display); margin-left: 3px; vertical-align: -6px; }
+.dlg-card:empty { display: none; }
+.dlg-card { margin-top: 8px; }
+.dlg .dlg-opts { position: absolute; right: 5vw; top: 50%; transform: translateY(-42%); display: grid; gap: 7px; justify-items: end; pointer-events: auto; }
+.dopt { display: flex; align-items: center; gap: 10px; border: 0; cursor: pointer; padding: 7px 22px 7px 16px; background: rgba(18,26,34,0.62);
+  clip-path: polygon(14px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); color: #fff; font: 400 23px 'Luckiest Guy', var(--display); letter-spacing: 0.02em;
+  -webkit-text-stroke: 1.4px #000; text-shadow: 0 3px 0 #000, 0 0 2px #000; transition: transform 0.12s, background 0.12s, font-size 0.12s; transform-origin: right center; }
+.dopt i { font-style: normal; color: var(--gold); }
+.dopt .gi { font-size: 22px; -webkit-text-stroke: 0; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.6)); }
+.dopt:hover, .dopt:focus-visible { transform: scale(1.14); background: rgba(40,56,70,0.8); outline: none; }
+.dopt.bye { font-size: 20px; opacity: 0.9; }
+.dopt.dim span { color: #c8d0d8; }
+.rodcard { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 10px 14px; background: linear-gradient(135deg, var(--paper1) 0 55%, var(--paper2) 55%); clip-path: var(--cut-s); color: var(--ink); }
+.rodcard img { width: 170px; height: 100px; object-fit: contain; }
+.rodcard b { font: 400 18px var(--display); }
+.rodcard p { margin: 2px 0 6px; font: 700 12px/1.35 var(--body); color: var(--ink2); }
+.rodcard small { font: 800 12px var(--body); color: var(--ink2); }
+.rodcard .statrow { display: grid; grid-template-columns: 74px 1fr 34px; gap: 6px; align-items: center; font: 800 12px var(--body); }
+.dreceipt { padding: 8px 12px; background: linear-gradient(135deg, var(--paper1) 0 55%, var(--paper2) 55%); clip-path: var(--cut-s); color: var(--ink); display: grid; gap: 3px; }
+.drow { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; font: 800 14px var(--body); animation: rowin 0.3s backwards; }
+.drow img { width: 56px; height: 30px; object-fit: contain; }
+.drow small { display: block; font: 700 11px var(--body); color: var(--ink2); }
+.drow b { font: 400 16px var(--display); color: #8a5a10; }
+.dmore { font: 700 12px var(--body); color: var(--ink2); text-align: center; }
+.dtotal { display: flex; justify-content: space-between; align-items: center; border-top: 2px solid rgba(90,60,30,0.3); padding-top: 4px; font: 800 14px var(--body); }
+.dtotal b { font: 400 26px var(--display); color: #8a5a10; }
+/* ---------------- a world event: letterbox bars, a still title ---------------- */
+.worldev { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s; color: #d8e4ec; }
+.worldev.on { opacity: 1; }
+.worldev .wbar { position: absolute; left: 0; right: 0; height: 11vh; background: #05080b; transition: transform 1.4s cubic-bezier(.2,.8,.2,1); }
+.worldev .wbar.top { top: 0; transform: translateY(-100%); }
+.worldev .wbar.bot { bottom: 0; transform: translateY(100%); }
+.worldev.on .wbar { transform: none; }
+.worldev .wcore { position: absolute; left: 50%; top: 30%; transform: translate(-50%, 0); width: min(760px, 90vw); text-align: center; padding: 18px 0;
+  background: radial-gradient(ellipse at center, rgba(6,10,14,0.72) 0 45%, transparent 72%); }
+.worldev .wline { display: block; width: 70%; height: 12px; margin: 0 auto; color: #9ab0c0; }
+.worldev h2 { margin: 10px 0 6px; font: 400 clamp(26px, 3.6vw, 46px) var(--display); letter-spacing: 0.22em; color: #eef4f8; text-shadow: 0 0 22px rgba(150,200,230,0.45), 0 3px 0 #000; }
+.worldev p { margin: 0; font: 800 15px var(--body); letter-spacing: 0.35em; text-transform: uppercase; color: #9ab0c0; }
+.worldev h3 { margin: 12px 0 10px; font: 400 22px 'Luckiest Guy', var(--display); letter-spacing: 0.12em; color: #fff; -webkit-text-stroke: 1px #000; text-shadow: 0 3px 0 #000; }
+.worldev h3:empty { display: none; }
+.worldev.gold { color: #f2c14a; }
+.worldev.gold h2 { text-shadow: 0 0 24px rgba(242,193,74,0.55), 0 3px 0 #000; }
+.worldev.gold .wline { color: #f2c14a; }
+.trophy-toast .chip { background: linear-gradient(135deg, rgba(120,84,20,0.95) 0 55%, rgba(90,60,14,0.95) 55%); display: flex; align-items: center; gap: 10px; }
+.trophy-toast .chip .gi { font-size: 26px; }
+.trophy-toast b { display: block; font: 400 13px var(--display); color: #fff0b0; letter-spacing: 0.12em; }
+.trophy-toast .tt { display: block; font: 800 14px var(--body); }
+/* ---------------- your catch, favourites ---------------- */
+.catchlist .li { grid-template-columns: 34px 70px 1fr auto; cursor: context-menu; }
+.catchlist .li.fav { background: linear-gradient(135deg, rgba(255,236,170,0.75) 0 60%, rgba(255,224,140,0.55) 60%); }
+.favbtn { width: 30px; height: 30px; border: 0; background: rgba(0,0,0,0.12); clip-path: var(--cut-s); font-size: 20px; filter: grayscale(1) opacity(0.45); }
+.favbtn.on { filter: none; background: rgba(160,100,20,0.25); }
+.price.kept { opacity: 0.45; text-decoration: line-through; }
+.soldby { display: inline-flex; align-items: center; gap: 6px; font: 800 12px var(--body); color: var(--ink2); max-width: 190px; }
+/* ---------------- the playtest panel ---------------- */
+.admin section { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.35); clip-path: var(--cut-s); }
+.admin h3 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; font: 400 17px var(--display); }
+.admin .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.admin .btn { font-size: 14px; padding: 6px 12px; }
+.admin select, .admin input { font: 700 14px var(--body); padding: 6px 8px; border: 2px solid var(--paper3); background: #fffaf0; color: var(--ink); pointer-events: auto; }
+.admin .note { margin: 4px 0 0; font: 700 12px var(--body); color: var(--ink2); }
 .talk { position: absolute; right: 26px; bottom: 110px; width: min(430px, 92vw); pointer-events: auto; animation: toastin 0.2s; }
 .talk .panel { padding: 16px 20px; }
 .talk h3 { font-size: 24px; text-transform: capitalize; }
@@ -347,10 +417,38 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .ending h2 { font-size: 48px; }
 .ending p { font-size: 18px; line-height: 1.6; font-weight: 700; }
 .bigicon .gi { font-size: 80px; }
-.chat { position: absolute; left: 18px; bottom: 150px; width: 340px; display: grid; gap: 4px; }
-.chat .m { font-weight: 800; font-size: 14px; text-shadow: 0 1px 3px #000; animation: toastin 0.2s; }
-.chat input { pointer-events: auto; font: 700 15px var(--body); padding: 8px 10px; border: 0; background: rgba(0,0,0,0.6); color: #fff; clip-path: var(--cut-s); }
-.shout { position: absolute; font: 400 20px var(--display); color: #fff; text-shadow: 0 2px 0 #000, 0 0 8px #000; transform: translate(-50%, -100%); white-space: nowrap; }
+/* ---- text chat (tap CTRL): bottom-left, above the boat panel, fades on its own ---- */
+#chat { position: fixed; left: 18px; bottom: 150px; z-index: 22; width: min(520px, 60vw); pointer-events: none; font-family: var(--body); }
+#chat-log { display: flex; flex-direction: column; gap: 3px; max-height: 210px; overflow: hidden; }
+.chat-line { display: flex; align-items: baseline; gap: 7px; padding: 4px 10px; background: rgba(12,20,28,0.62); clip-path: var(--cut-s);
+  font-size: 14px; font-weight: 700; line-height: 1.4; color: #fbf4e2; text-shadow: 0 1px 2px rgba(0,0,0,0.9); align-self: flex-start; max-width: 100%; opacity: 1; transition: opacity 0.7s ease; }
+.chat-line.gone { opacity: 0; }
+.chat-who { flex: 0 0 auto; font-weight: 900; }
+.chat-text { word-break: break-word; }
+.chat-count { flex: 0 0 auto; color: #9aa8b4; font-size: 12px; }
+.chat-line.system .chat-text { color: #9fd4ff; font-style: italic; }
+.chat-line.undelivered { opacity: 0.62; }
+.chat-line.undelivered .chat-text { text-decoration: line-through; }
+.chat-fail { flex: 0 0 auto; font-size: 10px; font-weight: 900; letter-spacing: 1px; color: #ff8a6a; border: 1px solid #8a3a2a; padding: 0 4px; }
+#chat-entry { display: none; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 12px; background: rgba(12,20,28,0.85); border: 2px solid #5a7a8a; clip-path: var(--cut-s); pointer-events: auto; }
+#chat.open #chat-entry { display: flex; }
+#chat.open .chat-line { opacity: 1; }
+#chat.open #chat-log { max-height: 300px; overflow-y: auto; pointer-events: auto; }
+.chat-caret { color: #f2c14a; font-weight: 900; flex: 0 0 auto; }
+#chat-field { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; outline: none; color: #fbf4e2; font: 700 15px var(--body); padding: 2px 0; }
+.chat-hint { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: #9aa8b4; letter-spacing: 1px; }
+.chat-hint kbd { font: 800 10px var(--body); padding: 1px 4px; margin: 0 2px; background: #1d2a34; border: 1px solid #5a7a8a; color: #fbf4e2; }
+@media (max-width: 620px) { #chat { width: 88vw; } .chat-hint { display: none; } #chat-log { max-height: 150px; } }
+/* ---- voice: who is talking, and your own mic / walkie-talkie ---- */
+.voicehud { position: absolute; right: 18px; bottom: 132px; display: grid; gap: 6px; justify-items: end; }
+.voicehud .vtalk { display: grid; gap: 4px; justify-items: end; }
+.voicehud .chip { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 12px; }
+.voicehud .chip .gi { font-size: 18px; }
+.voicehud .chip small { font-size: 11px; font-weight: 800; color: #c8d0d8; }
+.voicehud .vt { animation: vpulse 0.9s ease-in-out infinite alternate; }
+.voicehud .vt.radio { background: linear-gradient(135deg, rgba(90,70,20,0.92) 0 55%, rgba(60,46,12,0.92) 55%); }
+.voicehud .vme.walkie { background: linear-gradient(135deg, rgba(150,110,30,0.95) 0 55%, rgba(110,80,20,0.95) 55%); color: #fff4c8; }
+@keyframes vpulse { from { transform: scale(1); } to { transform: scale(1.04); } }
 .tutarrow { position: absolute; width: 44px; height: 44px; transform: translate(-50%, -50%); filter: drop-shadow(0 2px 3px #000); }
 .tutarrow .gi { width: 44px; height: 44px; }
 .hide { display: none !important; }

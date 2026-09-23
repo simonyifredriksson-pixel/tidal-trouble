@@ -9,12 +9,12 @@
    genuinely clear. Blockers (building footprints) are passed in from the
    settlement so nothing grows through a cabin. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt } from './Terrain.js?v=1790185859';
-import { regionWeights, WORLD } from './MapData.js?v=1790185859';
-import { hash3, smoothstep, rng } from '../core/Util.js?v=1790185859';
-import { MAT } from '../art/Materials.js?v=1790185859';
-import * as F from '../art/FloraArt.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt } from './Terrain.js?v=1790192871';
+import { regionWeights, WORLD } from './MapData.js?v=1790192871';
+import { hash3, smoothstep, rng } from '../core/Util.js?v=1790192871';
+import { MAT } from '../art/Materials.js?v=1790192871';
+import * as F from '../art/FloraArt.js?v=1790192871';
 
 const BLOCK = 200;
 
@@ -109,6 +109,8 @@ export class Scatter {
         if (h < 48) { p = Math.pow(f, 1.2) * 0.62 * (1 - smoothstep(30, 48, h)); key = 'snowpine'; }
       } else if (w.black > 0.5) {
         p = 0.1; key = hash3(x | 0, z | 0, 6) < 0.6 ? 'deaddark' : 'spire';
+      } else if (w.reach > 0.5) {
+        p = 0.06; key = 'dead';
       } else if (w.tropic > 0.5) {
         if (h < 5) { p = 0.16; key = 'palm'; }
         else { p = 0.2; key = hash3(x | 0, z | 0, 6) < 0.5 ? 'palm' : 'broad'; }
@@ -165,6 +167,7 @@ export class Scatter {
       if (h < 1.6 && q < 0.08 && w.home + w.tropic > 0.5) { this._put('log', x, h - 0.05, z, 1, rot); continue; }
       if (w.frost > 0.5) { if (h < 1.5 && q < 0.09) this._put('ice', x, h - 0.2, z, 0.8 + q * 4, rot); continue; }
       if (w.black > 0.5) continue;
+      if (w.reach > 0.5) { if (q < 0.1 && !pad) this._put('bush', x, h - 0.15, z, 0.5 + q * 3, rot, 0, 0.3); continue; }
       if (pad && q > 0.12) continue;
       if (w.tropic > 0.5) { if (q < 0.18) this._put('tbush', x, h - 0.1, z, 0.9 + q * 2, rot); continue; }
       if (w.home < 0.4) continue;
@@ -254,7 +257,7 @@ export class Grass {
       const h = heightAt(x, z);
       if (h < 1.1 || h > 40) continue;
       const w = regionWeights(x, z);
-      if (w.frost > 0.5 || w.black > 0.5) continue;
+      if (w.frost > 0.5 || w.black > 0.5 || w.reach > 0.5) continue;
       const pa = pathAt(x, z);
       if (pa > 0.25) continue;
       const pd = padAt(x, z);

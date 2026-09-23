@@ -15,9 +15,9 @@
    terrain: turquoise over sand, deep blue in the open, near-black in the
    Blackwater, with foam where the water is thin. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { heightAt } from './Terrain.js?v=1790185859';
-import { LAKES, WORLD } from './MapData.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { heightAt } from './Terrain.js?v=1790192871';
+import { LAKES, WORLD } from './MapData.js?v=1790192871';
 
 const TEX_N = 768;
 const TEX_HALF = WORLD.half + 200;
@@ -51,6 +51,7 @@ float waveAmp(vec2 p) {
   a += 1.15 * sstep(-380.0, -820.0, p.x) * (1.0 - sstep(560.0, 760.0, length(p - vec2(-680.0, 820.0))) * 0.4);
   a += 0.45 * (1.0 - sstep(250.0, 440.0, length(p - vec2(-680.0, 820.0))));
   a += 0.12 * (1.0 - sstep(200.0, 420.0, length(p - vec2(800.0, 120.0))));
+  a += 0.5 * (1.0 - sstep(170.0, 540.0, length(p - vec2(1015.0, 1005.0))));
   float edge = max(abs(p.x), abs(p.y));
   a += 1.4 * sstep(${(WORLD.half - 250).toFixed(1)}, ${WORLD.half.toFixed(1)}, edge);
   ${lakeGLSL()}
@@ -124,6 +125,8 @@ void main() {
   deep = mix(deep, vec3(0.004, 0.170, 0.260), wTrop);   shal = mix(shal, vec3(0.120, 0.700, 0.620), wTrop);
   deep = mix(deep, vec3(0.008, 0.060, 0.120), wOpen);   shal = mix(shal, vec3(0.040, 0.230, 0.320), wOpen);
   deep = mix(deep, vec3(0.002, 0.004, 0.008), wBlack);  shal = mix(shal, vec3(0.012, 0.030, 0.040), wBlack);
+  float wReach = 1.0 - sstep(260.0, 720.0, length(p - vec2(1015.0, 1005.0)));
+  deep = mix(deep, vec3(0.018, 0.032, 0.040), wReach);  shal = mix(shal, vec3(0.080, 0.130, 0.135), wReach);
 
   float shallow = 1.0 - sstep(0.0, 9.0, depth);
   vec3 col = mix(deep, shal, shallow);

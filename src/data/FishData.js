@@ -138,6 +138,20 @@ export const FISH = [
     fight: { power: 2.2, stamina: 2.4, erratic: 0.3, jump: 0 }, art: A({ h: 0.26, w: 0.15, back: 0x2a3a5a, belly: 0x4a5a7a, pat: 'spots', patCol: 0xe0e8f0, fin: 0x2a3a5a, tail: 'round', extras: ['lobefins'] }),
     blurb: 'Supposed to have died out with the dinosaurs. Did not get the memo.' },
 
+  /* ---------------- Vigil's End ---------------- */
+  { id: 'fogfin', name: 'Fogfin', rarity: 'uncommon', where: ['reach'], water: 'sea', time: 'any', bait: { worm: 0.8, pieces: 1, glow: 1.2 }, kg: [0.6, 6], cm: [30, 70], value: 180,
+    fight: { power: 1.3, stamina: 1.3, erratic: 0.9, jump: 0.4 }, art: A({ h: 0.24, w: 0.1, back: 0xa8b0b4, belly: 0xe8ecee, fin: 0xc8d0d4, pat: 'waves', patCol: 0x8a9296, tail: 'veil', extras: ['sail'] }),
+    blurb: 'Grey as the fog it swims under, with fins like torn sails. The old men of the Vigil call them little ghosts.' },
+  { id: 'hushray', name: 'Hush Ray', rarity: 'rare', where: ['reach'], water: 'sea', time: 'any', bait: { pieces: 1.2, glow: 1.3, mystery: 1 }, kg: [8, 60], cm: [80, 220], value: 900,
+    fight: { power: 2.2, stamina: 2.2, erratic: 0.5, jump: 0.3 }, art: A({ h: 0.6, w: 0.04, back: 0x4a5058, belly: 0xe8e8ea, fin: 0x3a4048, pat: 'spots', patCol: 0xc8d0d8, flat: true, tail: 'eel' }),
+    blurb: 'A grey ray that glides without a sound. They gather wherever something much larger has just passed.' },
+  { id: 'watcher', name: 'Watcher Grouper', rarity: 'epic', where: ['reach'], water: 'sea', time: 'any', bait: { pieces: 1.4, mystery: 1.2 }, kg: [60, 320], cm: [150, 280], value: 2400,
+    fight: { power: 2.9, stamina: 3.0, erratic: 0.35, jump: 0 }, art: A({ h: 0.36, w: 0.2, back: 0x3a4046, belly: 0x9aa0a4, fin: 0x2a3036, pat: 'spots', patCol: 0x6af0ff, mouth: 1.8, head: 1.4, tail: 'round', extras: ['glow'] }),
+    blurb: 'An enormous old grouper with lamps for eyes. It watches the deep water beyond the rocks, day and night.' },
+  { id: 'vigillight', name: 'Vigil Lantern', rarity: 'legendary', where: ['reach'], water: 'sea', time: 'night', bait: { glow: 1.6, mystery: 1.2 }, kg: [2, 9], cm: [40, 80], value: 5200,
+    fight: { power: 1.8, stamina: 2.0, erratic: 1.3, jump: 0.8 }, art: A({ h: 0.3, w: 0.13, back: 0x2a3a4a, belly: 0xd8f0ff, fin: 0x9af0ff, pat: 'lights', patCol: 0xd8fcff, tail: 'veil', extras: ['glow', 'lure'] }),
+    blurb: 'The fishermen light a lantern every night so that this fish has something to swim towards. Almost nobody has caught one.' },
+
   /* ---------------- the weird ones ---------------- */
   { id: 'bombfish', name: 'Bombfish', rarity: 'uncommon', where: 'all', water: 'any', time: 'any', bait: { explosive: 3, mystery: 1, worm: 0.2 }, kg: [1, 4], cm: [25, 45], value: 140, beh: 'bomb',
     fight: { power: 1.0, stamina: 0.8, erratic: 0.6, jump: 0.4 }, art: A({ h: 0.5, w: 0.45, back: 0x2a2a2e, belly: 0x4a4a50, fin: 0xc03a2a, pat: 'none', tail: 'round', extras: ['fuse'] }),
@@ -205,6 +219,10 @@ export const GIANTS = [
     blurb: 'Its lure is the size of a lantern. So is each tooth.' },
 ];
 
+// the deep-water regulars follow you all the way out to Vigil's End
+for (const f of FISH) if (['cod', 'mackerel', 'tuna', 'halibut', 'marlin', 'swordfish', 'oarfish', 'angler', 'viper', 'gulper', 'coelacanth', 'sharkfish', 'mimic', 'chest'].includes(f.id) && Array.isArray(f.where)) f.where.push('reach');
+GIANTS.find(g => g.id === 'abyssangler').where.push('reach');
+
 export const FISH_BY_ID = Object.fromEntries([...FISH, ...GIANTS].map(f => [f.id, f]));
 
 /** Median weight of a species. */
@@ -219,6 +237,7 @@ export const ZMIN = {
   frostpike: 2, barracuda: 2, mahi: 2, tuna: 2, halibut: 2, mimic: 2, sharkfish: 2, ghost: 2,
   glaciersalmon: 3, swordfish: 3, sunfish: 3, marlin: 3, oarfish: 3, lantern: 3,
   angler: 4, viper: 4, gulper: 4, coelacanth: 4,
+  fogfin: 4, hushray: 4, watcher: 4, vigillight: 4,
 };
 export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
 
@@ -247,10 +266,14 @@ export function rollVariant(zone, r = Math.random) {
 }
 export const zoneSizeBoost = z => ZONE_SIZE[Math.max(0, Math.min(4, z | 0))];
 
-/** How hard a fish fights on the bar (compared against a rod's rating). */
+/** How hard a fish fights on the bar (compared against a rod's rating).
+    One rule everywhere: bigger, rarer, pricier and stranger fish fight harder. */
+const RARITY_FIGHT = { common: 0, uncommon: 0.05, rare: 0.12, epic: 0.22, legendary: 0.34, giant: 0.25, junk: 0 };
 export function fightOf(f, kg, variant = null) {
   const F = f.fight;
   let v = 0.45 + F.power * 0.33 + Math.log10(Math.max(0.05, kg) + 1) * 0.32;
+  v += RARITY_FIGHT[f.rarity] || 0;
+  v += Math.max(0, Math.log10(Math.max(1, f.value) / 100)) * 0.05;
   if (variant && VARIANT_BY_ID[variant]) v += VARIANT_BY_ID[variant].fight;
   return v;
 }

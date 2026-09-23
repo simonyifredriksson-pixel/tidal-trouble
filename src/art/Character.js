@@ -8,10 +8,10 @@
    States: idle walk run sit fish reel cheer fall swim drive talk carry
    Feet are at y = 0 of the root; +Z is the way the character faces. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790185859';
-import { MAT } from './Materials.js?v=1790185859';
-import { rng, clamp, lerp, damp } from '../core/Util.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790192871';
+import { MAT } from './Materials.js?v=1790192871';
+import { rng, clamp, lerp, damp } from '../core/Util.js?v=1790192871';
 
 const SKINS = [0xf1c9a5, 0xe0ac86, 0xc68a62, 0x9a6444, 0x70462e, 0xf5d7bd];
 
@@ -215,7 +215,7 @@ export class Character {
 
     // animation state
     this.state = 'idle';
-    this.w = { idle: 1, walk: 0, run: 0, sit: 0, fish: 0, reel: 0, cheer: 0, fall: 0, swim: 0, drive: 0, talk: 0, carry: 0 };
+    this.w = { idle: 1, walk: 0, run: 0, sit: 0, sitfish: 0, fish: 0, reel: 0, cheer: 0, fall: 0, swim: 0, drive: 0, talk: 0, carry: 0 };
     this.t = this.r() * 10;
     this.speed = 0;
     this.lookYaw = 0; this.lookPitch = 0;
@@ -226,22 +226,30 @@ export class Character {
 
   setName(name, color = '#ffffff') {
     if (this.nameTag) { this.head.remove(this.nameTag); this.nameTag.material.map.dispose(); }
+    // bold white letters in a thick black outline, with a little pointer
+    // under them - readable against fog, sky or a sunset
     const cv = document.createElement('canvas');
-    cv.width = 256; cv.height = 64;
+    cv.width = 384; cv.height = 112;
     const c = cv.getContext('2d');
     if (c) {
-      c.font = '600 38px "Alegreya", Georgia, serif';
+      const label = String(name).toUpperCase();
+      let fs = 50;
+      c.font = `400 ${fs}px "Luckiest Guy", "Bree Serif", Georgia, sans-serif`;
+      while (c.measureText(label).width > 350 && fs > 22) { fs -= 2; c.font = `400 ${fs}px "Luckiest Guy", "Bree Serif", Georgia, sans-serif`; }
       c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillStyle = 'rgba(0,0,0,0.55)';
-      c.fillText(name, 129, 35);
+      c.lineJoin = 'round';
+      c.lineWidth = 11; c.strokeStyle = '#111';
+      c.strokeText(label, 192, 44);
       c.fillStyle = color;
-      c.fillText(name, 128, 32);
+      c.fillText(label, 192, 42);
+      c.beginPath(); c.moveTo(178, 84); c.lineTo(206, 84); c.lineTo(192, 100); c.closePath();
+      c.lineWidth = 6; c.stroke(); c.fillStyle = color; c.fill();
     }
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true, fog: false }));
-    sp.scale.set(1.2, 0.3, 1);
-    sp.position.y = 0.62;
+    sp.scale.set(1.25, 0.365, 1);
+    sp.position.y = 0.66;
     sp.renderOrder = 5;
     this.nameTag = sp;
     this.head.add(sp);
@@ -262,6 +270,7 @@ export class Character {
     this.speed = damp(this.speed, speed, 8, dt);
     for (const k in this.w) this.w[k] = damp(this.w[k], k === state ? 1 : 0, 9, dt);
     const W = this.w, t = this.t;
+    const FISH = W.fish + W.sitfish;
 
     // falling overrides with its own clock
     if (this.fallT > 0) {
@@ -276,7 +285,7 @@ export class Character {
 
     // legs
     const [lL, lR] = this.legs;
-    const sit = W.sit + W.drive * 0.2;
+    const sit = W.sit + W.sitfish + W.drive * 0.2;
     lL.rotation.x = -swing - sit * 1.45 + W.swim * Math.sin(t * 6) * 0.4 - fallA * 1.2;
     lR.rotation.x = swing - sit * 1.45 - W.swim * Math.sin(t * 6) * 0.4 - fallA * 1.0;
     lL.userData.knee.rotation.x = Math.max(0, Math.sin(cyc + 1.2)) * 0.8 * wk + sit * 1.5 + W.swim * 0.3 + fallA * 0.3;
@@ -288,7 +297,7 @@ export class Character {
     const breathe = Math.sin(t * 1.8) * 0.01;
     const jump = W.cheer * Math.max(0, Math.sin(t * 7)) * 0.18;
     this.hips.position.y = 0.92 * this.look.height + bob + jump - sit * 0.42 - W.swim * 0.5;
-    this.torso.rotation.x = 0.06 * W.run + breathe + W.fish * 0.08 + W.reel * 0.12 - sit * 0.1 + W.swim * 1.2 + W.carry * -0.05;
+    this.torso.rotation.x = 0.06 * W.run + breathe + FISH * 0.08 + W.reel * 0.12 - sit * 0.1 + W.swim * 1.2 + W.carry * -0.05;
     this.torso.rotation.y = Math.sin(cyc) * 0.08 * wk;
     this.torso.rotation.z = W.talk * Math.sin(t * 2) * 0.04;
 
@@ -298,12 +307,12 @@ export class Character {
     // arms
     const [aL, aR] = this.arms;
     const talkL = W.talk * (Math.sin(t * 3.1) * 0.35 + 0.4), talkR = W.talk * (Math.sin(t * 2.3 + 1) * 0.3 + 0.2);
-    aL.rotation.x = swing * 0.9 - W.fish * 1.0 - W.reel * 1.0 - W.cheer * 2.8 - W.drive * 1.1 - talkL - W.carry * 1.2 + W.swim * (Math.sin(t * 3) * 1.6 - 2.2) + fallA * -1.8;
-    aR.rotation.x = -swing * 0.9 - W.fish * 1.2 - W.reel * (1.05 + Math.sin(t * 9) * 0.25) - W.cheer * 2.8 - W.drive * 1.1 - talkR - W.carry * 1.2 + W.swim * (Math.sin(t * 3 + Math.PI) * 1.6 - 2.2) + fallA * -1.6;
-    aL.rotation.z = -0.08 - W.cheer * 0.35 - W.idle * 0.04 + W.fish * 0.35 + W.reel * 0.3 + W.carry * 0.3;
-    aR.rotation.z = 0.08 + W.cheer * 0.35 + W.idle * 0.04 - W.fish * 0.2 - W.reel * 0.1 - W.carry * 0.3;
-    aL.userData.elbow.rotation.x = -0.15 - W.fish * 0.5 - W.reel * 0.6 - W.drive * 0.4 - W.talk * 0.6 - W.carry * 0.4 - W.walk * 0.25;
-    aR.userData.elbow.rotation.x = -0.15 - W.fish * 0.3 - W.reel * (0.6 + Math.cos(t * 9) * 0.3) - W.drive * 0.4 - W.talk * 0.5 - W.carry * 0.4 - W.walk * 0.25;
+    aL.rotation.x = swing * 0.9 - FISH * 1.0 - W.reel * 1.0 - W.cheer * 2.8 - W.drive * 1.1 - talkL - W.carry * 1.2 + W.swim * (Math.sin(t * 3) * 1.6 - 2.2) + fallA * -1.8;
+    aR.rotation.x = -swing * 0.9 - FISH * 1.2 - W.reel * (1.05 + Math.sin(t * 9) * 0.25) - W.cheer * 2.8 - W.drive * 1.1 - talkR - W.carry * 1.2 + W.swim * (Math.sin(t * 3 + Math.PI) * 1.6 - 2.2) + fallA * -1.6;
+    aL.rotation.z = -0.08 - W.cheer * 0.35 - W.idle * 0.04 + FISH * 0.35 + W.reel * 0.3 + W.carry * 0.3;
+    aR.rotation.z = 0.08 + W.cheer * 0.35 + W.idle * 0.04 - FISH * 0.2 - W.reel * 0.1 - W.carry * 0.3;
+    aL.userData.elbow.rotation.x = -0.15 - FISH * 0.5 - W.reel * 0.6 - W.drive * 0.4 - W.talk * 0.6 - W.carry * 0.4 - W.walk * 0.25;
+    aR.userData.elbow.rotation.x = -0.15 - FISH * 0.3 - W.reel * (0.6 + Math.cos(t * 9) * 0.3) - W.drive * 0.4 - W.talk * 0.5 - W.carry * 0.4 - W.walk * 0.25;
 
     // head looks where it is told, plus a little life
     this.head.rotation.y = damp(this.head.rotation.y, clamp(this.lookYaw, -1.1, 1.1) + W.idle * Math.sin(t * 0.37) * 0.25, 5, dt);

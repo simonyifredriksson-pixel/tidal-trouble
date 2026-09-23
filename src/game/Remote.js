@@ -5,11 +5,11 @@
    animation, tool, and their fishing line so you can watch them fight a
    fish from across the boat. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { Character, PLAYER_LOOKS } from '../art/Character.js?v=1790185859';
-import { buildRod, buildBobber } from '../art/RodArt.js?v=1790185859';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790185859';
-import { damp, dampAngle } from '../core/Util.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { Character, PLAYER_LOOKS } from '../art/Character.js?v=1790192871';
+import { buildRod, buildBobber } from '../art/RodArt.js?v=1790192871';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790192871';
+import { damp, dampAngle } from '../core/Util.js?v=1790192871';
 
 const COLORS = ['#ffd27a', '#8af0ff', '#b8f08a', '#f0a8ff'];
 const _v = new THREE.Vector3();
@@ -40,7 +40,8 @@ export class Remote {
     this.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xe8e8e0 }));
     this.line.frustumCulled = false; this.line.visible = false;
     game.scene.add(this.bob, this.line);
-    this.shout = null;
+    this.walkie = false;
+    this.rodId = 'basic';
   }
 
   apply(s) {
@@ -63,6 +64,16 @@ export class Remote {
     this.yaw = dampAngle(this.yaw, s.yaw, 14, dt);
     this.pitch = damp(this.pitch, s.pitch, 14, dt);
     this.mode = s.m; this.anim = s.a; this.tool = s.t; this.hp = s.hp;
+    this.walkie = !!s.wk;
+    // show the rod they are actually holding - every rod is its own model
+    if (s.r && s.r !== this.rodId && ROD_BY_ID[s.r]) {
+      this.rodId = s.r;
+      this.c.hold(null);
+      this.rod = buildRod(ROD_BY_ID[s.r]);
+      this.rod.group.scale.setScalar(0.85);
+      this.rod.group.rotation.x = Math.PI / 2 - 0.5;
+      this.c.hold(this.rod.group);
+    }
     this.eye.set(this.pos.x, this.pos.y + 1.6, this.pos.z);
     const root = this.c.root;
     root.position.copy(this.pos);

@@ -11,7 +11,7 @@
      The Open Sea    everything west - big swell, few rocks, a lighthouse
      The Blackwater  deep trench to the south-west ringed by black spires */
 
-import { smoothstep, clamp } from '../core/Util.js?v=1790185859';
+import { smoothstep, clamp } from '../core/Util.js?v=1790192871';
 
 export const WORLD = {
   half: 1300,          // playable half-extent
@@ -25,7 +25,14 @@ export const REGIONS = {
   tropic: { id: 'tropic', name: 'Sunken Coast',   x: 800,  z: 120,  r: 400, color: 0xf0c872, blurb: 'Tropical islands, old shipwrecks and very strange fish.' },
   open:   { id: 'open',   name: 'The Open Sea',   x: -850, z: -60,  r: 520, color: 0x3f7fa6, blurb: 'Huge waves, huge fish and storms. Bring a better boat.' },
   black:  { id: 'black',  name: 'The Blackwater', x: -680, z: 820,  r: 440, color: 0x1e2430, blurb: 'Extremely deep. Almost no light. Something enormous lives down there.' },
+  reach:  { id: 'reach',  name: "Vigil's End",    x: 1015, z: 1005, r: 420, color: 0x6a7078, blurb: 'The last island before the edge of the sea. Fog, rocks and six old fishermen waiting for something.' },
 };
+/* Vigil's End: the farthest island in the playable sea. Everything about the
+   approach - the fog, the colour draining out of the sky, the rock field, the
+   heavier swell - is keyed off the distance to this point. */
+export const VIGIL = { x: 1015, z: 1005 };
+/** 0..1: how deep into the Vigil's End murk a point is. */
+export function mistAt(x, z) { return 1 - smoothstep(240, 720, Math.hypot(x - VIGIL.x, z - VIGIL.z)); }
 export const REGION_LIST = Object.values(REGIONS);
 
 /* Islands: r = shore radius, h = peak height, rise = fraction of the radius
@@ -63,6 +70,12 @@ export const ISLANDS = [
   { id: 'spire4', x: -900, z: 690, r: 17, h: 30, rise: 0.25, shape: 0.5, hill: 2, ridge: 0, warp: 0.35, wf: 0.05, slope: 0.7, region: 'black' },
   { id: 'spire5', x: -640, z: 580, r: 14, h: 26, rise: 0.25, shape: 0.5, hill: 2, ridge: 0, warp: 0.35, wf: 0.05, slope: 0.7, region: 'black' },
   { id: 'wreckisle', x: -560, z: 740, r: 20, h: 5, rise: 0.4, shape: 1, hill: 1, ridge: 0, warp: 0.25, wf: 0.04, slope: 0.3, region: 'black' },
+  // --- Vigil's End: a cliff-walled island with a notch cut for the landing ---
+  { id: 'vigil', x: 1015, z: 1005, r: 82, h: 17, rise: 0.2, shape: 0.7, hill: 3, ridge: 5, warp: 0.2, wf: 0.011, slope: 0.55, region: 'reach' },
+  { id: 'vstackA', x: 1105, z: 925, r: 11, h: 22, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
+  { id: 'vstackB', x: 930, z: 1085, r: 9, h: 18, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
+  { id: 'vstackC', x: 1110, z: 1100, r: 13, h: 26, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
+  { id: 'vstackD', x: 1060, z: 1150, r: 8, h: 15, rise: 0.2, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
 ];
 
 /* Lakes are carved out of land down to `depth` below sea level. They share
@@ -77,11 +90,16 @@ export const LAKES = [
 export const PADS = [
   { id: 'village', x: 25, z: 150, r: 62, y: 1.5 },
   { id: 'guildyard', x: -40, z: 128, r: 30, y: 2.2 },
-  { id: 'cabinlot', x: 92, z: 138, r: 22, y: 1.7 },
   { id: 'frostcamp', x: 44, z: -520, r: 22, y: 1.4 },
   { id: 'lakecamp', x: 55, z: -612, r: 14, y: 1.0 },
   { id: 'tiki', x: 690, z: 90, r: 22, y: 1.2 },
   { id: 'lightyard', x: -820, z: -60, r: 9, y: 11 },
+  // your home on the south-east waterfront: the hut, Pim's stall and the dock
+  { id: 'homecove', x: 128, z: 156, r: 26, y: 1.45 },
+  // Vigil's End: the landing, a terrace half way up, the hut on the cliff top
+  { id: 'vlanding', x: 955, z: 950, r: 26, y: 1.3 },
+  { id: 'vterrace', x: 975, z: 968, r: 17, y: 7.5 },
+  { id: 'vhut', x: 996, z: 985, r: 16, y: 14.5 },
 ];
 
 /* Channels: carved strips of water (x0,z0 -> x1,z1, width, bed depth). */
@@ -97,7 +115,9 @@ export const PATHS = [
   { w: 3.4, pts: [[25, 150], [-10, 120], [-40, 60], [-60, 0], [-70, -10]] },   // village -> Mirror Lake
   { w: 3.0, pts: [[25, 150], [60, 100], [85, 40], [88, -60]] },                 // village -> Reed Pond
   { w: 3.2, pts: [[25, 150], [-40, 128]] },                                    // to the guild hall
-  { w: 3.2, pts: [[25, 150], [92, 138]] },                                     // to your cabin
+  { w: 3.2, pts: [[25, 150], [70, 150], [104, 156], [124, 158]] },           // down to your hut on the cove
+  { w: 2.6, pts: [[124, 158], [130, 172]] },                                   // hut -> your dock
+  { w: 2.2, pts: [[955, 950], [975, 968], [996, 985], [1012, 1004]] },         // Vigil's End: landing -> cliff top
   { w: 3.0, pts: [[44, -520], [52, -565], [55, -612]] },                         // frost beach -> lake camp
   { w: 2.6, pts: [[690, 90], [700, 40], [690, 0]] },
 ];
@@ -112,7 +132,7 @@ export function regionWeights(x, z) {
     const d = Math.hypot(x - R.x, z - R.z);
     w[R.id] = 1 - smoothstep(R.r * 0.55, R.r, d);
   }
-  const others = Math.max(w.home, w.frost, w.tropic, w.black);
+  const others = Math.max(w.home, w.frost, w.tropic, w.black, w.reach);
   w.open = clamp(1 - others, 0, 1) * (0.6 + 0.4 * smoothstep(-300, -700, x));
   return w;
 }
@@ -134,6 +154,8 @@ export function waveAmp(x, z) {
   a += 1.15 * smoothstep(-380, -820, x) * (1 - smoothstep(560, 760, Math.hypot(x + 680, z - 820)) * 0.4);
   a += 0.45 * (1 - smoothstep(250, 440, Math.hypot(x + 680, z - 820)));
   a += 0.12 * (1 - smoothstep(200, 420, Math.hypot(x - 800, z - 120)));
+  // the swell gets heavy around Vigil's End: a rowboat will not make it
+  a += 0.5 * (1 - smoothstep(170, 540, Math.hypot(x - 1015, z - 1005)));
   const edge = Math.max(Math.abs(x), Math.abs(z));
   a += 1.4 * smoothstep(WORLD.half - 250, WORLD.half, edge);
   // lakes are nearly still, the frozen lake entirely
@@ -182,6 +204,8 @@ export const PLACES = [
   { name: 'Mount Smoulder', x: 1000, z: -120, kind: 'isle' },
   { name: 'Old Lighthouse', x: -820, z: -60, kind: 'isle' },
   { name: 'The Drowned Gate', x: -680, z: 820, kind: 'mystery' },
+  { name: 'Your Hut', x: 128, z: 150, kind: 'town' },
+  { name: "Vigil's End", x: 1015, z: 1005, kind: 'mystery' },
 ];
 
 /* ---------------- depth zones: the farther out, the crazier it gets ----------------

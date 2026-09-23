@@ -12,9 +12,9 @@
      cols     colliders in LOCAL space: boxes {x,z,hw,hd,y0,y1,floor?}
      anchors  named local points (door, counter, stool, mount slots...) */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { MeshBuilder, mixHex, shadeHex } from './Geo.js?v=1790185859';
-import { rng, TAU } from '../core/Util.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { MeshBuilder, mixHex, shadeHex } from './Geo.js?v=1790192871';
+import { rng, TAU } from '../core/Util.js?v=1790192871';
 
 const WALL_T = 0.14;
 
@@ -496,6 +496,143 @@ export function buildScale(col = 0x6ad0c0) {
     b.card([0, 0, 0], [pts[i][0], pts[i][1], 0.05 * i % 0.1], [pts[i + 1][0], pts[i + 1][1], 0.05]);
   }
   return b.build();
+}
+
+/* ------------------------------------------------------------------ */
+/* the home cove: Pim's stall, little boats, pots and baskets           */
+/* ------------------------------------------------------------------ */
+
+/** Pim's fish stall. Counter along X, customers stand at +Z, the seller at -Z. */
+export function buildFishStall(b, r) {
+  // counter: planked front, thick top, ice trays full of fish
+  for (let i = 0; i < 8; i++) b.color(shadeHex(0x7a5836, 0.85 + r() * 0.25)).box(0.38, 1.0, 0.08, -1.33 + i * 0.38, 0.5, 0.52);
+  b.color(0x5a4028).box(3.1, 1.0, 0.9, 0, 0.5, 0.05);
+  b.color(0x9a7446).box(3.3, 0.09, 1.2, 0, 1.04, 0.05);
+  for (let i = 0; i < 3; i++) {
+    b.color(0xd8e8f0).box(0.86, 0.1, 0.72, -1.02 + i * 1.02, 1.13, 0.1);
+    b.color(0xf0f8fc); for (let k = 0; k < 6; k++) b.lump(0.05, -1.3 + i * 1.02 + r() * 0.6, 1.2, -0.15 + r() * 0.5, 0.4, 0.6);
+    const col = [0x8a9aa8, 0xc88a5a, 0x5a7a4a][i];
+    for (let k = 0; k < 3; k++) { b.color(shadeHex(col, 0.9 + r() * 0.2)); b.push(-1.02 + i * 1.02 + (k - 1) * 0.08, 1.23 + k * 0.03, (k - 1) * 0.2, 0, (r() - 0.5) * 0.6, 0); b.blob(0.24, 0.055, 0.075, 0, 0, 0, 6, 2); b.color(shadeHex(col, 0.7)).cone(0.06, -0.3, -0.2, 3); b.pop(); }
+  }
+  // awning on four posts, red and white canvas
+  b.color(0x5a4230);
+  for (const px of [-1.55, 1.55]) for (const pz of [-0.55, 0.65]) b.box(0.1, 2.7, 0.1, px, 1.35, pz);
+  for (let i = 0; i < 8; i++) {
+    b.color(i % 2 ? 0xf2eee2 : 0xc8412e);
+    b.push(-1.52 + i * 0.435, 2.62, 0.05, 0.16, 0, 0); b.box(0.44, 0.05, 1.7, 0, 0, 0); b.pop();
+    b.push(-1.52 + i * 0.435, 2.36, 0.94, 0, 0, 0); b.box(0.44, 0.34, 0.03, 0, 0, 0); b.pop();
+  }
+  // a hanging weighing scale with a fish on it
+  b.color(0x3a3a3a).box(0.02, 0.3, 0.02, 1.1, 2.35, 0.55);
+  b.color(0xb8a060).cyl(0.12, 0.12, 2.12, 2.2, 8, true, 1.1, 0.55);
+  b.color(0xe8e0c8).cyl(0.1, 0.1, 2.14, 2.2, 8, false, 1.1, 0.62);
+  b.color(0x9a9aa0).cyl(0.2, 0.14, 1.76, 1.8, 8, true, 1.1, 0.55);
+  b.color(0x7a8a9a); b.push(1.1, 1.84, 0.55); b.blob(0.2, 0.05, 0.06, 0, 0, 0, 6, 2); b.pop();
+  // the back table: a cutting board, a knife, a bucket of scraps
+  b.color(0x6a4a30).box(2.4, 0.08, 0.6, 0, 0.88, -0.95);
+  for (const px of [-1.1, 1.1]) b.box(0.08, 0.88, 0.5, px, 0.44, -0.95);
+  b.color(0xc8a878).box(0.7, 0.05, 0.4, -0.5, 0.95, -0.95);
+  b.color(0xc0c4c8).box(0.26, 0.012, 0.05, -0.45, 0.98, -0.9); b.color(0x3a2a20).box(0.12, 0.02, 0.05, -0.68, 0.98, -0.9);
+  b.color(0x8a8a90).lathe([[0.16, 0], [0.19, 0.3], [0.2, 0.32]], 8, 0.7, -0.95); b.push(0, 0.93, 0); b.pop();
+}
+
+/** A little clinker rowboat (a prop, not a vehicle). Bow along +Z. */
+export function buildRowboat(b, r, col = 0x3a6a8a, flip = false) {
+  b.push(0, flip ? 0.5 : 0, 0, 0, 0, flip ? Math.PI : 0);
+  const L = 3.4, W = 0.75;
+  for (let k = 0; k < 4; k++) {
+    const y = 0.08 + k * 0.1, w = W * (0.55 + k * 0.15);
+    b.color(shadeHex(k === 3 ? 0xe8e0cc : col, 0.9 + r() * 0.15));
+    for (const s of [-1, 1]) {
+      b.beam([s * w * 0.35, y, -L / 2 + 0.2], [s * w, y, -L * 0.15], 0.05, 0.1);
+      b.beam([s * w, y, -L * 0.15], [s * w, y, L * 0.2], 0.05, 0.1);
+      b.beam([s * w, y, L * 0.2], [0, y + 0.05, L / 2], 0.05, 0.1);
+    }
+  }
+  b.color(shadeHex(col, 0.7)).box(W * 0.9, 0.05, L * 0.62, 0, 0.06, -0.05);
+  b.color(0x7a5836); for (const z of [-0.8, 0.4]) b.box(W * 1.7, 0.05, 0.26, 0, 0.36, z);
+  b.color(0x9a7446); b.beam([0.4, 0.4, 0.4], [1.0, 0.25, -1.4], 0.05, 0.05); b.box(0.12, 0.02, 0.5, 1.05, 0.25, -1.6);
+  b.pop();
+}
+
+/** A stack of crab pots: wooden frames wrapped in net. */
+export function buildCrabPots(b, r, n = 3) {
+  for (let i = 0; i < n; i++) {
+    const y = i < 2 ? 0 : 0.5, x = i < 2 ? i * 0.7 - 0.35 : 0;
+    b.push(x, y, 0, 0, (r() - 0.5) * 0.3, 0);
+    b.color(0x6a4a30);
+    for (const sx of [-0.3, 0.3]) for (const sz of [-0.25, 0.25]) b.box(0.04, 0.48, 0.04, sx, 0.24, sz);
+    b.box(0.64, 0.04, 0.54, 0, 0.48, 0); b.box(0.64, 0.04, 0.54, 0, 0.02, 0);
+    b.color(0xc4b48a);
+    for (let k = 0; k < 6; k++) b.box(0.006, 0.44, 0.52, -0.25 + k * 0.1, 0.25, 0);
+    for (let k = 0; k < 4; k++) b.box(0.62, 0.006, 0.52, 0, 0.1 + k * 0.1, 0);
+    b.color(0xe0402a).blob(0.07, 0.07, 0.07, 0.3, 0.52, 0.25, 5, 3);
+    b.pop();
+  }
+}
+
+/** A woven fish basket, with the day's catch sticking out. */
+export function buildFishBasket(b, r, x = 0, z = 0) {
+  b.color(0xb08a50).lathe([[0.2, 0], [0.26, 0.12], [0.3, 0.32], [0.32, 0.36]], 9, x, z, 0, t => shadeHex(0xb08a50, 0.8 + ((t * 7) % 1) * 0.35));
+  const cols = [0x8a9aa8, 0x6a8a5a, 0xc88a5a];
+  for (let k = 0; k < 4; k++) { b.color(cols[k % 3]); b.push(x + (r() - 0.5) * 0.25, 0.36, z + (r() - 0.5) * 0.25, 0, r() * 6, 1.1 + r() * 0.3); b.blob(0.18, 0.04, 0.055, 0, 0, 0, 5, 2); b.pop(); }
+}
+
+/** A firewood pile and a chopping block with the hand axe buried in it. */
+export function buildWoodpile(b, r) {
+  b.color(0x6a4a30);
+  for (let row = 0; row < 3; row++) for (let i = 0; i < 6 - row; i++) {
+    b.color(shadeHex(0x7a5838, 0.8 + r() * 0.3));
+    b.push(-0.9 + i * 0.3 + row * 0.15, 0.13 + row * 0.24, 0, Math.PI / 2, 0, 0); b.cyl(0.13, 0.13, -0.6, 0.6, 6, true); b.pop();
+    b.color(0xd8b888).cyl(0.1, 0.1, 0.6, 0.61, 6, false, -0.9 + i * 0.3 + row * 0.15, 0.13 + row * 0.24);
+  }
+  // the block and the axe
+  b.color(0x6a4a30).cyl(0.34, 0.36, 0, 0.55, 8, true, 1.4, 0.2);
+  b.color(0xc8a070).cyl(0.3, 0.3, 0.55, 0.56, 8, false, 1.4, 0.2);
+  b.push(1.4, 0.56, 0.2, 0, 0.5, -0.5);
+  b.color(0x7a5836).cyl(0.03, 0.035, 0, 0.75, 6, true);
+  b.color(0x8a9098).box(0.04, 0.16, 0.22, 0, 0.02, 0.06);
+  b.pop();
+}
+
+/**
+ * The trophy bookcase. Built at the origin, back against -Z, front at +Z.
+ * Returns the cubbies in local space: { S: [...], L: [...] } with the floor
+ * point of each cubby, its width and its height.
+ */
+export function buildBookcase(b, r, W = 4.0, H = 2.62, D = 0.46) {
+  const wood = 0x5a3a24, edge = 0x6e4a2e;
+  const S = [], L = [];
+  // carcass
+  b.color(wood).box(W, H, 0.05, 0, H / 2, -D / 2 + 0.025);
+  for (const sx of [-1, 1]) b.color(edge).box(0.08, H, D, sx * (W / 2 - 0.04), H / 2, 0);
+  b.color(edge).box(W, 0.1, D, 0, 0.05, 0);
+  b.color(edge).box(W + 0.12, 0.1, D + 0.08, 0, H - 0.05, 0.02);
+  // crown moulding and a carved board
+  b.color(0x4a2e1c).box(W + 0.2, 0.06, D + 0.12, 0, H + 0.02, 0.03);
+  // the big bottom shelf (four large spaces) and four rows of ten cubbies
+  const rows = [0.1, 0.86, 1.3, 1.74, 2.18];
+  b.color(edge);
+  for (let i = 1; i < rows.length; i++) b.box(W - 0.1, 0.05, D - 0.02, 0, rows[i] - 0.025, 0.01);
+  // large bay dividers
+  for (let k = 1; k < 4; k++) b.box(0.05, rows[1] - 0.1, D - 0.04, -W / 2 + k * W / 4, (rows[1] + 0.1) / 2, 0);
+  for (let k = 0; k < 4; k++) L.push({ x: -W / 2 + (k + 0.5) * W / 4, y: 0.1, z: 0.02, w: W / 4 - 0.1, h: rows[1] - 0.14 });
+  // small cubby dividers
+  const cw = (W - 0.1) / 10;
+  for (let row = 1; row < rows.length; row++) {
+    const y0 = rows[row], y1 = row + 1 < rows.length ? rows[row + 1] - 0.05 : H - 0.1;
+    for (let k = 1; k < 10; k++) b.color(shadeHex(edge, 0.9)).box(0.03, y1 - y0, D - 0.06, -W / 2 + 0.05 + k * cw, (y0 + y1) / 2, 0);
+    for (let k = 0; k < 10; k++) S.push({ x: -W / 2 + 0.05 + (k + 0.5) * cw, y: y0, z: 0.02, w: cw - 0.05, h: y1 - y0 - 0.02 });
+  }
+  // top of the case: three big display spots
+  for (let k = 0; k < 3; k++) L.push({ x: -W / 2 + (k + 0.5) * W / 3, y: H + 0.05, z: 0.02, w: W / 3 - 0.2, h: 0.55, top: true });
+  // a row of real books in the top corner cubby so it reads as a bookcase
+  S.pop();
+  for (let k = 0; k < 7; k++) {
+    b.color([0x7a2a22, 0x2a4a6a, 0x3a5a2a, 0x8a6a2a, 0x5a2a4a][k % 5]);
+    b.box(0.045, 0.24 + r() * 0.08, 0.26, W / 2 - 0.12 - k * 0.05, rows[4] + 0.14, -0.04);
+  }
+  return { S, L, W, H, D };
 }
 
 /* ------------------------------------------------------------------ */

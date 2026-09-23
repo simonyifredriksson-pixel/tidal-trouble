@@ -10,17 +10,17 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790185859';
-import { Input } from './core/Input.js?v=1790185859';
-import { Audio } from './core/Audio.js?v=1790185859';
-import { World } from './world/World.js?v=1790185859';
-import { Game } from './game/Game.js?v=1790185859';
-import { UI } from './ui/UI.js?v=1790185859';
-import { State } from './game/State.js?v=1790185859';
-import { Net } from './net/Net.js?v=1790185859';
-import { Remote } from './game/Remote.js?v=1790185859';
-import { heightAt } from './world/Terrain.js?v=1790185859';
-import { U } from './art/Materials.js?v=1790185859';
+import * as THREE from '../lib/three.module.js?v=1790192871';
+import { Input } from './core/Input.js?v=1790192871';
+import { Audio } from './core/Audio.js?v=1790192871';
+import { World } from './world/World.js?v=1790192871';
+import { Game } from './game/Game.js?v=1790192871';
+import { UI } from './ui/UI.js?v=1790192871';
+import { State } from './game/State.js?v=1790192871';
+import { Net } from './net/Net.js?v=1790192871';
+import { Remote } from './game/Remote.js?v=1790192871';
+import { heightAt } from './world/Terrain.js?v=1790192871';
+import { U } from './art/Materials.js?v=1790192871';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -139,7 +139,7 @@ function startGame(mode, lock = true) {
   if (Q.has('stage')) stage(Q.get('stage'));
   if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790185859').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790192871').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -149,6 +149,8 @@ async function hostRoom() {
     game.player.id = net.selfId;
     for (const it of game.loot.items.values()) if (it.held === 'local') it.held = net.selfId;
     for (const b of game.boats) if (b.driver === 'local') b.driver = net.selfId;
+    game.chat.system('Room ' + net.room + ' is open. Tap CTRL to chat - voice is on nearby, hold C for the walkie-talkie.');
+    game.voice.start(net);
   } catch (e) { net._status(e.message); }
   if (ui.screen === 'lobby') ui.render();
 }
@@ -177,10 +179,14 @@ function wireNet() {
     game._boatChanged();
     ui.open('lobby', {});
     game._needsPlace = true;
+    game.chat.system('Joined room ' + net.room + '. Tap CTRL to chat - voice is on nearby, hold C for the walkie-talkie.');
+    game.voice.start(net);
   };
   net.on.join = (id, p) => {
     if (!game.remotes.has(id)) game.remotes.set(id, new Remote(game, id, p, idx++));
     ui.toast((p?.name || 'Someone') + ' joined the crew!', 'good');
+    game.chat.system((p?.name || 'Someone') + ' joined the crew');
+    game.voice.connectAll();
     if (ui.screen === 'lobby') ui.render();
   };
   net.on.leave = (id, p) => {
@@ -189,6 +195,8 @@ function wireNet() {
     for (const b of game.boats) if (b.driver === id) b.driver = null;
     for (const it of game.loot.items.values()) if (it.held === id) it.held = null;
     ui.toast((p?.name || 'Someone') + ' left.', 'warn');
+    game.chat.system((p?.name || 'Someone') + ' left');
+    game.voice.drop(id);
     if (ui.screen === 'lobby') ui.render();
   };
   net.on.player = (id, s) => {
@@ -228,6 +236,17 @@ function netProbe(role) {
     if (role === 'host' && n === 4) { for (let i = 0; i < 3; i++) game.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(new THREE.Vector3(0, b.deck + 1, i - 1)) }); game.state.s.money += 500; }
     if (role === 'client' && n === 7) { const it = [...game.loot.items.values()][0]; if (it) { game.act({ t: 'pickup', id: it.id }); log('client asked to pick up ' + it.id); } }
     if (role === 'client' && n === 9) { game.act({ t: 'buy', k: 'bait', id: 'glow' }); log('client bought glow bait'); }
+    if (role === 'client' && n === 8) {
+      // the real chat: tap CTRL, type, ENTER
+      if (ui.isOpen) ui.close();
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'ControlLeft', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { code: 'ControlLeft', bubbles: true }));
+      log('client chat opened by a CTRL tap: ' + game.chat.open);
+      game.chat.fieldEl.value = 'ahoy from the client';
+      game.chat.fieldEl.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true }));
+      log('client chat sent, box closed: ' + !game.chat.open);
+    }
+    if (role === 'host' && n === 11) { const l = game.chat.lines.filter(x => !x.system).pop(); log('host chat got: ' + (l ? '<' + l.name + '> ' + l.text : 'nothing')); }
     if (role === 'host' && n === 10) { game.events.start('storm', game.player.pos); }
     if (role === 'client' && n === 12) log('client sees storm=' + game.world.storm.toFixed(2) + ' events=' + game.events.list.map(e => e.k).join(','));
     if (n > 13) clearInterval(iv);
@@ -271,6 +290,80 @@ function stage(name) {
   if (name === 'sunset') { G.tod = 0.745; P.attach(b, new THREE.Vector3(0, b.deck, 0)); P.yaw = b.heading + Math.PI * 0.7; }
   if (name === 'storm') { G.events.start('storm', P.pos); G.events.storm = 1; }
   if (name === 'lev') { G.state.s.clues = {}; G.creatures.startLev('gloop', -75, -45); P.place(A.lakePier.clone(), -1.57); G.tod = 0.9; }
+  // headless shots render only a few frames: fast-forward the simulation instead
+  const advance = sec => { const keep = [P.yaw, P.pitch]; for (let i = 0; i < sec * 30; i++) G.update(1 / 30); [P.yaw, P.pitch] = keep; };
+  const look = (from, to, pitch = 0) => { P.place(from.clone(), Math.atan2(-(to.x - from.x), -(to.z - from.z))); P.pitch = pitch; };
+  const C = A.cabinInside;
+  if (name === 'hut' || name === 'hut2' || name === 'hutbare') {
+    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790192871').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
+    G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'oath'; G._rodChanged();
+    G.tod = 0.5;
+    if (name === 'hut2') look(C.clone().add(new THREE.Vector3(1.9, 0, -1.2)), C.clone().add(new THREE.Vector3(-3.4, 0.9, 1.6)), -0.12);
+    else look(C.clone().add(new THREE.Vector3(2.9, 0, 2.5)), C.clone().add(new THREE.Vector3(-1.2, 1.4, -3.0)), -0.02);
+  }
+  if (name === 'rack') { G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'basic'; G._rodChanged(); G.tod = 0.5; look(C.clone().add(new THREE.Vector3(1.3, 0, -0.9)), C.clone().add(new THREE.Vector3(3.8, 1.3, -0.9)), 0.05); P.tool = 'hammer'; G.vm.setTool('hammer'); }
+  if (name === 'cove') { G.tod = 0.4; look(C.clone().add(new THREE.Vector3(-9, 1, 17)), C.clone().add(new THREE.Vector3(4, 1.5, 4)), -0.02); P.tool = 'hammer'; G.vm.setTool('hammer'); }
+  if (name === 'dock') { G.tod = 0.72; const d = A.homeDock; look(d.clone().add(new THREE.Vector3(0, 0, 0.5)), C.clone().add(new THREE.Vector3(3, 1, 3)), 0.02); }
+  if (name === 'talk') {
+    G.tod = 0.45;
+    const pim = G.npcs.byId('pim');
+    for (let i = 0; i < 4; i++) G.loot.spawn({ sp: ['bass', 'pike', 'goldtrout', 'catfish'][i], kg: 2 + i * 3, cm: 40 + i * 20, pos: pim.pos.clone().add(new THREE.Vector3(-1.6, 0.4, i * 0.4 - 0.6)), flop: 0 });
+    look(pim.pos.clone().add(new THREE.Vector3(-3.9, 0, 0.6)), pim.pos.clone().add(new THREE.Vector3(0, 1.3, 0)), 0);
+    setTimeout(() => { G._talk(pim); if (Q.get('opt') === 'rods') G._dRods(pim); if (Q.get('opt') === 'sell') G._dSellAll(pim); }, 500);
+  }
+  if (name === 'vigil') { G.tod = 0.4; G.teleport('vigil'); look(P.pos.clone(), new THREE.Vector3(1015, 14, 1005), 0.12); }
+  if (name === 'vigiltop') { G.tod = 0.42; const m = G.npcs.byId('mags'); look(m.pos.clone().add(new THREE.Vector3(-4, 0, -3)), m.pos.clone().add(new THREE.Vector3(0, 1, 0)), -0.05); }
+  if (name === 'vigilsea' || name.startsWith('great:')) {
+    G.tod = 0.42;
+    G.state.s.boat.hull = 'motor'; G._boatChanged();
+    b.pos.set(815, 0, 800); b.heading = Math.atan2(1015 - 815, 1005 - 800); b.docked = false; b._updateMatrix();
+    P.attach(b, new THREE.Vector3(0.3, b.deck, 1.6)); P.yaw = b.heading + Math.PI - 0.1; P.pitch = 0.06;
+    world.prebuild(b.pos.x, b.pos.z);
+    if (name.startsWith('great:')) {
+      const [, id, phase] = name.split(':');
+      const L = G.great.spawnLev(id);
+      const f = new THREE.Vector3(Math.sin(b.heading), 0, Math.cos(b.heading));
+      const dd = +(Q.get('d') || 130);
+      L.x = b.pos.x + f.x * dd; L.z = b.pos.z + f.z * dd; L.h = b.heading + (+(Q.get('h') || 1.3)); L.phase = phase || 'rise'; L.pt = +(Q.get('pt') || 6); L.pdur = phase === 'breach' ? 5 : 14; L.life = 999;
+      L._y = undefined;
+      G.great._hostLev = () => {};      // freeze the phase for the photo
+      if (!Q.has('banner')) setTimeout(() => { const w = G.ui.el('.worldev'); if (w) w.classList.remove('on'); G.ui.el('.banner')?.classList.remove('on'); }, 900);
+    }
+    advance(1.5);
+    P.attach(b, new THREE.Vector3(0.3, b.deck, 1.6)); P.yaw = b.heading + Math.PI - 0.1; P.pitch = 0.06;
+    if (window.__log && G.great.lev) setTimeout(() => { const m = G.great.m.lev; const bx = new THREE.Box3().setFromObject(m.group); window.__log('lev dist ' + P.pos.distanceTo(m.group.position).toFixed(0) + ' scale ' + m.group.scale.x + ' box ' + bx.getSize(new THREE.Vector3()).toArray().map(v => v.toFixed(0)).join(',') + ' y ' + m.group.position.y.toFixed(1) + ' fov ' + camera.fov); }, 500);
+  }
+  if (name === 'kraken') {
+    G.tod = 0.47;
+    G.teleport('offshore');
+    G.state.s.tools.axe = true; P.tool = 'axe'; G.vm.setTool('axe');
+    G.great.startKraken(b);
+    P.local.set(-0.2, b.deck, -b.hull.hl + 0.5); P.yaw = b.heading + Math.PI - 0.25; P.pitch = 0.3;
+    advance(+(Q.get('adv') || 3));
+    if (window.__log) setInterval(() => { const K = G.great.kraken, T = G.great.m.arms[0]; window.__log('K ' + (K && K.phase) + ' ' + (K ? JSON.stringify(K.arms.map(a => [a.st, +a.t.toFixed(1)])) : '') + ' rz5 ' + (T ? T.segs[5].rotation.z.toFixed(2) : '-') + ' wt ' + world.time.toFixed(1)); }, 2000);
+  }
+  if (name === 'catch') {
+    b.respawn(false);
+    for (let i = 0; i < 6; i++) G.loot.spawn({ sp: ['bass', 'marlin', 'goldtrout', 'mahi', 'tuna', 'fogfin'][i], kg: 2 + i * 4, cm: 40 + i * 20, pos: b.toWorld(new THREE.Vector3(0, b.deck + 0.5, i * 0.5 - 1.5)), v: i === 3 ? 'golden' : null, zone: i % 4 });
+    P.attach(b, new THREE.Vector3(0, b.deck, -1));
+    setTimeout(() => { const items = [...G.loot.items.values()]; items[1].fav = true; items[3].fav = true; G.ui.open('catch'); }, 600);
+  }
+  if (name === 'admin') setTimeout(() => G.ui.open('admin'), 400);
+  if (name === 'chat') {
+    // a crew mid-conversation, for a screenshot of the chat and voice HUD
+    G.net = { isOnline: true, isHost: true, isClient: false, room: 'KRAKN', sendPlayer() {}, sendWorld() {}, sendEvent() {}, sendSave() {}, conns: new Map(), profiles: new Map(), lobbyList: [] };
+    G.voice.mic = true; G.voice.status = 'on';
+    G.remotes.set('bo', { pos: P.pos.clone(), walkie: true, name: 'Bo', color: '#8af0ff', update() {} });
+    G.voice.peers.set('bo', { call: { close() {} }, prox: null, radio: null, an: null, level: 0.2, walkie: true, speaking: true });
+    G.voice.update = () => {};
+    G.chat.system('Room KRAKN is open. Tap CTRL to chat - voice is on nearby, hold C for the walkie-talkie.');
+    G.chat.system('Bo joined the crew');
+    G.chat.push({ name: 'Bo', text: 'I am out past the orange buoys, the tuna are huge here', color: '#8af0ff' });
+    G.chat.push({ name: 'Fisher', text: 'on my way, save me one', color: '#ffd27a', self: true });
+    G.chat.push({ name: 'Bo', text: 'something just bumped the boat', color: '#8af0ff' });
+    G.chat.push({ name: 'Bo', text: 'something just bumped the boat', color: '#8af0ff' });
+    setTimeout(() => { G.chat.tryOpen(); G.chat.fieldEl.value = 'is it the kraken'; }, 400);
+  }
   if (name === 'giant') { P.attach(b, new THREE.Vector3(0, b.deck, 0)); G.creatures.spawnGiant(b.pos); }
 }
 
@@ -352,10 +445,34 @@ input.onLockChange = locked => {
   if (locked) input.requireLock = true;
   // menus always keep the cursor: a lock that lands while one is open is undone
   if (locked && (!game || !game.running || ui.isOpen || ui.talkEl)) { input.unlock(); return; }
-  if (!locked && game && game.running && !ui.isOpen && !ui.talkEl && !input.blocked) ui.open('pause');
+  // (ESC out of the chat also drops the pointer - that is not a pause)
+  const chatEsc = game && (game.chat.open || performance.now() / 1000 - game.chat.closedAt < 0.5);
+  if (!locked && game && game.running && !ui.isOpen && !ui.talkEl && !input.blocked && !chatEsc) ui.open('pause');
 };
 // the canvas only captures the mouse in play, never in a menu
-input.canLock = () => !!(game && game.running && !ui.isOpen && !ui.talkEl);
+input.canLock = () => !!(game && game.running && !ui.isOpen && !ui.talkEl && !game.chat.open);
+
+/* The playtest panel: hold L, J, M and 3 together. Only the complete
+   combination does anything, and the same combination closes it again. */
+{
+  const COMBO = ['KeyL', 'KeyJ', 'KeyM', 'Digit3'];
+  const down = new Set();
+  let fired = false;
+  const norm = c => (c === 'Numpad3' ? 'Digit3' : c);
+  addEventListener('keydown', e => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    const c = norm(e.code);
+    if (COMBO.includes(c)) down.add(c);
+    if (!fired && COMBO.every(k => down.has(k)) && game && game.running) {
+      fired = true;
+      for (const k of COMBO) input.down.delete(k);     // none of the four keys does its normal job this time
+      if (ui.screen === 'admin') ui.close(); else ui.open('admin');
+    }
+  });
+  addEventListener('keyup', e => { down.delete(norm(e.code)); if (!COMBO.every(k => down.has(k))) fired = false; });
+  addEventListener('blur', () => { down.clear(); fired = false; });
+}
 
 boot().catch(e => {
   console.error(e);

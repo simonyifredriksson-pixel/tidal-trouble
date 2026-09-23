@@ -7,17 +7,19 @@
    Everything is rebuilt from State whenever it changes, so co-op peers
    see the same museum. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790185859';
-import { MAT } from '../art/Materials.js?v=1790185859';
-import { fishMesh } from '../art/FishArt.js?v=1790185859';
-import { buildRod } from '../art/RodArt.js?v=1790185859';
-import { buildLeviathan } from '../art/CreatureArt.js?v=1790185859';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790185859';
-import { RODS } from '../data/GearData.js?v=1790185859';
-import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790185859';
-import { rng } from '../core/Util.js?v=1790185859';
-import { worldMapCanvas, toMap } from '../ui/MapArt.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790192871';
+import { MAT } from '../art/Materials.js?v=1790192871';
+import { fishMesh } from '../art/FishArt.js?v=1790192871';
+import { buildRod } from '../art/RodArt.js?v=1790192871';
+import { buildLeviathan } from '../art/CreatureArt.js?v=1790192871';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790192871';
+import { RODS } from '../data/GearData.js?v=1790192871';
+import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790192871';
+import { rng } from '../core/Util.js?v=1790192871';
+import { worldMapCanvas, toMap } from '../ui/MapArt.js?v=1790192871';
+import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790192871';
+import { buildTrophy } from '../art/TrophyArt.js?v=1790192871';
 
 function plaque() {
   const b = new MeshBuilder(rng(9));
@@ -88,7 +90,7 @@ export class Cabin {
 
   update() {
     const s = this.game.state.s;
-    const key = JSON.stringify([s.cabin, s.rods, s.levs, s.shards, Object.keys(s.clues).length]);
+    const key = JSON.stringify([s.cabin, s.rods, s.rod, s.levs, s.shards, Object.keys(s.clues).length, s.trophies?.placed]);
     if (key === this.key) return;
     this.key = key;
     this.rebuild();
@@ -168,15 +170,45 @@ export class Cabin {
       pic.rotation.y = spot.face;
       this.group.add(pic);
     });
-    // rod rack
-    const rack = S.cabin.rack.pos;
+    // rod rack: every rod you own stands in its peg on the wall; the one in
+    // your hands leaves an empty peg
+    const rack = S.cabin.rack;
+    this.rackSpots = [];
     RODS.forEach((R, i) => {
+      const pos = new THREE.Vector3(rack.pos.x - 0.06, rack.pos.y + 0.25, rack.pos.z + i * rack.step);
+      this.rackSpots.push({ id: R.id, pos: pos.clone().add(new THREE.Vector3(0, 1.2, 0)), own: s.rods.includes(R.id), held: R.id === s.rod });
       if (!s.rods.includes(R.id) || R.id === s.rod) return;
       const rod = buildRod(R);
-      rod.group.position.set(rack.x - 0.1, rack.y + 0.2, rack.z - 0.5 + i * 0.33);
-      rod.group.rotation.set(0, 0, -0.05);
+      rod.group.scale.setScalar(0.95);
+      rod.group.position.copy(pos);
+      rod.group.rotation.set(0, rack.face, -0.04);
       this.group.add(rod.group);
     });
+    // the bookcase: every trophy you have placed, in its own cubby
+    const TS = S.cabin.trophies;
+    this.trophySpots = [];
+    if (TS) for (const id in s.trophies.placed) {
+      const T = TROPHY_BY_ID[id];
+      const slot = (T && (T.size === 'L' ? TS.L : TS.S)[s.trophies.placed[id]]);
+      if (!slot) continue;
+      const m = buildTrophy(T, slot.w, slot.h);
+      m.position.copy(slot.pos);
+      this.group.add(m);
+      this.trophySpots.push({ id, pos: slot.pos.clone().add(new THREE.Vector3(0, slot.h * 0.4, 0)) });
+    }
+    // the chart pinned over the desk
+    if (S.anchors.cabinMap) {
+      if (!this._chartTex) {
+        const cv = worldMapCanvas(256, true);
+        this._chartTex = new THREE.CanvasTexture(cv); this._chartTex.colorSpace = THREE.SRGBColorSpace;
+      }
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), new THREE.MeshLambertMaterial({ map: this._chartTex }));
+      pl.position.copy(S.anchors.cabinMap.pos); pl.rotation.y = S.anchors.cabinMap.face;
+      this.group.add(pl);
+      const fb = new MeshBuilder(rng(4));
+      fb.color(0xc83a2a); for (const [x, y] of [[-0.55, 0.4], [0.55, 0.4], [-0.55, -0.4], [0.55, -0.4]]) fb.box(0.04, 0.04, 0.03, x, y, 0.01);
+      const pins = new THREE.Mesh(fb.build(), MAT.solid); pins.position.copy(pl.position); this.group.add(pins);
+    }
     // guild hall: a statue per leviathan caught, shards on the table
     LEVIATHANS.forEach((L, i) => {
       if (!s.levs[L.id]) return;
@@ -232,6 +264,33 @@ export class Cabin {
       m.position.copy(S.anchors.shardTable).add(new THREE.Vector3(Math.cos(a) * 0.9, 0.05, Math.sin(a) * 0.35));
       this.group.add(m);
     }
+  }
+
+  /** Put every trophy you have earned but not placed onto the bookcase. Returns how many. */
+  placeAll() {
+    const G = this.game, s = G.state.s, TS = G.world.settlement.cabin.trophies;
+    const used = { S: new Set(), L: new Set() };
+    for (const id in s.trophies.placed) { const T = TROPHY_BY_ID[id]; if (T) used[T.size].add(s.trophies.placed[id]); }
+    let n = 0;
+    for (const id of G.state.pendingTrophies()) {
+      const T = TROPHY_BY_ID[id];
+      const list = T.size === 'L' ? TS.L : TS.S;
+      let k = 0; while (k < list.length && used[T.size].has(k)) k++;
+      if (k >= list.length) continue;
+      used[T.size].add(k); s.trophies.placed[id] = k; n++;
+    }
+    return n;
+  }
+  /** The trophy you are looking at on the shelf, if any. */
+  trophyNear(pos, r = 0.35) {
+    let best = null, bd = r;
+    for (const t of this.trophySpots || []) { const d = t.pos.distanceTo(pos); if (d < bd) { bd = d; best = t; } }
+    return best;
+  }
+  rackNear(pos, r = 0.45) {
+    let best = null, bd = r;
+    for (const t of this.rackSpots || []) { if (!t.own || t.held) continue; const d = Math.hypot(t.pos.x - pos.x, t.pos.z - pos.z) + Math.abs(t.pos.y - pos.y) * 0.3; if (d < bd) { bd = d; best = t; } }
+    return best;
   }
 
   /** The nearest empty/filled plaque to a point (for mounting). */

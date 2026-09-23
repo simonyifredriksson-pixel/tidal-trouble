@@ -153,6 +153,29 @@ export class Audio {
   ouch() { this.tone(300, 0.2, 'triangle', 0.12, 0.005, 0.6); }
   flame() { if (Math.random() < 0.3) this.noise(0.15, 0.05, 'bandpass', 1500 + Math.random() * 1500, 2); }
   stroke() { this.noise(0.35, 0.09, 'lowpass', 900, 0.8, 0.5); this.noise(0.15, 0.04, 'highpass', 2500, 1, 1, 0.1); }
+  /** The kraken: a tearing, rising scream with a wet rattle under it. */
+  shriek(v = 1) {
+    this.tone(320, 1.3, 'sawtooth', 0.16 * v, 0.05, 2.6);
+    this.tone(410, 1.1, 'square', 0.07 * v, 0.08, 2.2, 0.05);
+    this.tone(90, 1.4, 'sawtooth', 0.2 * v, 0.05, 0.6);
+    this.noise(1.3, 0.3 * v, 'bandpass', 1400, 1.5, 2.5);
+    this.noise(0.9, 0.2 * v, 'lowpass', 500, 1, 0.5, 0.3);
+  }
+  /** A world event: a long, low fog horn, twice. */
+  horn() {
+    for (const d of [0, 2.2]) {
+      this.tone(73.4, 1.9, 'sawtooth', 0.22, 0.25, 1, d, this.music);
+      this.tone(110, 1.9, 'triangle', 0.12, 0.25, 1, d, this.music);
+      this.tone(146.8, 1.6, 'sine', 0.06, 0.3, 1, d + 0.1, this.music);
+    }
+    this.noise(4.5, 0.08, 'lowpass', 260, 0.8, 1, 0);
+  }
+  /** The Graveback surfacing: a breath like a storm through a keyhole. */
+  blow(dist = 50) {
+    const a = 1 / (1 + dist / 120);
+    this.noise(2.2, 0.5 * a, 'bandpass', 700, 0.6, 0.3);
+    this.tone(55, 2.4, 'sine', 0.25 * a, 0.3, 0.8);
+  }
   bubble() { this.tone(400 + Math.random() * 500, 0.06, 'sine', 0.04, 0.002, 1.8); }
 
   /* ---------------- continuous: ambience, engine, music ---------------- */
@@ -166,6 +189,18 @@ export class Audio {
     set(this.wind.g, 0.02 + env.storm * 0.12 + (env.frost ? 0.04 : 0) + (env.height > 25 ? 0.05 : 0));
     this.wind.f.frequency.value = 700 + Math.sin(t * 0.17) * 300;
     set(this.rain.g, env.storm * 0.12);
+    // Vigil's End: the wind drops to a low hum and the fog swallows the birds
+    const mist = env.mist || 0;
+    if (!this.drone) {
+      this.drone = ctx.createOscillator(); this.drone.type = 'sine'; this.drone.frequency.value = 49;
+      this.drone2 = ctx.createOscillator(); this.drone2.type = 'triangle'; this.drone2.frequency.value = 73.5;
+      this.droneG = ctx.createGain(); this.droneG.gain.value = 0;
+      this.drone.connect(this.droneG); this.drone2.connect(this.droneG); this.droneG.connect(this.sfx);
+      this.drone.start(); this.drone2.start();
+    }
+    set(this.droneG, mist * 0.05);
+    this.drone2.frequency.value = 73.5 + Math.sin(t * 0.13) * 1.5;
+    if (mist > 0.5 && Math.random() < dt * 0.02) this.tone(38 + Math.random() * 10, 4, 'sine', 0.12 * mist, 1.2, 0.8);   // something far away, very big
     const th = Math.abs(env.throttle || 0);
     set(this.engGain, env.engine ? 0.035 + th * 0.07 : 0);
     this.eng.frequency.value = 38 + th * 70 + (env.speed || 0) * 2;
@@ -173,7 +208,7 @@ export class Audio {
     this.engFilter.frequency.value = 300 + th * 700;
     // critters
     if (!env.underwater) {
-      if (!env.night && env.nearLand && Math.random() < dt * 0.35) this._bird();
+      if (!env.night && env.nearLand && (env.mist || 0) < 0.4 && Math.random() < dt * 0.35) this._bird();
       if (env.night && env.nearLand && Math.random() < dt * 2) this.tone(4200 + Math.random() * 400, 0.04, 'sine', 0.012);
       if (env.fire && Math.random() < dt * 8) this.flame();
     }
@@ -205,7 +240,7 @@ export class Audio {
         const bar = Math.floor(b / 16) % 4;
         const roots = env.night ? [0, 3, 4, 2] : [0, 4, 5, 3];
         if (b % 8 === 0) this.tone(scale[roots[bar]] / 2, 1.6, 'triangle', 0.07, 0.01, 1, when, this.music);
-        if (Math.random() < 0.45 && b % 2 === 0) {
+        if (Math.random() < 0.45 * (1 - (env.mist || 0) * 0.8) && b % 2 === 0) {
           const f = scale[(roots[bar] + [0, 2, 4, 1, 3][Math.floor(Math.random() * 5)]) % scale.length];
           this.tone(f, 0.9, 'triangle', 0.045, 0.004, 1, when, this.music);
           this.tone(f * 2, 0.5, 'sine', 0.012, 0.004, 1, when + 0.01, this.music);

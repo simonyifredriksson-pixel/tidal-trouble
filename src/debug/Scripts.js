@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790185859';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790185859';
-import { heightAt } from '../world/Terrain.js?v=1790185859';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790185859';
-import { Bus } from '../core/Bus.js?v=1790185859';
+import * as THREE from '../../lib/three.module.js?v=1790192871';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790192871';
+import { heightAt } from '../world/Terrain.js?v=1790192871';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790192871';
+import { Bus } from '../core/Bus.js?v=1790192871';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -232,7 +232,7 @@ export async function runScripts(names, game) {
         b.respawn(false); step(1);
       }
       if (name === 'ui') {
-        const screens = ['pause', 'settings', 'controls', 'tackle', 'boatyard', 'market', 'guild', 'journal', 'map', 'bait', 'trophy', 'ending'];
+        const screens = ['pause', 'settings', 'controls', 'tackle', 'boatyard', 'market', 'guild', 'journal', 'map', 'bait', 'catch', 'admin', 'ending'];
         for (const s of screens) {
           G.ui.open(s, {});
           for (const tab of ['rods', 'bait', 'tools', 'gear', 'hulls', 'parts', 'paint', 'decor', 'repair', 'levs', 'map', 'story', 'fish', 'clues', 'stats']) { G.ui.tab[s] = tab; G.ui.render(); }
@@ -310,13 +310,14 @@ export async function runScripts(names, game) {
         G.tools._grapple(); step(1.2);
         ok(P.pos.distanceTo(p0) > 3 || G.tools.cool > 0, 'grapple pulled (' + P.pos.distanceTo(p0).toFixed(1) + ' m)');
         // swimming and climbing back aboard
+        b.pos.set(60, 0, 270); b.docked = false; b._updateMatrix(); step(0.2);
         P.place(b.pos.clone().add(V(1.9, -1.2, 0)), 0); P.mode = 'swim'; step(1);
         ok(P.mode === 'swim', 'swimming next to the boat');
         ok(P.tryClimb() && P.boat === b, 'climbed back aboard from the water');
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790185859');
+        const { State } = await import('../game/State.js?v=1790192871');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();
@@ -325,7 +326,228 @@ export async function runScripts(names, game) {
         ok(!!S2.s.dex.pike && S2.s.cabin.slots[0]?.sp === 'pike', 'journal and cabin mounts survive');
         ok(S2.s.boatCargo.length >= 1, 'fish left on the deck survive (' + S2.s.boatCargo.length + ')');
         ok(!!S2.s.player, 'player position saved');
-      }      if (name === 'net') {
+      }      if (name === 'home') {
+        const S = G.world.settlement, A = S.anchors;
+        const pim = G.npcs.byId('pim');
+        const door = A.cabinDoor.pos;
+        ok(pim && pim.pos.distanceTo(door) < 12, 'Pim stands right outside your hut door: ' + (pim ? pim.pos.distanceTo(door).toFixed(1) : '-') + ' m');
+        const m = G.homeMooring();
+        ok(m.home && m.pos.distanceTo(door) < 60 && heightAt(m.pos.x, m.pos.z) < -1.2, 'your boat is tied up at your own dock (' + m.pos.distanceTo(door).toFixed(0) + ' m, depth ' + (-heightAt(m.pos.x, m.pos.z)).toFixed(1) + ' m)');
+        ok(S.cabin.trophies.S.length >= 38 && S.cabin.trophies.L.length >= 6, 'the bookcase has ' + S.cabin.trophies.S.length + ' cubbies and ' + S.cabin.trophies.L.length + ' big spaces');
+        ok(S.interact.some(x => x.kind === 'bed') && S.interact.some(x => x.kind === 'bookcase') && S.interact.some(x => x.kind === 'journal'), 'the hut has a bed, a journal and the trophy bookcase');
+        // --- the conversation, not a shop window ---
+        b.respawn(false); step(0.5);
+        P.place(pim.pos.clone().add(V(-1.2, 0.1, 0)), -Math.PI / 2); step(0.3);
+        for (let i = 0; i < 3; i++) G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: pim.pos.clone().add(V(-1.5, 0.4, i * 0.4 - 0.4)), flop: 0 });
+        const fav = G.loot.spawn({ sp: 'goldtrout', kg: 2, cm: 45, pos: pim.pos.clone().add(V(-1.8, 0.4, 0.8)), flop: 0 });
+        step(0.5);
+        G.uiAct('favToggle', fav.id);
+        ok(fav.fav, 'a fish can be made a favourite');
+        G._talk(pim);
+        const labels = () => [...(G.ui.talkEl?.querySelectorAll('.dopt span') || [])].map(s => s.textContent);
+        ok(labels().join('|').includes('Sell all fish') && labels().join('|').includes('Sell the fish I\'m holding') && labels().join('|').includes('View fishing rods') && labels().join('|').includes('Never mind'), 'talking to Pim offers: ' + labels().join(', '));
+        ok(!document.querySelector('#screens.on'), 'and no shop window opened');
+        const m0 = G.state.s.money;
+        document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit1', bubbles: true }));
+        step(0.2);
+        ok(G.state.s.money > m0 && G.loot.items.has(fav.id), 'SELL ALL (key 1) sold the bass for ' + (G.state.s.money - m0) + ' and left the favourite alone');
+        ok(!!G.ui.talkEl?.querySelector('.dreceipt'), 'Pim counts it out in the conversation: "' + G.ui.talkEl?.querySelector('.dlg-line')?.textContent + '"');
+        G._do({ t: 'pickup', id: fav.id }, P.id); P.held = fav.id; step(0.1);
+        G._dSellHeld(pim); step(0.1);
+        ok(G.loot.items.has(fav.id) && /favourite|keep/i.test(G.ui.talkEl?.querySelector('.dlg-line')?.textContent || ''), 'the favourite in your hands will not be sold: "' + G.ui.talkEl?.querySelector('.dlg-line')?.textContent + '"');
+        G._do({ t: 'sell', id: fav.id, at: 'pim' }, P.id);
+        ok(G.loot.items.has(fav.id), 'not even by a direct sell order');
+        G.uiAct('favToggle', fav.id); G._dSellHeld(pim); step(0.1);
+        ok(!G.loot.items.has(fav.id), 'unfavourited, it sells');
+        G._dRods(pim);
+        ok(labels().some(l => l.startsWith('Reinforced Rod')) && !labels().some(l => l.startsWith('Coral Whip')), 'Pim only stocks the home rods: ' + labels().join(', '));
+        const coco = G.npcs.byId('coco'); G._dRods(coco);
+        ok(labels().some(l => l.startsWith('Coral Whip')) && labels().some(l => l.startsWith('Deepwater')), 'Coco on the Sunken Coast sells the Coral Whip and the Deepwater Rod');
+        const maud = G.npcs.byId('maud'); G._dRods(maud);
+        ok(labels().some(l => l.startsWith("Vigil's Oath")), "Maud at Vigil's End sells Vigil's Oath");
+        G.ui.closeTalk();
+      }
+      if (name === 'trophy') {
+        const s = G.state.s;
+        for (const id of ['first', 'sp:marlin', 'kraken', 'great:hushwing', 'lev:gloop']) G.award(id);
+        ok(G.state.pendingTrophies().length >= 5, 'trophies earned wait to be placed: ' + G.state.pendingTrophies().join(', '));
+        P.place(G.world.settlement.anchors.cabinInside.clone(), Math.PI); step(0.2);
+        G._do({ t: 'placeTrophies' }, P.id); step(0.2);
+        ok(Object.keys(s.trophies.placed).length >= 5 && !G.state.pendingTrophies().length, 'pressing E at the bookcase puts them on the shelf');
+        ok(G.cabin.trophySpots.length >= 5, 'and they are real objects in the hut: ' + G.cabin.trophySpots.length);
+        const L = ['kraken', 'great:hushwing'].every(id => s.trophies.placed[id] !== undefined && s.trophies.placed[id] < 7);
+        ok(L, 'the kraken and the Hushwing take the big spaces');
+        const spot = G.cabin.trophySpots.find(t => t.id === 'sp:marlin');
+        ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:marlin', 'looking at a trophy tells you what it is');
+      }
+      if (name === 'great') {
+        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790192871');
+        const c = {}; for (let i = 0; i < 20000; i++) { const g = rollGreat(); c[g.id] = (c[g.id] || 0) + 1; }
+        const pc = k => (c[k] || 0) / 200;
+        ok(Math.abs(pc('graveback') - 60) < 2 && Math.abs(pc('ninefold') - 30) < 2 && Math.abs(pc('hushwing') - 10) < 1.5, `spawn odds over 20000 rolls: Graveback ${pc('graveback').toFixed(1)}%, Ninefold ${pc('ninefold').toFixed(1)}%, Hushwing ${pc('hushwing').toFixed(1)}%`);
+        G.teleport('vigilsea'); step(0.5);
+        const L = G.great.spawnLev('graveback');
+        step(0.3);
+        ok(!!L && document.querySelector('.worldev.on')?.textContent.includes('LEVIATHAN HAS BEEN SPOTTED'), 'the whole sea is told: "' + (document.querySelector('.worldev h2')?.textContent || '') + ' ' + (document.querySelector('.worldev p')?.textContent || '') + '"');
+        const seen = new Set(); for (let i = 0; i < 90; i++) { step(1); seen.add(G.great.lev?.phase); }
+        ok(seen.has('rise') && seen.has('deep') && seen.has('dive'), 'it surfaces and dives in turn: ' + [...seen].join(', '));
+        ok(G.scene.getObjectByName('great:graveback'), 'the Graveback is in the water');
+        let hooks = 0, n = 400;
+        for (let i = 0; i < n; i++) { G.great.lev.hooked = null; G.great.lev.wary = 0; const r = G.great.claim(V(G.great.lev.x, 0, G.great.lev.z)); if (r && !r.refused) hooks++; }
+        G.great.lev.hooked = null;
+        ok(hooks / n > 0.1 && hooks / n < 0.2, 'only about 15% of bites near it hook it: ' + (hooks / n * 100).toFixed(1) + '%');
+        // a weak rod has no chance. (Fought from the Leviathan Hunter, out of the rocks.)
+        G.state.s.boat.hull = 'expedition'; G._boatChanged();
+        const placeBoat = () => { const Lv = G.great.lev; const a = Math.atan2(Lv.z - 1005, Lv.x - 1015); b.pos.set(Lv.x + Math.cos(a) * 70, 0, Lv.z + Math.sin(a) * 70); b.hp = b.stats.hp; b.water = 0; b.leaks = []; b._updateMatrix(); P.attach(b, V(0, b.deck, 0)); };
+        const fightIt = (rod) => {
+          placeBoat();
+          G.state.s.rod = rod; G.state.s.rods = [...new Set([...G.state.s.rods, rod])]; G.vm.setRod(G.fishing.rod);
+          const F = G.fishing; F.cancel(true); P.tool = 'rod'; G.vm.setTool('rod');
+          F.bpos.set(G.great.lev.x, 0, G.great.lev.z); F.water = 'sea';
+          F.pending = G.great._pending(G.great.lev.def, 'great'); G.great.lev.hooked = P.id; F._hook();
+          let why = ''; const ot = G.ui.toast.bind(G.ui); G.ui.toast = (m, k) => { why = m; ot(m, k); };
+          log('INFO hooked: state ' + F.state + ' fight ' + (F.fish && F.fish.fight) + ' pace ' + (F.fish && F.fish.pace) + ' rod ' + F.rod.rating);
+          let t = 0; while (F.state === 'fight' && t < 300) { fightPolicy(); G.update(1 / 30); t += 1 / 30; }
+          G.ui.toast = ot;
+          log('INFO fight over: ' + F.state + ' after ' + t.toFixed(1) + ' s, meter ' + (F.bar ? F.bar.catch.toFixed(2) : '-') + ' [' + why + ']');
+          release(); return t;
+        };
+        const tw = fightIt('heavy');
+        ok(!G.state.s.great.graveback && tw < 20, 'on a Heavy Rod the Graveback breaks you in ' + tw.toFixed(1) + ' s');
+        const tl = fightIt('oath');
+        ok(true, "INFO a fair player on Vigil's Oath: " + (G.state.s.great.graveback ? 'LANDED it after ' : 'lost it after ') + tl.toFixed(0) + ' s');
+        if (!G.great.lev) G.great.spawnLev('ninefold');
+        G.admin.autoCatch = true;
+        const L2 = G.great.lev;
+        placeBoat(); L2.hooked = null; P.tool = 'rod'; G.vm.setTool('rod'); G.fishing.cancel(true);
+        const r = G.great.claim(V(L2.x, 0, L2.z));
+        ok(r && !r.refused, 'playtest catch-all mode makes it bite');
+        G.fishing.pending = r; G.fishing.bpos.set(L2.x, 0, L2.z); G.fishing._hook();
+        step(5);
+        G.admin.autoCatch = false;
+        ok(!G.great.lev && Object.keys(G.state.s.great).length >= 1 && G.state.s.trophies.got['great:' + L2.id], 'and the fight wins itself: caught, rewarded, trophy earned');
+      }
+      if (name === 'kraken') {
+        G.teleport('offshore'); step(0.5);
+        const { zoneAt } = await import('../world/MapData.js?v=1790192871');
+        ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
+        const K = G.great.startKraken(b);
+        ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
+        step(2.5);
+        log('INFO kraken ' + (G.great.kraken === K) + ' ' + K.phase + ' arms ' + JSON.stringify(K.arms.map(A => [A.st, +A.t.toFixed(1)])) + ' meshes ' + G.great.m.arms.length + ' boat ' + !!G.boatById(K.boat) + ' crew ' + (P.boat === b));
+        ok(K.arms.every(A => A.st === 'grip') && G.great.m.arms.length === 3, 'they grip the boat');
+        { const T = G.great.m.arms[0]; const tip = T.tip.getWorldPosition(V()), root = T.group.getWorldPosition(V()); log('INFO arm curl seg5 ' + T.segs[5].rotation.z.toFixed(2) + ' tip-root ' + tip.clone().sub(root).toArray().map(v => v.toFixed(1)).join(',') + ' boat ' + b.pos.x.toFixed(0) + ',' + b.pos.z.toFixed(0)); }
+        const v0 = b.speed();
+        P.tool = 'rod'; G.vm.setTool('rod');
+        const arm0 = K.arms[0];
+        // walk up to each arm and chop it
+        let chops = 0;
+        for (const A of K.arms) {
+          const L = b.toLocal(A._grip, V());
+          P.local.set(Math.sign(L.x) * (b.hull.hw - 0.4), b.deck, Math.max(-b.hull.hl + 0.4, Math.min(b.hull.hl - 0.4, L.z))); step(0.1);
+          if (A === arm0) { const hint = G.great.armNear(P.pos); ok(!!hint, 'standing next to an arm, E offers to chop it'); }
+          P.tool = 'axe'; G.vm.setTool('axe');
+          for (let k = 0; k < 2; k++) { G.vm.play('chop'); G._do({ t: 'chop', arm: A.id }, P.id); step(0.5); chops++; }
+        }
+        ok(K.arms.every(A => A.hp <= 0), 'two axe blows each and all ' + K.arms.length + ' arms let go (' + chops + ' chops)');
+        step(1);
+        ok(G.great.kraken?.phase === 'dive' || G.great.kraken?.phase === 'window', 'it screams and dives -> ' + G.great.kraken?.phase);
+        ok(G.state.s.trophies.got.survivor, 'Kraken Survivor trophy earned');
+        step(6);
+        ok(G.great.kraken?.phase === 'window', 'the water where it went down can be fished');
+        const spot = G.great.kraken.spot;
+        let hooks = 0, n = 500;
+        for (let i = 0; i < n; i++) { G.great.kraken.hooked = null; const r = G.great.claim(V(spot.x, 0, spot.z)); if (r && !r.refused) hooks++; }
+        G.great.kraken.hooked = null;
+        ok(hooks / n > 0.06 && hooks / n < 0.14, 'the kraken takes about one bait in ten: ' + (hooks / n * 100).toFixed(1) + '%');
+        G.admin.autoCatch = true;
+        const r = G.great.claim(V(spot.x, 0, spot.z));
+        G.fishing.pending = r; G.fishing.bpos.set(spot.x, 0, spot.z); P.tool = 'rod'; G.vm.setTool('rod'); G.fishing._hook(); step(5);
+        G.admin.autoCatch = false;
+        ok(G.state.s.kraken.caught === 1 && G.state.s.trophies.got.kraken && !G.great.kraken, 'the kraken, caught (playtest mode) - trophy earned');
+        void v0;
+      }
+      if (name === 'admin') {
+        const key = (code, down) => document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, bubbles: true }));
+        G.ui.close();
+        key('KeyL', true); key('KeyJ', true); key('KeyM', true);
+        ok(G.ui.screen !== 'admin', 'L + J + M alone does nothing');
+        key('Digit3', true);
+        ok(G.ui.screen === 'admin', 'L + J + M + 3 opens the playtest panel');
+        for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, false);
+        ok(document.querySelectorAll('#screens [data-act="adm"]').length > 30, 'with ' + document.querySelectorAll('#screens [data-act="adm"]').length + ' controls');
+        document.querySelector('#screens [data-arg="giveRod:oath"]').click(); step(0.1);
+        ok(G.state.s.rod === 'oath', "Give rod: Vigil's Oath in your hands");
+        document.querySelector('#screens [data-arg="toggle:autoCatch"]').click();
+        ok(G.admin.autoCatch, 'catch-all mode on');
+        document.querySelector('#screens [data-arg="toggle:autoCatch"]').click();
+        const m0 = G.state.s.money; document.getElementById('admMoney').value = 777; document.querySelector('#screens [data-arg="moneyAdd"]').click();
+        ok(G.state.s.money === m0 + 777, 'money added: +777');
+        for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, true);
+        ok(G.ui.screen !== 'admin', 'the same combination closes it');
+        for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, false);
+        G.ui.close();
+      }
+      if (name === 'vigil') {
+        const S = G.world.settlement;
+        G.teleport('vigil'); step(1);
+        ok(G.mist > 0.9 && G.state.s.flags.vigil && G.state.s.trophies.got.vigil, "reached Vigil's End: fog " + G.mist.toFixed(2) + ', trophy earned');
+        ok(S.rocks.length > 50, 'a rock field of ' + S.rocks.length + ' rocks around the island');
+        const fisher = ['tobias', 'hesketh', 'ada', 'pell', 'ansel', 'mags'].map(id => G.npcs.byId(id));
+        ok(fisher.every(Boolean) && new Set(fisher.map(n => n.def.lines[1])).size === 6, 'six fishermen, each with their own story');
+        const d = []; for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) d.push(fisher[i].pos.distanceTo(fisher[j].pos));
+        ok(Math.min(...d) > 15 && fisher.every(n => n.pos.y > 8), 'on different cliffs (at least ' + Math.min(...d).toFixed(0) + ' m apart, ' + Math.min(...fisher.map(n => n.pos.y)).toFixed(0) + '+ m up)');
+        ok(G.npcs.byId('maud') && G.npcs.byId('maud').pos.distanceTo(S.anchors.vigilHut.pos) < 8, 'Maud the fish seller is by the hut');
+        for (const n of fisher) { G._talk(n); step(0.05); }
+        G.ui.closeTalk();
+        ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
+        const { waveAmp } = await import('../world/MapData.js?v=1790192871');
+        ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
+      }
+      if (name === 'chat') {
+        const C = G.chat;
+        const tap = (extra) => {
+          document.dispatchEvent(new KeyboardEvent('keydown', { code: 'ControlLeft', bubbles: true }));
+          if (extra) document.dispatchEvent(new KeyboardEvent('keydown', { code: extra, bubbles: true }));
+          document.dispatchEvent(new KeyboardEvent('keyup', { code: 'ControlLeft', bubbles: true }));
+        };
+        tap('KeyC');
+        ok(!C.open, 'CTRL+C is a shortcut, it does not open the chat');
+        tap();
+        ok(C.open && document.activeElement === C.fieldEl, 'a CTRL tap opens the chat with the box focused');
+        ok(I.blocked, 'the game ignores keys while you type');
+        C.fieldEl.value = 'hello';
+        C.fieldEl.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true }));
+        ok(!C.open && !I.blocked, 'ENTER sends and closes the box');
+        const last = C.lines[C.lines.length - 2], sys = C.lines[C.lines.length - 1];
+        ok(last && last.text === 'hello' && last.undelivered && sys.system, 'solo: the line is marked NOT SENT with a reason: "' + (sys && sys.text) + '"');
+        tap(); C.fieldEl.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+        ok(!C.open, 'ESC backs out');
+        C.push({ name: 'Bo', text: 'spam' }); C.push({ name: 'Bo', text: 'spam' }); C.push({ name: 'Bo', text: 'spam' });
+        ok(C.lines[C.lines.length - 1].count === 3, 'repeats collapse into one row with a count (3)');
+        C.push({ name: '<img src=x onerror=alert(1)>', text: '<b>bold</b>' });
+        ok(!C.logEl.querySelector('img,b'), 'names and text from the network are never HTML');
+        G.ui.open('pause'); tap(); ok(!C.open, 'the chat will not open over a menu'); G.ui.close();
+        // voice maths: near is loud, far is silent, the walkie ignores distance
+        const { Voice } = await import('../net/Voice.js?v=1790192871');
+        ok(Voice.proximity(2) === 1 && Voice.proximity(17.5) > 0.2 && Voice.proximity(17.5) < 0.3 && Voice.proximity(40) === 0, 'proximity voice: 2 m full, 17 m ' + Voice.proximity(17.5).toFixed(2) + ', 40 m silent');
+        const fakeR = { pos: P.pos.clone().add(V(200, 0, 0)), walkie: false, name: 'Far', color: '#fff' };
+        G.remotes.set('fake', fakeR);
+        const peer = { call: { close() {} }, prox: { gain: { value: 0 } }, radio: { gain: { value: 0 } }, an: null, level: 0.2, walkie: false };
+        G.voice.peers.set('fake', peer);
+        G.voice.update(1); ok(peer.prox.gain.value < 0.01 && peer.radio.gain.value < 0.01, 'a friend 200 m away is silent');
+        fakeR.walkie = true; G.voice.update(1); ok(peer.radio.gain.value > 1, 'the same friend on the walkie-talkie comes through the radio: gain ' + peer.radio.gain.value.toFixed(2));
+        ok(G.voice.talking().some(t => t.radio), 'and the HUD shows them talking on the radio');
+        G.voice.peers.delete('fake'); G.remotes.delete('fake');
+        // holding C lifts your own walkie-talkie (online only)
+        const wasNet = G.net; G.net = { isOnline: true, isHost: true, isClient: false, sendPlayer() {}, sendWorld() {}, sendEvent() {}, sendSave() {}, conns: new Map(), profiles: new Map() };
+        I.keys.add('KeyC'); step(0.1);
+        ok(G.voice.walkie && G.vm.walkieMesh.visible, 'holding C raises the walkie-talkie');
+        I.keys.delete('KeyC'); step(0.1);
+        ok(!G.voice.walkie, 'letting go puts it away');
+        G.net = wasNet;
+      }
+      if (name === 'net') {
         const snap = JSON.parse(JSON.stringify(G.worldSnapshot()));
         G.applyWorld(snap, 0.1);
         ok(true, 'world snapshot round-trips (' + JSON.stringify(snap).length + ' bytes)');

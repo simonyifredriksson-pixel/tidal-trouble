@@ -9,10 +9,11 @@
    throws can never make the UI say "caught!" about a fish that was never
    stored. */
 
-import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790185859';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790185859';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790185859';
-import { Bus } from '../core/Bus.js?v=1790185859';
+import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790192871';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790192871';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790192871';
+import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790192871';
+import { Bus } from '../core/Bus.js?v=1790192871';
 
 export const SAVE_KEY = 'tidaltrouble.save.v1';
 export const SETTINGS_KEY = 'tidaltrouble.settings.v1';
@@ -22,7 +23,7 @@ export function freshSave() {
     v: 1, day: 1, tod: 0.3, money: 120,
     rods: ['basic'], rod: 'basic',
     baits: { worm: 25, pieces: 5 }, bait: 'worm',
-    tools: { rod: true, hammer: true, bucket: true },
+    tools: { rod: true, hammer: true, bucket: true, axe: true },
     gear: {},
     boat: { hull: 'dinghy', parts: {}, paint: 'natural', decor: [] },
     hulls: ['dinghy'], paints: ['natural'], decorOwned: [],
@@ -30,6 +31,8 @@ export function freshSave() {
     cabin: { slots: new Array(10).fill(null), yard: new Array(12).fill(null), shelf: [], photos: [] },
     stats: { caught: 0, earned: 0, biggest: null, fires: 0, sunk: 0, overboard: 0, explosions: 0, slapped: 0 },
     tut: 0, flags: {},
+    trophies: { got: {}, placed: {} },     // earned (id -> day) and on the bookshelf (id -> slot)
+    great: {}, kraken: { met: 0, caught: 0 }, heard: {},
     player: null, boatPos: null, boatCargo: [], traps: [], holes: [],
     name: 'Fisher',
   };
@@ -65,7 +68,20 @@ export class State {
     s.stats = Object.assign(f.stats, s.stats || {});
     if (!ROD_BY_ID[s.rod]) s.rod = 'basic';
     if (!s.rods.includes('basic')) s.rods.unshift('basic');
+    s.tools.axe = true;
+    s.trophies = Object.assign(f.trophies, s.trophies || {});
+    s.great = s.great || {}; s.kraken = Object.assign(f.kraken, s.kraken || {}); s.heard = s.heard || {};
   }
+
+  /* ---------------- trophies ---------------- */
+  /** Earn a trophy. Returns true the first time. */
+  award(id) {
+    const T = this.s.trophies;
+    if (!TROPHY_BY_ID[id] || T.got[id]) return false;
+    T.got[id] = this.s.day;
+    return true;
+  }
+  pendingTrophies() { const T = this.s.trophies; return Object.keys(T.got).filter(id => T.placed[id] === undefined && TROPHY_BY_ID[id]); }
   save() {
     if (this.remote) return false;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; }
