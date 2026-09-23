@@ -19,14 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790192871';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790192871';
-import { zoneAt } from '../world/MapData.js?v=1790192871';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790192871';
-import { buildBobber } from '../art/RodArt.js?v=1790192871';
-import { fishMesh } from '../art/FishArt.js?v=1790192871';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790192871';
-import { Bus } from '../core/Bus.js?v=1790192871';
+import * as THREE from '../../lib/three.module.js?v=1790193571';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790193571';
+import { zoneAt } from '../world/MapData.js?v=1790193571';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790193571';
+import { buildBobber } from '../art/RodArt.js?v=1790193571';
+import { fishMesh } from '../art/FishArt.js?v=1790193571';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790193571';
+import { Bus } from '../core/Bus.js?v=1790193571';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -37,6 +37,7 @@ export function pickSpecies(ctx, r = Math.random) {
   for (const f of FISH) {
     if (f.where === 'meteor') { if (!ctx.meteor) continue; }
     else if (f.where !== 'all' && !f.where.includes(ctx.region)) continue;
+    if (f.zoneOnly !== undefined && (ctx.zone || 0) !== f.zoneOnly) continue;
     if (f.water === 'lake' && ctx.water !== 'lake') continue;
     if (f.water === 'sea' && ctx.water !== 'sea') continue;
     if (f.water === 'ice' && ctx.water !== 'ice') continue;

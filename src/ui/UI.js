@@ -9,17 +9,19 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790192871';
-import { fishThumb, rodThumb, boatThumb, levThumb } from './Thumbs.js?v=1790192871';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790192871';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790192871';
-import { GREAT } from '../data/GreatData.js?v=1790192871';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790192871';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790192871';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790192871';
-import { heightAt } from '../world/Terrain.js?v=1790192871';
-import { worldMapCanvas } from './MapArt.js?v=1790192871';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790192871';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790193571';
+import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790193571';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790193571';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790193571';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790193571';
+import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790193571';
+import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790193571';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790193571';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790193571';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790193571';
+import { heightAt } from '../world/Terrain.js?v=1790193571';
+import { worldMapCanvas } from './MapArt.js?v=1790193571';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790193571';
 
 const $ = (s, r = document) => r.querySelector(s);
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
@@ -870,9 +872,11 @@ export class UI {
   /* ---------- journal ---------- */
   _journal(d) {
     const G = this.game, s = G.state.s;
-    const t = this._tabs([['fish', 'Fish', 'fish'], ['clues', 'Clues', 'eye'], ['story', 'Story', 'bottle'], ['stats', 'Records', 'trophy']], 'fish');
+    const t = this._tabs([['fish', 'Field Guide', 'fish'], ['clues', 'Clues', 'eye'], ['story', 'Story', 'bottle'], ['stats', 'Records', 'trophy']], 'fish');
     let body = '';
     if (t.cur === 'fish') {
+      body = this._fieldGuide(d);
+    } else if (t.cur === 'oldfish') {
       const sel = d.sel && FISH_BY_ID[d.sel];
       if (sel) {
         const rec = s.dex[sel.id];
@@ -908,6 +912,91 @@ export class UI {
           .map(([i, l, v]) => `<div class="card"><h3>${ic(i)}${esc(String(v))}</h3><p>${l}</p></div>`).join('')}</div>`;
     }
     return this._wrap(`${this._head('journal', 'Fishing Journal', 'Everything you have caught, found and survived')}${t.html}<div class="sbody">${body}</div>`);
+  }
+
+  /* ---------- the field guide: fish by where they live ----------
+     Pick a place on the left; only what lives there shows on the right.
+     Unknown entries are a dark silhouette and three question marks until
+     you catch one - then the page fills in. */
+  _fieldGuide(d) {
+    const G = this.game, s = G.state.s;
+    const pr = progress(s);
+    if (!d.sec) {
+      // open on the page for wherever you are standing
+      const P = G.player, reg = G.world.region(P.pos.x, P.pos.z);
+      d.sec = (G.zone === 2 && G.world.height(P.pos.x, P.pos.z) < -8) ? 'kraken' : SECTIONS.some(S => S.id === reg) ? reg : 'home';
+    }
+    const sec = SECTIONS.find(S => S.id === d.sec) || SECTIONS[0];
+    const bar = (a, b) => `<div class="jbar"><i style="width:${b ? Math.round(a / b * 100) : 0}%"></i></div>`;
+    const side = `<div class="jside">
+      <div class="jtotal"><small>FISH DISCOVERED</small><b>${pr.got} <em>/ ${pr.of}</em></b>${bar(pr.got, pr.of)}</div>
+      ${SECTIONS.map(S => { const p = pr.per[S.id]; return `<button class="jsec ${S.id === sec.id ? 'on' : ''} ${p.got === p.of ? 'done' : ''}" data-act="jsec" data-arg="${S.id}">${ic(S.icon)}<span><b>${esc(S.name)}</b>${bar(p.got, p.of)}</span><em>${p.got}/${p.of}</em></button>`; }).join('')}
+    </div>`;
+    const sel = d.sel ? sectionEntries(sec).find(e => e.key === d.sel) : null;
+    let main;
+    if (sel) main = this._guidePage(sel, sec);
+    else {
+      const es = sectionEntries(sec), p = pr.per[sec.id];
+      const cards = es.map(e => {
+        const got = discovered(s, e), big = e.type !== 'fish';
+        const info = this._entryInfo(e);
+        return `<div class="jcard ${got ? '' : 'unknown'} ${big ? 'legend' : ''}" data-act="dexSel" data-arg="${e.key}">
+          ${got ? `<span class="stripe" style="background:${info.css}"></span>` : ''}
+          <img src="${this._entryThumb(e, got)}" alt="">
+          <b>${got ? esc(info.name) : big ? '? ? ?' : '???'}</b>
+          <small>${got ? esc(info.tag) : big ? 'Something enormous' : 'Unknown fish'}</small></div>`;
+      }).join('');
+      main = `<div class="jhead"><div><h3>${ic(sec.icon)}${esc(sec.name)}</h3><p>${esc(sec.blurb)}</p></div><div class="jprog"><b>${p.got} / ${p.of}</b><small>discovered here</small>${bar(p.got, p.of)}</div></div>
+        <div class="jgrid">${cards}</div>`;
+    }
+    return `<div class="guide">${side}<div class="jmain">${main}</div></div>`;
+  }
+  _entryInfo(e) {
+    if (e.type === 'fish') { const f = FISH_BY_ID[e.id], R = RARITY[f.rarity]; return { name: f.name, css: R.css, tag: R.name + ' - ' + sizeClass(f) }; }
+    if (e.type === 'lev') { const L = LEV_BY_ID[e.id]; return { name: L.name, css: '#f2b33a', tag: 'Leviathan - ' + L.title }; }
+    if (e.type === 'great') { const D = GREAT_BY_ID[e.id]; return { name: D.name, css: '#c8d8e8', tag: 'Great Leviathan - ' + D.title }; }
+    return { name: KRAKEN.name, css: '#c84a5a', tag: 'The Kraken - ' + KRAKEN.title };
+  }
+  _entryThumb(e, got) {
+    if (e.type === 'fish') return fishThumb(e.id, got);
+    if (e.type === 'lev') return levThumb(e.id, got);
+    if (e.type === 'great') return objThumb('jg:' + e.id + got, () => { const m = buildGreat(GREAT_BY_ID[e.id], true); m.pose(1.1); return m.group; }, [0.9, 0.35, 0.6], 1.1, !got);
+    return objThumb('jk:' + got, () => buildKrakenStatue(), [0.4, 0.3, 1], 1.1, !got);
+  }
+  /** One page of the field guide. */
+  _guidePage(e, sec) {
+    const s = this.game.state.s, got = discovered(s, e), info = this._entryInfo(e);
+    const back = `<button class="btn" data-act="dexBack">${ic('arrow')} Back to ${esc(sec.name)}</button>`;
+    const row = (k, v) => `<div class="jrow"><span>${k}</span><b>${v}</b></div>`;
+    if (!got) {
+      const hint = e.type === 'fish' ? 'You have not caught one of these yet. It lives somewhere in ' + sec.name + '.' : e.type === 'kraken' ? 'Nobody tells stories about this one. It hunts in the Offshore water.' : e.type === 'great' ? 'The old men on the cliffs of Vigil\'s End say it is out there. Nobody has seen it in years.' : 'Its clues are on the guild map. Find them and it will come.';
+      return `<div class="jpage unknown"><div class="jpic"><img src="${this._entryThumb(e, false)}" alt=""></div><div><h2>${e.type === 'fish' ? '???' : '? ? ?'}</h2><p class="jlore">${esc(hint)}</p>${back}</div></div>`;
+    }
+    let rows = '', lore = '';
+    if (e.type === 'fish') {
+      const f = FISH_BY_ID[e.id], rec = s.dex[f.id], R = RARITY[f.rarity];
+      rows = row('Rarity', `<span class="rar" style="background:${R.css}">${R.name}</span>`) + row('Size', `${sizeClass(f)}  -  ${fmtKg(f.kg[0])} to ${fmtKg(f.kg[1])}`) + row('Habitat', esc(habitat(f)))
+        + row('When', TIME[f.time] || 'Any time') + row('Worth', `${ic('coin')} about ${fmtInt(fishValue(f, (f.kg[0] + f.kg[1]) / 2))} (more far out)`)
+        + (f.bait ? row('Likes', esc(Object.entries(f.bait).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => BAIT_BY_ID[k]?.name).filter(Boolean).join(', ') || 'anything')) : '')
+        + (f.beh && BEHAVIOUR[f.beh] ? row('Beware', esc(BEHAVIOUR[f.beh])) : '')
+        + row('Your record', `${rec.n} caught  -  best ${fmtKg(rec.bestKg)}, ${fmtCm(rec.bestCm)}`)
+        + row('First caught', esc((rec.where || 'somewhere out there') + '  -  day ' + (rec.first || 1)))
+        + (rec.vars?.length ? row('Variants seen', esc(rec.vars.map(v => VARIANT_BY_ID[v]?.name).filter(Boolean).join(', '))) : '');
+      lore = f.blurb;
+    } else if (e.type === 'lev') {
+      const L = LEV_BY_ID[e.id];
+      rows = row('Kind', 'Leviathan - shard-bearer') + row('Habitat', esc(REGIONS[L.region].name)) + row('Length', '~' + L.size + ' m') + row('Caught', 'Day ' + (s.levs[L.id]?.day || '?'));
+      lore = L.story;
+    } else if (e.type === 'great') {
+      const D = GREAT_BY_ID[e.id];
+      rows = row('Kind', 'Great Leviathan') + row('Habitat', "The waters round Vigil's End, beyond the rocks") + row('Length', '~' + D.size + ' m') + row('How rare', D.chance >= 0.6 ? 'The one that comes most often. Once in a long while.' : D.chance >= 0.3 ? 'Rarer than the Graveback.' : 'Once in a lifetime.') + row('Landed', (s.great[D.id]?.n || 1) + ' time' + ((s.great[D.id]?.n || 1) > 1 ? 's' : ''));
+      lore = D.blurb;
+    } else {
+      rows = row('Kind', 'The Kraken') + row('Habitat', 'Offshore water - the orange buoys and beyond, before the deep') + row('Warning', 'None. It comes up under the boat.') + row('Landed', s.kraken.caught + ' time' + (s.kraken.caught > 1 ? 's' : ''));
+      lore = KRAKEN.blurb;
+    }
+    return `<div class="jpage ${e.type !== 'fish' ? 'legend' : ''}"><div class="jpic"><img src="${this._entryThumb(e, true)}" alt=""></div>
+      <div><h2>${esc(info.name)}</h2><p class="jtag" style="color:${info.css}">${esc(info.tag)}</p>${rows}<p class="jlore">${esc(lore)}</p>${back}</div></div>`;
   }
 
   /* ---------- world map ---------- */

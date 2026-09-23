@@ -15,9 +15,9 @@
    turning is added to your yaw, so standing on a turning boat turns you
    with it instead of making the world spin round you. */
 
-import * as THREE from '../../lib/three.module.js?v=1790192871';
-import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790192871';
-import { Bus } from '../core/Bus.js?v=1790192871';
+import * as THREE from '../../lib/three.module.js?v=1790193571';
+import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790193571';
+import { Bus } from '../core/Bus.js?v=1790193571';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -181,12 +181,21 @@ export class Player {
     }
     if (this.boat) this.boat.toWorld(this.local, this.pos);
 
-    // swimming stamina: roughly ten seconds, then you are spent
+    // swimming stamina: roughly ten seconds, then you are spent. Within about
+    // fifteen metres of the beach you are safe: an exhausted swimmer there is
+    // carried in by the surf and never passes out or drowns.
+    const safe = this.mode === 'swim' && this._nearShore(dt);
     if (this.mode === 'swim') {
       this.stamina = Math.max(0, this.stamina - dt * (sprint ? 1.5 : 1) * (this.exhausted ? 0 : 1));
-      if (this.stamina <= 0 && !this.exhausted) { this.exhausted = true; this.exhaustT = 0; Bus.emit('player:exhausted', { p: this }); }
+      if (this.stamina <= 0 && !this.exhausted) { this.exhausted = true; this.exhaustT = 0; Bus.emit('player:exhausted', { p: this, safe }); }
       if (this.exhausted) {
-        this.exhaustT += dt;
+        if (safe) {
+          // the surf takes you in, gently
+          this.exhaustT = Math.max(0, this.exhaustT - dt);
+          const s = this._shore;
+          const dx = s.x - this.pos.x, dz = s.z - this.pos.z, d = Math.hypot(dx, dz) || 1;
+          this.vel.x += dx / d * 1.1 * dt; this.vel.z += dz / d * 1.1 * dt;
+        } else this.exhaustT += dt;
         if (this.exhaustT > 12) { this.exhausted = false; this.stamina = this.maxStamina; G.passOut(this, 'exhausted'); }
       }
     } else {
@@ -200,7 +209,12 @@ export class Player {
     this.underwater = head < sea - 0.05;
     if (this.underwater) {
       this.breath -= dt;
-      if (this.breath <= 0) { this.breath = 0; this.hurt(dt * 20, 'drown'); }
+      if (this.breath <= 0) {
+        this.breath = 0;
+        // near the beach your body just bobs back up for air
+        if (safe || (this.mode === 'swim' && this._shoreNear)) this.vel.y = Math.max(this.vel.y, 3);
+        else this.hurt(dt * 20, 'drown');
+      }
     } else this.breath = Math.min(this.maxBreath, this.breath + dt * 8);
 
     // animation state for the avatar other people see
@@ -208,6 +222,27 @@ export class Player {
     this.anim = this.cheerT > 0 && this.mode === 'walk' ? 'cheer' : this.mode === 'down' ? 'fall' : this.mode === 'swim' ? 'swim' : this.mode === 'drive' ? 'drive' : this.speed > 4.5 ? 'run' : this.speed > 0.4 ? 'walk' : 'idle';
     this._camera(dt);
   }
+
+  /** Is there beach within ~15 m? Sampled a few times a second; remembers the nearest land. */
+  _nearShore(dt) {
+    this._shoreT = (this._shoreT || 0) - dt;
+    if (this._shoreT > 0) return this._shoreNear;
+    this._shoreT = 0.3;
+    const G = this.game.world;
+    let best = null;
+    for (const r of [3, 6, 9, 12, 15]) {
+      for (let i = 0; i < 16; i++) {
+        const a = i / 16 * Math.PI * 2;
+        const x = this.pos.x + Math.cos(a) * r, z = this.pos.z + Math.sin(a) * r;
+        if (G.height(x, z) > 0.35) { best = { x, z }; break; }
+      }
+      if (best) break;
+    }
+    this._shoreNear = !!best;
+    if (best) this._shore = best;
+    return this._shoreNear;
+  }
+  get safeSwim() { return this.mode === 'swim' && !!this._shoreNear; }
 
   inWaterNow() {
     const s = this.game.world.waterAt(this.pos.x, this.pos.z);

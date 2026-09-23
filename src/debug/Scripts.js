@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790192871';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790192871';
-import { heightAt } from '../world/Terrain.js?v=1790192871';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790192871';
-import { Bus } from '../core/Bus.js?v=1790192871';
+import * as THREE from '../../lib/three.module.js?v=1790193571';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790193571';
+import { heightAt } from '../world/Terrain.js?v=1790193571';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790193571';
+import { Bus } from '../core/Bus.js?v=1790193571';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -317,7 +317,7 @@ export async function runScripts(names, game) {
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790192871');
+        const { State } = await import('../game/State.js?v=1790193571');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();
@@ -326,7 +326,83 @@ export async function runScripts(names, game) {
         ok(!!S2.s.dex.pike && S2.s.cabin.slots[0]?.sp === 'pike', 'journal and cabin mounts survive');
         ok(S2.s.boatCargo.length >= 1, 'fish left on the deck survive (' + S2.s.boatCargo.length + ')');
         ok(!!S2.s.player, 'player position saved');
-      }      if (name === 'home') {
+      }      if (name === 'journal') {
+        const J = await import('../data/JournalData.js?v=1790193571');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790193571');
+        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790193571');
+        const pr = J.progress(G.state.s);
+        ok(J.SECTIONS.length >= 8 && pr.of > 60, 'the field guide has ' + J.SECTIONS.length + ' places and ' + pr.of + ' entries: ' + J.SECTIONS.map(S => S.name + ' ' + pr.per[S.id].of).join(', '));
+        // every fish listed under a place can really be caught there
+        const bad = [];
+        for (const S of J.SECTIONS) {
+          if (S.id === 'any') continue;
+          for (const e of J.sectionEntries(S)) {
+            if (e.type !== 'fish') continue;
+            const f = FISH_BY_ID[e.id];
+            if (f.rarity === 'giant') continue;       // giants come with their world event
+            const bait = Object.entries(f.bait).sort((a, b) => b[1] - a[1])[0][0];
+            const region = S.id === 'kraken' ? f.where[0] : S.id;
+            const ctx = { region, water: f.water === 'any' ? 'sea' : f.water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false };
+            let hit = false; for (let i = 0; i < 4000 && !hit; i++) if (pickSpecies(ctx).id === f.id) hit = true;
+            if (!hit) bad.push(S.id + ':' + f.id);
+          }
+        }
+        ok(!bad.length, 'every fish in every section bites where the journal says' + (bad.length ? ' - NOT: ' + bad.join(', ') : ''));
+        const kz = ['inkfin', 'suckerfish', 'hatchling'];
+        let wrong = 0, right = 0;
+        for (let i = 0; i < 6000; i++) { const z = [1, 2, 3][i % 3]; const f = pickSpecies({ region: 'open', water: 'sea', bait: 'pieces', night: true, zone: z }); if (kz.includes(f.id)) { if (z === 2) right++; else wrong++; } }
+        ok(right > 0 && wrong === 0, "the kraken's-water fish bite only in the Offshore zone (" + right + ' there, ' + wrong + ' elsewhere)');
+        // discovery: hidden until caught
+        G.ui.open('journal', { sec: 'frost' }); G.ui.tab.journal = 'fish'; G.ui.render();
+        const sc = () => document.querySelector('#screens');
+        ok(sc().querySelector('.jsec.on')?.textContent.includes('Frostbite') && ![...sc().querySelectorAll('.jcard b')].some(b => b.textContent === 'Northern Pike' && !G.state.s.dex.pike), 'Frostbite Lake shows only its own fish, unknown ones as ???');
+        const before = sc().querySelectorAll('.jcard.unknown').length;
+        G.state.record('frostpike', 12, 110, null, 'Frostbite Lake');
+        G.ui.render();
+        ok(sc().querySelectorAll('.jcard.unknown').length === before - 1 && [...sc().querySelectorAll('.jcard b')].some(b => b.textContent === 'Frost Pike'), 'catching a Frost Pike reveals it');
+        G.uiAct('dexSel', 'fish:frostpike'); G.ui.render();
+        const page = sc().querySelector('.jpage')?.textContent || '';
+        ok(/Habitat/.test(page) && /Frostbite Lake/.test(page) && /First caught/.test(page) && /Worth/.test(page), 'its page: habitat, size, value, where you caught it');
+        G.uiAct('jsec', 'reach'); G.ui.render();
+        ok(sc().querySelectorAll('.jcard.legend').length === 3 && sc().querySelector('.jcard.legend b').textContent.includes('?'), "Vigil's End: three great leviathan entries, hidden");
+        G.uiAct('jsec', 'kraken'); G.ui.render();
+        ok(sc().querySelectorAll('.jcard.legend').length === 1, "the Kraken's Water: the kraken's own entry");
+        G.ui.close();
+      }
+      if (name === 'drown') {
+        const A = G.world.settlement.anchors;
+        // near the beach: exhausted and out of breath, and still fine
+        const m = G.homeMooring();
+        let spot = null;
+        for (let d = 2; d < 40 && !spot; d += 0.5) { const x = m.pos.x + d, z = m.pos.z + 6; if (heightAt(x, z) < -2.2 && heightAt(x + 7, z) > 0.4) spot = V(x, 0, z); }
+        if (!spot) { for (let d = 0; d < 80 && !spot; d += 1) { const x = 128 + d, z = 186; if (heightAt(x, z) < -2 && G.player._nearShore) spot = V(x, 0, z); } }
+        const nearTest = (pos, sec) => {
+          P.place(pos.clone().setY(-1.6), 0); P.mode = 'swim'; P.hp = 100; P.stamina = 0.1; P.breath = 0.2; P.exhausted = false; G.passing = false;
+          let passed = false; const op = G.passOut.bind(G); G.passOut = (p, why) => { passed = why; };
+          step(sec, () => { P.vel.y = Math.min(P.vel.y, -0.5); });   // hold them under, as badly as possible
+          G.passOut = op;
+          return { passed, hp: P.hp, mode: P.mode };
+        };
+        // walk out from the beach until the water is over your head, and stop there
+        // somewhere the water is over your head and the beach is still within 12 m
+        const shoreSpot = (() => {
+          for (let x = -400; x < 400; x += 2) for (let z = -300; z < 420; z += 2) {
+            if (heightAt(x, z) > -1.9) continue;
+            for (let a = 0; a < 16; a++) if (heightAt(x + Math.cos(a) * 11, z + Math.sin(a) * 11) > 0.5) return V(x, 0, z);
+          }
+          return null;
+        })();
+        ok(!!shoreSpot, 'found deep water within 10 m of the beach');
+        const r1 = nearTest(shoreSpot, 20);
+        ok(!r1.passed && r1.hp > 99, 'near the beach you cannot drown or pass out (hp ' + Math.round(r1.hp) + ', ' + r1.mode + ')');
+        const far = V(60, 0, 300);
+        const r2 = nearTest(far, 20);
+        ok(r2.passed || r2.hp < 100, 'forty metres out the normal rules apply (' + (r2.passed || 'hp ' + Math.round(r2.hp)) + ')');
+        void spot; void A;
+        P.place(A.spawn.clone(), 0); P.hp = 100; P.exhausted = false; P.stamina = P.maxStamina;
+      }
+      if (name === 'home') {
+        G.ui.close();
         const S = G.world.settlement, A = S.anchors;
         const pim = G.npcs.byId('pim');
         const door = A.cabinDoor.pos;
@@ -381,7 +457,7 @@ export async function runScripts(names, game) {
         ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:marlin', 'looking at a trophy tells you what it is');
       }
       if (name === 'great') {
-        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790192871');
+        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790193571');
         const c = {}; for (let i = 0; i < 20000; i++) { const g = rollGreat(); c[g.id] = (c[g.id] || 0) + 1; }
         const pc = k => (c[k] || 0) / 200;
         ok(Math.abs(pc('graveback') - 60) < 2 && Math.abs(pc('ninefold') - 30) < 2 && Math.abs(pc('hushwing') - 10) < 1.5, `spawn odds over 20000 rolls: Graveback ${pc('graveback').toFixed(1)}%, Ninefold ${pc('ninefold').toFixed(1)}%, Hushwing ${pc('hushwing').toFixed(1)}%`);
@@ -429,7 +505,7 @@ export async function runScripts(names, game) {
       }
       if (name === 'kraken') {
         G.teleport('offshore'); step(0.5);
-        const { zoneAt } = await import('../world/MapData.js?v=1790192871');
+        const { zoneAt } = await import('../world/MapData.js?v=1790193571');
         ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
         const K = G.great.startKraken(b);
         ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
@@ -501,7 +577,7 @@ export async function runScripts(names, game) {
         for (const n of fisher) { G._talk(n); step(0.05); }
         G.ui.closeTalk();
         ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
-        const { waveAmp } = await import('../world/MapData.js?v=1790192871');
+        const { waveAmp } = await import('../world/MapData.js?v=1790193571');
         ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
       }
       if (name === 'chat') {
@@ -529,7 +605,7 @@ export async function runScripts(names, game) {
         ok(!C.logEl.querySelector('img,b'), 'names and text from the network are never HTML');
         G.ui.open('pause'); tap(); ok(!C.open, 'the chat will not open over a menu'); G.ui.close();
         // voice maths: near is loud, far is silent, the walkie ignores distance
-        const { Voice } = await import('../net/Voice.js?v=1790192871');
+        const { Voice } = await import('../net/Voice.js?v=1790193571');
         ok(Voice.proximity(2) === 1 && Voice.proximity(17.5) > 0.2 && Voice.proximity(17.5) < 0.3 && Voice.proximity(40) === 0, 'proximity voice: 2 m full, 17 m ' + Voice.proximity(17.5).toFixed(2) + ', 40 m silent');
         const fakeR = { pos: P.pos.clone().add(V(200, 0, 0)), walkie: false, name: 'Far', color: '#fff' };
         G.remotes.set('fake', fakeR);

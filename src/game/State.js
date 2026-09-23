@@ -9,11 +9,11 @@
    throws can never make the UI say "caught!" about a fish that was never
    stored. */
 
-import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790192871';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790192871';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790192871';
-import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790192871';
-import { Bus } from '../core/Bus.js?v=1790192871';
+import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790193571';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790193571';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790193571';
+import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790193571';
+import { Bus } from '../core/Bus.js?v=1790193571';
 
 export const SAVE_KEY = 'tidaltrouble.save.v1';
 export const SETTINGS_KEY = 'tidaltrouble.settings.v1';
@@ -142,8 +142,9 @@ export class State {
 
   /* ---------------- the journal ---------------- */
   /** Record a catch. Returns {isNew, record} - call BEFORE announcing. */
-  record(sp, kg, cm, variant = null) {
+  record(sp, kg, cm, variant = null, where = null) {
     const d = this.s.dex[sp] || { n: 0, bestKg: 0, bestCm: 0, first: this.s.day };
+    if (where && !d.where) d.where = where;
     if (variant) { d.vars = d.vars || []; if (!d.vars.includes(variant)) d.vars.push(variant); }
     const isNew = d.n === 0;
     d.n++;

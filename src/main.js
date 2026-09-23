@@ -10,17 +10,17 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790192871';
-import { Input } from './core/Input.js?v=1790192871';
-import { Audio } from './core/Audio.js?v=1790192871';
-import { World } from './world/World.js?v=1790192871';
-import { Game } from './game/Game.js?v=1790192871';
-import { UI } from './ui/UI.js?v=1790192871';
-import { State } from './game/State.js?v=1790192871';
-import { Net } from './net/Net.js?v=1790192871';
-import { Remote } from './game/Remote.js?v=1790192871';
-import { heightAt } from './world/Terrain.js?v=1790192871';
-import { U } from './art/Materials.js?v=1790192871';
+import * as THREE from '../lib/three.module.js?v=1790193571';
+import { Input } from './core/Input.js?v=1790193571';
+import { Audio } from './core/Audio.js?v=1790193571';
+import { World } from './world/World.js?v=1790193571';
+import { Game } from './game/Game.js?v=1790193571';
+import { UI } from './ui/UI.js?v=1790193571';
+import { State } from './game/State.js?v=1790193571';
+import { Net } from './net/Net.js?v=1790193571';
+import { Remote } from './game/Remote.js?v=1790193571';
+import { heightAt } from './world/Terrain.js?v=1790193571';
+import { U } from './art/Materials.js?v=1790193571';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -139,7 +139,7 @@ function startGame(mode, lock = true) {
   if (Q.has('stage')) stage(Q.get('stage'));
   if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790192871').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790193571').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -295,7 +295,7 @@ function stage(name) {
   const look = (from, to, pitch = 0) => { P.place(from.clone(), Math.atan2(-(to.x - from.x), -(to.z - from.z))); P.pitch = pitch; };
   const C = A.cabinInside;
   if (name === 'hut' || name === 'hut2' || name === 'hutbare') {
-    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790192871').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
+    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790193571').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
     G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'oath'; G._rodChanged();
     G.tod = 0.5;
     if (name === 'hut2') look(C.clone().add(new THREE.Vector3(1.9, 0, -1.2)), C.clone().add(new THREE.Vector3(-3.4, 0.9, 1.6)), -0.12);
@@ -349,6 +349,11 @@ function stage(name) {
     setTimeout(() => { const items = [...G.loot.items.values()]; items[1].fav = true; items[3].fav = true; G.ui.open('catch'); }, 600);
   }
   if (name === 'admin') setTimeout(() => G.ui.open('admin'), 400);
+  if (name.startsWith('journal')) {
+    for (const [sp, w] of [['bass', 'Mirror Lake'], ['pike', 'Mirror Lake'], ['cod', 'Driftwood Bay - Driftwood Shallows'], ['goldtrout', 'Reed Pond'], ['mackerel', 'Driftwood Bay - Coastal Waters'], ['flounder', 'Driftwood Bay - Driftwood Shallows'], ['catfish', 'Mirror Lake']]) G.state.record(sp, 3, 50, null, w);
+    const [, sec, sel] = name.split(':');
+    setTimeout(() => G.ui.open('journal', { sec: sec || 'home', sel: sel || null }), 500);
+  }
   if (name === 'chat') {
     // a crew mid-conversation, for a screenshot of the chat and voice HUD
     G.net = { isOnline: true, isHost: true, isClient: false, room: 'KRAKN', sendPlayer() {}, sendWorld() {}, sendEvent() {}, sendSave() {}, conns: new Map(), profiles: new Map(), lobbyList: [] };

@@ -15,8 +15,8 @@
    triangle away from their own centre, so none of them can come out inside
    out. Hand-built quads take an explicit `out` hint for the same reason. */
 
-import * as THREE from '../../lib/three.module.js?v=1790192871';
-import { TAU, clamp } from '../core/Util.js?v=1790192871';
+import * as THREE from '../../lib/three.module.js?v=1790193571';
+import { TAU, clamp } from '../core/Util.js?v=1790193571';
 
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) {

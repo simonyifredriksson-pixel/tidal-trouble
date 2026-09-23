@@ -138,6 +138,17 @@ export const FISH = [
     fight: { power: 2.2, stamina: 2.4, erratic: 0.3, jump: 0 }, art: A({ h: 0.26, w: 0.15, back: 0x2a3a5a, belly: 0x4a5a7a, pat: 'spots', patCol: 0xe0e8f0, fin: 0x2a3a5a, tail: 'round', extras: ['lobefins'] }),
     blurb: 'Supposed to have died out with the dinosaurs. Did not get the memo.' },
 
+  /* ---------------- the kraken's water: Offshore only (zone 2), any sea ---------------- */
+  { id: 'inkfin', name: 'Inkfin', rarity: 'uncommon', where: ['home', 'frost', 'tropic', 'open', 'black'], zoneOnly: 2, water: 'sea', time: 'any', bait: { pieces: 1.2, worm: 0.6, glow: 0.8 }, kg: [1, 7], cm: [35, 75], value: 140,
+    fight: { power: 1.5, stamina: 1.4, erratic: 0.9, jump: 0.2 }, art: A({ h: 0.22, w: 0.1, back: 0x3a1a2a, belly: 0xb88a9a, fin: 0x1a0a14, pat: 'spots', patCol: 0x14080e, tail: 'fork' }),
+    blurb: 'Squirts a cloud of black ink when it is hooked. It only lives where the kraken hunts, and eats what the kraken leaves.' },
+  { id: 'suckerfish', name: 'Sucker Remora', rarity: 'rare', where: ['home', 'frost', 'tropic', 'open', 'black'], zoneOnly: 2, water: 'sea', time: 'any', bait: { pieces: 1.4, mystery: 1 }, kg: [3, 18], cm: [60, 130], value: 620,
+    fight: { power: 2.0, stamina: 1.8, erratic: 0.6, jump: 0 }, art: A({ h: 0.14, w: 0.1, back: 0x5a3a44, belly: 0xe8c8c0, fin: 0x4a2a34, pat: 'bars', patCol: 0xf4d8cc, head: 1.3, tail: 'round' }),
+    blurb: 'Clamps onto something enormous and rides it for years. The round scars on its sides are exactly the size of a kraken sucker.' },
+  { id: 'hatchling', name: 'Kraken Hatchling', rarity: 'epic', where: ['home', 'frost', 'tropic', 'open', 'black'], zoneOnly: 2, water: 'sea', time: 'night', bait: { glow: 1.5, mystery: 1.2 }, kg: [4, 22], cm: [50, 120], value: 2100,
+    fight: { power: 2.5, stamina: 2.4, erratic: 1.2, jump: 0 }, art: A({ h: 0.34, w: 0.26, back: 0x8a2e3a, belly: 0xf0b8b0, fin: 0x6a1e2e, pat: 'spots', patCol: 0xf4d8cc, head: 1.5, tail: 'none', extras: ['whiskers', 'glow'] }),
+    blurb: 'A baby. Somewhere below it, its mother is listening. Only comes up at night, only in the offshore water.' },
+
   /* ---------------- Vigil's End ---------------- */
   { id: 'fogfin', name: 'Fogfin', rarity: 'uncommon', where: ['reach'], water: 'sea', time: 'any', bait: { worm: 0.8, pieces: 1, glow: 1.2 }, kg: [0.6, 6], cm: [30, 70], value: 180,
     fight: { power: 1.3, stamina: 1.3, erratic: 0.9, jump: 0.4 }, art: A({ h: 0.24, w: 0.1, back: 0xa8b0b4, belly: 0xe8ecee, fin: 0xc8d0d4, pat: 'waves', patCol: 0x8a9296, tail: 'veil', extras: ['sail'] }),
@@ -238,6 +249,7 @@ export const ZMIN = {
   glaciersalmon: 3, swordfish: 3, sunfish: 3, marlin: 3, oarfish: 3, lantern: 3,
   angler: 4, viper: 4, gulper: 4, coelacanth: 4,
   fogfin: 4, hushray: 4, watcher: 4, vigillight: 4,
+  inkfin: 2, suckerfish: 2, hatchling: 2,
 };
 export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
 
