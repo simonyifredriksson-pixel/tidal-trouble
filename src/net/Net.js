@@ -168,10 +168,10 @@ export class Net {
 
   join(c, profile) {
     this.profile = profile;
-    c = String(c || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
+    c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
     return new Promise((res, rej) => {
       if (!Net.available) return rej(new Error('Co-op needs an internet connection (PeerJS could not load).'));
-      if (c.length !== 5) return rej(new Error('Room codes are five letters.'));
+      if (c.length !== 5) return rej(new Error('Room codes are five characters.'));
       this._status('Connecting...');
       const P = PeerCtor(); const p = new P(undefined, { debug: 0, config: ICE });
       let done = false;

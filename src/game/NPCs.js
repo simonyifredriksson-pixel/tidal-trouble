@@ -2,10 +2,10 @@
    plus villagers strolling between the lamps. NPCs look at you when you
    come near and gesture while they talk. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { Character, randomLook } from '../art/Character.js?v=1790183165';
-import { NPCS, VILLAGERS } from '../data/NPCData.js?v=1790183165';
-import { damp, wrapAngle } from '../core/Util.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { Character, randomLook } from '../art/Character.js?v=1790185859';
+import { NPCS, VILLAGERS } from '../data/NPCData.js?v=1790185859';
+import { damp, wrapAngle } from '../core/Util.js?v=1790185859';
 
 export class NPCs {
   constructor(game) {

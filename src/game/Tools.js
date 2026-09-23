@@ -11,15 +11,16 @@
      auger    drills a hole in the ice for ice fishing
      holders  extra lines on the boat; a bell rings when one bites */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { MeshBuilder } from '../art/Geo.js?v=1790183165';
-import { MAT } from '../art/Materials.js?v=1790183165';
-import { buildRod, buildBobber } from '../art/RodArt.js?v=1790183165';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790183165';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790183165';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790183165';
-import { clamp, damp, uid } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { MeshBuilder } from '../art/Geo.js?v=1790185859';
+import { MAT } from '../art/Materials.js?v=1790185859';
+import { buildRod, buildBobber } from '../art/RodArt.js?v=1790185859';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790185859';
+import { pickSpecies, rollCatch } from './Fishing.js?v=1790185859';
+import { zoneAt } from '../world/MapData.js?v=1790185859';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790185859';
+import { clamp, damp, uid } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
@@ -204,7 +205,7 @@ export class Tools {
       const sea = G.world.waterAt(at.x, at.z);
       if (sea > -Infinity && G.events.near('migration', at, 90) && Math.random() < 0.55) {
         const sp = pickSpecies({ region: G.world.region(at.x, at.z), water: G.isLake(at.x, at.z) ? 'lake' : 'sea', bait: 'worm', night: G.isNight(), migration: true });
-        if (sp.rarity !== 'junk') { G.act({ t: 'netFish', c: rollCatch(sp), x: at.x, z: at.z }); got++; }
+        if (sp.rarity !== 'junk') { G.act({ t: 'netFish', c: rollCatch(sp, Math.random, 0, zoneAt(at.x, at.z)), x: at.x, z: at.z }); got++; }
       }
       if (sea > -Infinity) G.fx.splash(at.x, sea, at.z, 0.7);
       if (!got) G.ui.toast(sea > -Infinity ? 'Nothing in the net.' : 'You wave the net at the air.', 'info');
@@ -376,7 +377,7 @@ export class Tools {
           const w = b.toWorld(_v.set(0, 0, -b.hull.hl - 8));
           const water = G.isLake(w.x, w.z) ? 'lake' : 'sea';
           const sp = pickSpecies({ region: G.world.region(w.x, w.z), water, bait: G.state.s.bait, night: G.isNight(), lucky: G.state.has('lucky') });
-          H.c = rollCatch(sp);
+          H.c = rollCatch(sp, Math.random, 0, zoneAt(w.x, w.z, -G.world.height(w.x, w.z)));
           H.bite = 8;
           G.audio.bell();
           G.ui.toast('A rod holder is bending! Press E at the holder.', 'good');

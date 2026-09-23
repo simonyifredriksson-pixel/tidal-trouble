@@ -1,4 +1,4 @@
-/* Audio.js - every sound in Tidal Trouble is synthesised. No files.
+/* Audio.js - every sound in Hooked is synthesised. No files.
 
    Ambience (sea, wind, rain, birds, crickets) and the boat engine are
    long-running nodes whose gains are set each frame from the world; sound
@@ -152,6 +152,7 @@ export class Audio {
   shock() { this.zap(); }
   ouch() { this.tone(300, 0.2, 'triangle', 0.12, 0.005, 0.6); }
   flame() { if (Math.random() < 0.3) this.noise(0.15, 0.05, 'bandpass', 1500 + Math.random() * 1500, 2); }
+  stroke() { this.noise(0.35, 0.09, 'lowpass', 900, 0.8, 0.5); this.noise(0.15, 0.04, 'highpass', 2500, 1, 1, 0.1); }
   bubble() { this.tone(400 + Math.random() * 500, 0.06, 'sine', 0.04, 0.002, 1.8); }
 
   /* ---------------- continuous: ambience, engine, music ---------------- */

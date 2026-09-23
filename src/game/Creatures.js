@@ -10,14 +10,15 @@
              fight, harpoons still help) -> LANDED. Lose it and it goes
              back to rampaging; run far enough and it sinks away. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { fishShadowGeo, shadowMat, buildLeviathan, swimMaterial } from '../art/CreatureArt.js?v=1790183165';
-import { buildFish, fishMesh } from '../art/FishArt.js?v=1790183165';
-import { GIANTS, FISH_BY_ID } from '../data/FishData.js?v=1790183165';
-import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790183165';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790183165';
-import { clamp, damp, wrapAngle, lerp, uid } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { fishShadowGeo, shadowMat, buildLeviathan, swimMaterial } from '../art/CreatureArt.js?v=1790185859';
+import { buildFish, fishMesh } from '../art/FishArt.js?v=1790185859';
+import { GIANTS, FISH_BY_ID } from '../data/FishData.js?v=1790185859';
+import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790185859';
+import { pickSpecies, rollCatch } from './Fishing.js?v=1790185859';
+import { zoneAt } from '../world/MapData.js?v=1790185859';
+import { clamp, damp, wrapAngle, lerp, uid } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
@@ -147,7 +148,7 @@ export class Creatures {
         S.alive = false; S.m.visible = false;
         const x = S.pos.x, z = S.pos.z;
         const sp = pickSpecies({ region: G.world.region(x, z), water: G.isLake(x, z) ? 'lake' : 'sea', bait: 'pieces', night: G.isNight() });
-        if (sp.rarity !== 'junk') G.act({ t: 'netFish', c: rollCatch(sp), x, z, spear: true });
+        if (sp.rarity !== 'junk') G.act({ t: 'netFish', c: rollCatch(sp, Math.random, 0, zoneAt(x, z)), x, z, spear: true });
         return { kind: 'shadow' };
       }
     }

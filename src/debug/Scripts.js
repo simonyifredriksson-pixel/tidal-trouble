@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790183165';
-import { heightAt } from '../world/Terrain.js?v=1790183165';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790185859';
+import { heightAt } from '../world/Terrain.js?v=1790185859';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -24,15 +24,16 @@ export async function runScripts(names, game) {
   const errs = [];
   addEventListener('error', e => errs.push(e.message));
 
+  // a decent (not perfect) player: hold when the fish is above the zone,
+  // leading a little by the zone's own velocity, with a human reaction lag
+  let lagT = 0, want = false;
   const fightPolicy = () => {
     const F = G.fishing;
-    if (F.state !== 'fight') return;
-    const reel = F.tension < 0.7 && !F.jump;
-    if (reel && !I.mouse.buttons.has(0)) I.fakeBtn(0, true);
-    if (!reel && I.mouse.buttons.has(0)) I.fakeBtn(0, false);
-    const d = F.fish ? F.fish.dir : 0;
-    I.keys.delete('KeyA'); I.keys.delete('KeyD');
-    if (d > 0.2) I.keys.add('KeyA'); else if (d < -0.2) I.keys.add('KeyD');
+    if (F.state !== 'fight' || !F.bar) return;
+    lagT -= 1 / 30;
+    if (lagT <= 0) { lagT = 0.12; want = F.fish.fishPos > F.bar.zone + F.bar.vel * 0.25; }
+    if (want && !I.mouse.buttons.has(0)) I.fakeBtn(0, true);
+    if (!want && I.mouse.buttons.has(0)) I.fakeBtn(0, false);
   };
   const release = () => { I.fakeBtn(0, false); I.keys.clear(); };
 
@@ -49,7 +50,7 @@ export async function runScripts(names, game) {
     const before = landedN;
     let why = '';
     const ot = G.ui.toast.bind(G.ui); G.ui.toast = (m, k) => { why = m; ot(m, k); };
-    for (; t < 130 && !end; t += 1 / 30) {
+    for (; t < 160 && !end; t += 1 / 30) {
       fightPolicy();
       G.update(1 / 30);
       if (F.state !== 'fight') end = landedN > before ? 'landed' : 'lost';
@@ -82,12 +83,16 @@ export async function runScripts(names, game) {
         step(0.5);
         const F = G.fishing;
         G.state.s.baits.worm = 20;
-        I.fakeBtn(0, true); step(0.8); I.fakeBtn(0, false); step(0.1);
-        ok(F.state === 'fly' || F.state === 'wait', 'cast launched -> ' + F.state);
-        step(3);
-        ok(F.state === 'wait' || F.state === 'nibble', 'bobber landed in water -> ' + F.state + ' water=' + F.water);
-        F.timer = 0.05; F.nibbles = 0;
-        step(0.3);
+        let tries = 0;
+        do {
+          F.cancel(true); step(0.2);
+          I.fakeBtn(0, true); step(0.8); I.fakeBtn(0, false); step(0.1);
+          if (!tries) ok(F.state === 'fly' || F.state === 'wait', 'cast launched -> ' + F.state);
+          step(3);
+          if (!tries) ok(F.state === 'wait' || F.state === 'nibble', 'bobber landed in water -> ' + F.state + ' water=' + F.water);
+          F.timer = 0.05; F.nibbles = 0;
+          step(0.3);
+        } while (F.state !== 'bite' && ++tries < 4);   // a Thieffish can steal the bait; cast again
         ok(F.state === 'bite', 'bite happened -> ' + F.state);
         I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false);
         ok(F.state === 'fight', 'strike hooked it -> ' + F.state + ' ' + (F.fish && F.fish.sp));
@@ -311,7 +316,7 @@ export async function runScripts(names, game) {
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790183165');
+        const { State } = await import('../game/State.js?v=1790185859');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();

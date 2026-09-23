@@ -9,11 +9,11 @@
    Poses are spring-blended targets per tool and action, so a cast is a
    wind-up and a whip, reeling turns the crank, and a hammer swings. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790183165';
-import { MAT } from '../art/Materials.js?v=1790183165';
-import { buildRod } from '../art/RodArt.js?v=1790183165';
-import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790185859';
+import { MAT } from '../art/Materials.js?v=1790185859';
+import { buildRod } from '../art/RodArt.js?v=1790185859';
+import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790185859';
 
 function handMesh(skin, sleeve, side) {
   const b = new MeshBuilder(rng(side > 0 ? 3 : 4));
@@ -164,9 +164,23 @@ export class ViewModel {
       Lh = { x: 0.1, y: -0.3, z: -0.4, rx: -1.0, ry: -0.2, rz: 0.4, show: true };
       if (F.state === 'charge') { const c = F.charge || 0; R.rx = -1.12 + c * 1.2; R.y += c * 0.08; R.z += c * 0.12; }
       if (this.action === 'cast') { const k = this.actT; const w = k < 0.12 ? k / 0.12 : Math.max(0, 1 - (k - 0.12) / 0.3); R.rx = -1.12 - w * 0.45; }
-      if (F.state === 'fight' || F.state === 'reelin') {
-        R.rx = -1.0 - (F.tension || 0) * 0.3; R.ry = 0.12 + (F.side || 0) * 0.3; R.y -= (F.tension || 0) * 0.04;
-        Lh.y += Math.sin(F.crank || 0) * 0.035; Lh.z += Math.cos(F.crank || 0) * 0.035;
+      if (F.state === 'fight') {
+        // the fish drags the tip down and toward it; the bigger it is, the more you lean and shake
+        const pull = F.pull || 0.5, ten = F.tension || 0;
+        const heave = Math.max(0, pull - 0.6);
+        R.rx = -1.12 + 0.2 * ten + heave * 0.22;
+        R.ry = 0.14 + (F.side || 0) * 0.32;
+        R.rz = 0.12 - (F.side || 0) * 0.12;
+        R.z = -0.46 - heave * 0.08; R.y = -0.2 - ten * 0.05;
+        const sh = Math.min(0.022, heave * 0.012 + Math.max(0, ten - 0.8) * 0.02);
+        this.shakeT = (this.shakeT || 0) + dt * 23;
+        R.x += Math.sin(this.shakeT * 1.3) * sh; R.y += Math.cos(this.shakeT) * sh; R.rz += Math.sin(this.shakeT * 0.7) * sh * 3;
+        // the left hand turns the crank in a circle
+        const c = F.crank || 0;
+        Lh = { x: 0.1 + Math.sin(c) * 0.025, y: -0.3 + Math.sin(c) * 0.04 - ten * 0.03, z: -0.4 + Math.cos(c) * 0.04, rx: -1.0 + Math.sin(c) * 0.25, ry: -0.2, rz: 0.4, show: true };
+      } else if (F.state === 'reelin') {
+        const c = F.crank || 0;
+        Lh.y += Math.sin(c) * 0.035; Lh.z += Math.cos(c) * 0.035;
       }
       if (F.state === 'bite') { R.rx += Math.sin(this.t * 40) * 0.03; }
     } else if (tool === 'harpoon') {
@@ -201,6 +215,21 @@ export class ViewModel {
       Lh = { x: -0.26, y: -0.46, z: -0.45, rx: -0.3, ry: 0, rz: 0, show: s.holding };
     }
     if (s.holding) { R = { x: 0.2, y: -0.4, z: -0.5, rx: -0.4, ry: -0.3, rz: 0.4 }; Lh = { x: -0.2, y: -0.4, z: -0.5, rx: -0.4, ry: 0.3, rz: -0.4, show: true }; }
+    // swimming: a breaststroke - reach forward, sweep out, pull back, recover
+    this.swimW = damp(this.swimW || 0, s.swim ? 1 : 0, 6, dt);
+    if (s.swim) {
+      const sp = s.swim.exhausted ? 0.9 : s.swim.moving ? 2.1 : 0.9;
+      this.strokeT = (this.strokeT || 0) + dt * sp;
+      const p = this.strokeT % 1, a = p * Math.PI * 2;
+      const reach = s.swim.moving ? 1 : 0.35;
+      const out = Math.max(0, Math.sin(a)) * 0.32 * reach, back = Math.max(0, -Math.sin(a)) * reach;
+      const low = s.swim.exhausted ? -0.1 : 0;
+      R = { x: 0.1 + out, y: -0.28 - back * 0.1 + low, z: -0.52 + back * 0.28 + out * 0.1, rx: -1.3 + back * 0.6, ry: -0.3 - out * 1.1, rz: -0.5, show: true };
+      Lh = { x: -0.1 - out, y: -0.28 - back * 0.1 + low, z: -0.52 + back * 0.28 + out * 0.1, rx: -1.3 + back * 0.6, ry: 0.3 + out * 1.1, rz: 0.5, show: true };
+      if (s.swim.moving && p < this.lastP) this.onStroke && this.onStroke();
+      this.lastP = p;
+    }
+    this.toolHolder.visible = this.swimW < 0.5;
     const sw = this.switchT > 0 ? this.switchT / 0.35 : 0;
     const k = 1 - Math.exp(-14 * dt);
     const apply = (grp, T, bobK) => {
@@ -217,7 +246,7 @@ export class ViewModel {
     this.right.visible = this.visible;
     // rod bend and reel
     if (this.rod && tool === 'rod') {
-      const bend = F.state === 'fight' ? 0.35 + (F.tension || 0) * 1.3 : F.state === 'bite' ? 0.5 + Math.sin(this.t * 30) * 0.2 : F.state === 'nibble' ? 0.18 : F.state === 'wait' ? 0.08 : 0;
+      const bend = F.state === 'fight' ? 0.3 + (F.tension || 0) * 0.85 * Math.min(1.7, 0.6 + (F.pull || 0.5)) : F.state === 'bite' ? 0.5 + Math.sin(this.t * 30) * 0.2 : F.state === 'nibble' ? 0.18 : F.state === 'wait' ? 0.08 : 0;
       this.rodBend = damp(this.rodBend || 0, bend, 10, dt);
       this.rod.bend(this.rodBend, (F.side || 0) * 0.6);
       this.rod.crank(F.crank || 0);

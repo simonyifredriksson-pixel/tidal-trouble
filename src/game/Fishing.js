@@ -19,13 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { FISH_BY_ID, FISH, rollSize, RARITY } from '../data/FishData.js?v=1790183165';
-import { ROD_BY_ID, BAIT_BY_ID } from '../data/GearData.js?v=1790183165';
-import { buildBobber } from '../art/RodArt.js?v=1790183165';
-import { fishMesh } from '../art/FishArt.js?v=1790183165';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790185859';
+import { zoneAt } from '../world/MapData.js?v=1790185859';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790185859';
+import { buildBobber } from '../art/RodArt.js?v=1790185859';
+import { fishMesh } from '../art/FishArt.js?v=1790185859';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -54,17 +55,27 @@ export function pickSpecies(ctx, r = Math.random) {
     if (ctx.whirl && f.rarity !== 'common') w *= 1.8;
     if (ctx.meteor && f.id === 'starfish') w *= 30;
     if (f.id === 'bombfish' && ctx.bait === 'explosive') w *= 4;
+    // the farther out, the crazier it gets
+    const z = ctx.zone || 0, zm = ZMIN[f.id] ?? 0;
+    if (z < zm) w *= 0.03;
+    else w *= 1 + (z - zm) * 0.12;
+    const rs = { common: 1 - 0.14 * z, uncommon: 1 + 0.3 * z, rare: 1 + 0.65 * z, epic: 1 + 1.1 * z, legendary: 1 + 1.5 * z, junk: 1 - 0.1 * z }[f.rarity] ?? 1;
+    w *= Math.max(0.25, rs);
     list.push({ f, w: w * aff * tm });
   }
   const pick = weighted(list, r);
   return pick ? pick.f : FISH_BY_ID.boot;
 }
 
-export function rollCatch(sp, r = Math.random, luck = 0) {
-  const s = rollSize(r, luck);
-  const kg = sp.kg[0] + (sp.kg[1] - sp.kg[0]) * s;
-  const cm = sp.cm[0] + (sp.cm[1] - sp.cm[0]) * Math.sqrt(s);
-  return { sp: sp.id, kg, cm, size: s };
+export function rollCatch(sp, r = Math.random, luck = 0, zone = 0) {
+  const s = rollSize(r, luck + zone * 0.3);
+  const v = sp.junk || sp.lev ? null : rollVariant(zone, r);
+  const V = v ? VARIANT_BY_ID[v] : null;
+  // deep water grows them bigger than the book says
+  const grow = (1 + zoneSizeBoost(zone) * s) * (V ? V.size : 1);
+  const kg = (sp.kg[0] + (sp.kg[1] - sp.kg[0]) * s) * grow;
+  const cm = (sp.cm[0] + (sp.cm[1] - sp.cm[0]) * Math.sqrt(s)) * Math.cbrt(grow);
+  return { sp: sp.id, kg, cm, size: s, zone, v, mult: zoneValue(zone) * (V ? V.mult : 1) };
 }
 
 export class Fishing {
@@ -117,8 +128,11 @@ export class Fishing {
       region, water: this.water, bait: G.state.s.bait, night: tod < 0.22 || tod > 0.8, dusk: Math.abs(tod - 0.76) < 0.06 || Math.abs(tod - 0.24) < 0.05,
       lucky: G.state.has('lucky'), deep: G.world.height(p.x, p.z) < -20,
       migration: ev.near('migration', p, 90), whirl: ev.near('whirlpool', p, 80), meteor: ev.near('meteor', p, 30),
+      zone: this.zoneHere(),
     };
   }
+
+  zoneHere() { const p = this.bpos; return zoneAt(p.x, p.z, -this.game.world.height(p.x, p.z)); }
 
   _biteTime() {
     const G = this.game;
@@ -283,7 +297,7 @@ export class Fishing {
     if (big) { this.pending = big; }
     else {
       const sp = pickSpecies(this._ctx());
-      const c = rollCatch(sp, Math.random, G.state.has('lucky') ? 1 : 0);
+      const c = rollCatch(sp, Math.random, G.state.has('lucky') ? 1 : 0, this.zoneHere());
       this.pending = c;
       if (sp.beh === 'thief' && Math.random() < 0.5) {
         // the thief takes the bait and runs
@@ -308,105 +322,178 @@ export class Fishing {
     const sp = FISH_BY_ID[c.sp];
     const sizeF = c.size ?? 0.5;
     const F = sp.fight;
+    const rod = this.rod;
+    const TIER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, giant: 5, junk: 0 };
+    let tier = sp.lev ? 6 : TIER[sp.rarity] ?? 0;
+    const zone = c.zone || 0;
+    // how hard it fights, against how much the rod can hold
+    let fight = fightOf(sp, c.kg, c.v);
+    if (sp.lev) fight = (RODS.find(r => r.tier === (c.rod || 3)) || rod).rating - 0.05;
+    if (sp.junk) { fight = 0.5; tier = 0; }
+    const er = F.erratic;
     this.fish = {
-      sp: c.sp, kg: c.kg, cm: c.cm, size: sizeF, giant: !!c.giant, lev: c.lev || null, creature: c.creature || null,
-      power: F.power * (0.75 + sizeF * 0.5), stamina: 0, staminaMax: F.stamina * 8 * (0.7 + sizeF * 0.6), erratic: F.erratic, jump: F.jump,
-      dir: 0, run: false, dirT: 0.5, dist: Math.max(4, this.bpos.distanceTo(this.player.pos)),
-      bearing: Math.atan2(this.bpos.x - this.player.pos.x, this.bpos.z - this.player.pos.z), jumpT: 2 + Math.random() * 4, phaseT: 3 + Math.random() * 3, phased: false,
-      grown: false, reqTier: c.rod || sp.rod || 0,
+      sp: c.sp, kg: c.kg, cm: c.cm, size: sizeF, v: c.v || null, zone, giant: !!c.giant, lev: c.lev || null, creature: c.creature || null,
+      power: F.power * (0.75 + sizeF * 0.5), jump: F.jump, erratic: er, tier, fight,
+      // the bar: how the fish moves on it
+      move: {
+        speed: clamp(0.24 + er * 0.16 + tier * 0.045 + zone * 0.03 + sizeF * 0.06, 0.18, 0.78),
+        restless: 0.5 + er * 0.6 + tier * 0.14 + zone * 0.08,
+        dart: clamp(0.16 + er * 0.2 + tier * 0.03, 0, 0.6),
+        pause: clamp(0.45 - er * 0.18 - tier * 0.05, 0.06, 0.5),
+        drift: 0.08 + er * 0.07,
+        drain: clamp(0.5 + F.power * 0.1 + tier * 0.1 + zone * 0.06, 0.45, 1.3),
+      },
+      fishPos: 0.5, fishTarget: 0.5, nextThink: 0.4, feint: 0, feintTo: 0.5,
+      dist: Math.max(4, this.bpos.distanceTo(this.player.pos)), dist0: Math.max(4, this.bpos.distanceTo(this.player.pos)),
+      bearing: Math.atan2(this.bpos.x - this.player.pos.x, this.bpos.z - this.player.pos.z), dir: 0,
+      jumpT: 2 + Math.random() * 4, phaseT: 3 + Math.random() * 3, phased: false, grown: false,
+      reqTier: c.rod || sp.rod || 0, rnd: rng((Math.random() * 1e9) | 0),
     };
-    if (c.staminaMax) { this.fish.staminaMax = c.staminaMax; this.fish.power = c.power; }
-    this.fish.stamina = this.fish.staminaMax;
+    if (c.power) this.fish.power = c.power;
+    // you start ON the fish with a little line in hand; the first second is a grace period
+    this.bar = { zone: 0.5, vel: 0, catch: 0.35, fought: 0, tired: 0, held: 0, on: 0 };
     this.state = 'fight';
-    this.fightT = 0; this.tension = 0.3; this.overT = 0; this.slackT = 0;
+    this.fightT = 0; this.tension = 0.3; this.pull = 0.5;
     G.state.useBait(G.state.s.bait);
     G.audio.hook();
     Bus.emit('fish:hooked', { fish: this.fish });
-    if (this.fish.giant || this.fish.lev) G.ui.banner(this.fish.lev ? 'IT IS HOOKED!' : 'GIANT ON THE LINE!', 'Keep the tension in the zone. Pull against its runs.');
+    const over = this.fish.fight - rod.rating;
+    if (this.fish.giant || this.fish.lev) G.ui.banner(this.fish.lev ? 'IT IS HOOKED!' : 'GIANT ON THE LINE!', 'Hold to lift the catch zone. Keep it on the fish.');
+    if (over > 0.25 && !sp.lev) {
+      const need = RODS.find(r => r.rating >= this.fish.fight);
+      G.ui.toast('This one is too strong for your ' + rod.name + (need ? ' - you need a ' + need.name + '.' : '.'), 'bad');
+      Bus.emit('fish:toostrong', { need: need && need.id });
+    }
   }
 
-  _fight(dt, input, blocked, reeling) {
-    const G = this.game, P = this.player, F = this.fish, rod = this.rod;
+  /* ---------------- the fight: the Fish N Sticks bar ----------------
+     The catch zone is a weightless thing in a gravity well: holding the
+     button lifts it (and reels - you can see the crank turn), letting go
+     drops it. Keep it over the fish as the fish darts about the bar and the
+     catch meter fills; slip off and it drains. The fish tires only while
+     you are ON it (pressure, not patience), and one heavier than the rod's
+     rating bleeds the meter however well you track it - the upgrade loop
+     as a rule rather than a locked door. After 75 s the line parts. */
+  _fight(dt, input, blocked, holding) {
+    const G = this.game, P = this.player, F = this.fish, rod = this.rod, B = this.bar;
     this.fightT += dt;
-    // fish AI
-    F.dirT -= dt;
-    if (F.dirT <= 0) {
-      const opts = [-1, -0.6, 0, 0.6, 1];
-      F.dir = opts[Math.floor(Math.random() * opts.length)];
-      F.run = Math.random() < 0.25 + F.erratic * 0.25;
-      F.dirT = (1 + Math.random() * 2.5) / (0.5 + F.erratic);
-    }
-    const tired = F.stamina <= 0;
-    let pull = F.power * (0.35 + 0.65 * clamp(F.stamina / F.staminaMax, 0, 1)) * (F.run ? 1.6 : 1);
-    if (tired) pull *= 0.3;
-    // player input: pull the rod against the run
-    const sideIn = blocked ? 0 : input.axis('KeyA', 'KeyD');
-    this.side = damp(this.side, sideIn, 6, dt);
-    const counter = clamp(-this.side * F.dir, -1, 1);
-    const over = F.lev ? 0 : Math.max(0, F.kg / rod.maxKg - 1);
-    const tMul = 1 + over * 1.6;
-    let target = (pull * (reeling ? 0.5 : 0.16) * tMul / rod.tolerance) * (1 - 0.4 * Math.max(0, counter)) * (1 + 0.35 * Math.max(0, -counter)) + (reeling ? 0.1 : 0);
-    // ghostfish: when it phases out, reeling yanks on nothing and then everything
-    if (FISH_BY_ID[F.sp].beh === 'ghost') {
-      F.phaseT -= dt;
-      if (F.phaseT <= 0) { F.phased = !F.phased; F.phaseT = F.phased ? 1.4 : 3 + Math.random() * 3; if (F.phased) this.msg('It vanished... it is still on the line!', 'info'); }
-      if (F.phased && reeling) target += 0.5;
-    }
+    const sp = FISH_BY_ID[F.sp];
     // sharkfish: small at first
-    if (FISH_BY_ID[F.sp].beh === 'shark' && !F.grown && this.fightT > 2.5) {
+    if (sp.beh === 'shark' && !F.grown && this.fightT > 2.5) {
       F.grown = true;
-      F.kg *= 10; F.cm *= 2.15; F.power *= 2.4; F.staminaMax *= 2.2; F.stamina *= 2.2;
+      F.kg *= 10; F.cm *= 2.15; F.power *= 2.4; F.fight += 0.9; F.tier = Math.min(6, F.tier + 2);
+      F.move.speed = Math.min(0.8, F.move.speed * 1.35); F.move.drain *= 1.3; F.move.restless += 0.5;
       G.fx.eruption(this.bpos.x, G.world.sea(this.bpos.x, this.bpos.z), this.bpos.z, 4);
       G.audio.roar(0.6);
       G.ui.banner('IT IS GROWING?!', 'That was a tiny fish a second ago.');
       Bus.emit('fish:grew', {});
     }
-    this.tension = damp(this.tension, target, 5, dt);
-    // jumps: a spike if you reel mid-air
-    F.jumpT -= dt;
-    if (F.jump > 0 && F.jumpT <= 0 && !F.lev) {
-      F.jumpT = (4 + Math.random() * 6) / (0.4 + F.jump);
-      this._startJump();
+    // ghostfish: it fades out; while it is gone you cannot land progress on it
+    if (sp.beh === 'ghost') {
+      F.phaseT -= dt;
+      if (F.phaseT <= 0) { F.phased = !F.phased; F.phaseT = F.phased ? 1.3 : 3 + Math.random() * 3; if (F.phased) this.msg('It vanished... it is still on the line!', 'info'); }
     }
-    if (this.jump && reeling) this.tension += dt * 1.2;
-    // line
-    const out = pull * (F.run ? 0.55 : 0.22);
-    const inn = reeling ? rod.reel * (1 - 0.5 * clamp(this.tension, 0, 1)) * (tired ? 1.4 : 1) : 0;
-    F.dist += (out - inn) * dt;
-    F.bearing += F.dir * 0.22 * dt * (F.run ? 1.5 : 1);
-    this.crank += reeling ? dt * 16 : 0;
-    if (reeling) G.audio.reel(this.tension);
+    // --- the player's zone: lift while held, gravity when not ---
+    const drag = 2.2 * rod.control;
+    B.vel += ((holding ? rod.lift : 0) - rod.fall) * dt;
+    B.vel -= B.vel * Math.min(1, drag * dt);
+    B.zone += B.vel * dt;
+    if (B.zone < 0) { B.zone = 0; B.vel = Math.max(0, B.vel); }
+    if (B.zone > 1) { B.zone = 1; B.vel = Math.min(0, B.vel); }
+    // --- the fish ---
+    this._moveFish(dt);
+    // --- on it? ---
+    const half = rod.band * 0.5;
+    const on = Math.abs(F.fishPos - B.zone) <= half && !F.phased;
+    B.on = on ? Math.min(1, B.on + dt * 6) : Math.max(0, B.on - dt * 6);
+    if (on) B.fought += dt;
+    B.tired = clamp(B.fought / 30, 0, 1);
+    B.held += dt;
+    if (on) B.catch += 0.52 * (1 + B.tired * 1.2) * dt;
+    else B.catch -= 0.30 * F.move.drain * Math.min(1, B.held / 1.5) * dt;
+    const over = F.fight - rod.rating;
+    // OVER THE ROD'S RATING the meter bleeds even when you track it perfectly,
+    // and it bleeds hard: a little over is a fight, a lot over is impossible.
+    if (over > 0) B.catch -= (over * 0.55 + over * over * 1.2) * dt;
+    B.catch = clamp(B.catch, 0, 1);
+    // --- what the rod, the reel and the line feel ---
+    const pull = clamp(F.fight / rod.rating, 0.2, 2);
+    const strain = (on ? 0.35 : 0.75) * pull + (holding ? 0.15 : 0) + Math.max(0, over) * 0.6;
+    this.tension = damp(this.tension, clamp(strain, 0.1, 1.25), 6, dt);
+    this.pull = pull;
+    this.side = damp(this.side, clamp((F.fishTarget - F.fishPos) * 4, -1, 1), 4, dt);
+    this.crank += holding ? dt * (6 + rod.reel * 3) * (on ? 1 : 0.6) : 0;
+    if (holding) G.audio.reel(this.tension);
     G.audio.tension(this.tension);
-    // the tiring clock runs only in the zone
-    if (this.tension > 0.25 && this.tension < 0.95) {
-      F.stamina -= dt * (reeling ? 1 : 0.35) * (1 + 0.9 * Math.max(0, counter)) * (0.85 + rod.tier * 0.12);
-    }
-    // failure conditions
-    if (this.tension > 1) this.overT += dt; else this.overT = Math.max(0, this.overT - dt * 0.6);
-    if (this.tension < 0.06 && !tired) this.slackT += dt; else this.slackT = 0;
-    const rodPull = F.reqTier > rod.tier;
-    if (rodPull && this.tension > 1.05 && this.overT > 0.45) return this._yank();
-    if (this.overT > 0.75) return this._lose('SNAP! The line broke.');
-    if (F.dist > rod.line) return this._lose('It took all your line. SNAP.');
-    if (this.slackT > 2.6) return this._lose('Slack line - it spat the hook.');
-    if (this.fightT > (F.lev ? FIGHT_MAX * 1.7 : FIGHT_MAX)) return this._lose('After all that, the line finally parts.');
-    // position of the fish on the water
+    // jumps
+    F.jumpT -= dt;
+    if (F.jump > 0 && F.jumpT <= 0 && !F.lev) { F.jumpT = (4 + Math.random() * 6) / (0.4 + F.jump); this._startJump(); }
+    // --- the fish in the world: it comes in as the meter fills ---
+    const want = 1.6 + (F.dist0 - 1.6) * (1 - B.catch);
+    F.dist = damp(F.dist, want, 1.5, dt);
+    F.dir = clamp(F.fishTarget - F.fishPos, -1, 1) * 2;
+    F.bearing += F.dir * 0.12 * dt * (on ? 0.5 : 1.2);
     const px = P.pos.x + Math.sin(F.bearing) * F.dist, pz = P.pos.z + Math.cos(F.bearing) * F.dist;
     const s = this.water === 'ice' ? 0.05 : G.world.waterAt(px, pz);
     if (this.water === 'ice') this.bpos.set(this.bpos.x, 0.0, this.bpos.z);
-    else if (s === -Infinity) { F.bearing -= F.dir * 0.5 * dt; F.dir = -F.dir; F.dist = Math.max(2, F.dist - 3 * dt); }
+    else if (s === -Infinity) { F.bearing -= F.dir * 0.4 * dt; }
     else this.bpos.set(px, s - 0.25, pz);
-    if (Math.random() < dt * (3 + pull)) G.fx.splash(this.bpos.x, (s > -Infinity ? s : 0), this.bpos.z, clamp(F.kg / 40, 0.2, 2));
+    if (Math.random() < dt * (2 + pull * 2)) G.fx.splash(this.bpos.x, (s > -Infinity ? s : 0), this.bpos.z, clamp(F.kg / 40, 0.2, 2));
     // big fish tow the boat, or you
     const dx = this.bpos.x - P.pos.x, dz = this.bpos.z - P.pos.z, dl = Math.hypot(dx, dz) || 1;
+    const tugging = (on ? 0.5 : 1.3) * (1 - B.tired * 0.6);
     if (P.boat && (F.power > 1.6 || F.kg > 60)) {
-      const k = F.power * (F.run ? 1.6 : 1) * (tired ? 0.3 : 1) * 1.8 / Math.sqrt(P.boat.hull.mass / 250);
+      const k = F.power * tugging * 1.8 / Math.sqrt(P.boat.hull.mass / 250);
       P.boat.tow.x += dx / dl * k; P.boat.tow.y += dz / dl * k;
-    } else if (!P.boat && F.power > 2.6 && this.tension > 0.7 && !tired) {
+    } else if (!P.boat && F.power > 2.6 && !on) {
       P.vel.x += dx / dl * (F.power - 2.4) * 1.3 * dt; P.vel.z += dz / dl * (F.power - 2.4) * 1.3 * dt;
     }
-    if (F.dist < 1.8 || (this.water === 'ice' && F.dist < 2.5)) this._land();
+    // --- outcomes ---
+    if (B.catch >= 1) return this._land();
+    if (B.catch <= 0) {
+      if (F.reqTier > rod.tier && Math.random() < 0.6) return this._yank();
+      return this._lose(over > 0.2 ? 'SNAP! Too strong for this rod.' : 'It shook the hook and got away.');
+    }
+    if (B.held > (F.lev ? 150 : 75)) return this._lose('After all that, the line finally parts.');
   }
+
+  /** The fish on the bar: picks a spot and swims at it, changing its mind
+      on its own schedule. Rarer and deeper fish feint, run and break rhythm -
+      timing, not raw speed, is what makes them hard. */
+  _moveFish(dt) {
+    const F = this.fish, M = F.move, B = this.bar, rnd = F.rnd, tier = F.tier;
+    F.feint = Math.max(0, F.feint - dt);
+    if (F.feint > 0) F.fishTarget = clamp(F.feintTo, 0, 1);
+    F.nextThink -= dt;
+    if (F.nextThink <= 0) {
+      const r = rnd();
+      F.nextThink = lerp(0.9, 0.16, clamp(M.restless / 2.6, 0, 1)) * (0.6 + rnd() * 0.9);
+      if (tier >= 5 && rnd() < 0.55) {
+        const roll = rnd();
+        if (roll < 0.34) { F.fishTarget = F.fishPos; F.nextThink = 1.3 + rnd() * 1.1; }
+        else if (roll < 0.72) { F.fishTarget = clamp(F.fishPos + (rnd() < 0.5 ? -1 : 1) * (0.34 + rnd() * 0.46), 0, 1); F.nextThink = 0.11 + rnd() * 0.12; }
+        else { F.fishTarget = clamp(0.08 + rnd() * 0.84, 0, 1); F.nextThink = 0.45 + rnd() * 0.9; }
+      } else if (tier >= 4 && rnd() < 0.22) {
+        F.fishTarget = rnd() < 0.5 ? 0.06 : 0.94; F.nextThink = 1.1 + rnd() * 0.7;
+      } else if (tier >= 2 && rnd() < (tier >= 4 ? 0.2 : tier >= 3 ? 0.15 : 0.1)) {
+        const size = tier >= 4 ? 1 : 0.62, away = rnd() < 0.5 ? -1 : 1;
+        F.feintTo = clamp(F.fishPos + away * (0.14 + rnd() * 0.22) * size, 0, 1);
+        F.feint = (0.22 + rnd() * 0.14) * size;
+        F.fishTarget = clamp(F.fishPos - away * (0.18 + rnd() * 0.26) * size, 0, 1);
+        F.nextThink = F.feint + 0.35;
+      } else if (r < M.pause) F.fishTarget = F.fishPos;
+      else if (r < M.pause + M.dart * 0.5) F.fishTarget = clamp(F.fishPos + (rnd() < 0.5 ? -1 : 1) * (0.25 + rnd() * 0.5), 0, 1);
+      else F.fishTarget = clamp(0.1 + rnd() * 0.8, 0, 1);
+    }
+    const wobble = Math.sin(this.fightT * 3.1 + F.kg) * M.drift * 0.06;
+    const want = clamp(F.fishTarget + wobble, 0, 1);
+    const d = want - F.fishPos;
+    const step = M.speed * (1 - B.tired * 0.17) * dt * (1 + Math.abs(d) * 1.4);
+    F.fishPos = clamp(F.fishPos + clamp(d, -step, step), 0, 1);
+  }
+
+  /** Friends with harpoons: every hit on a hooked giant hands you line. */
+  assist(n) { if (this.bar && this.state === 'fight') this.bar.catch = clamp(this.bar.catch + n * 0.012, 0, 1); }
 
   _startJump() {
     const F = this.fish, G = this.game;
@@ -469,7 +556,7 @@ export class Fishing {
     if (F.lev || F.creature) {
       G.creatures.landed(F.creature, F);
     } else {
-      G.landCatch({ sp: F.sp, kg: F.kg, cm: F.cm, pos: from, vel, by: P.id, slap, size: F.size });
+      G.landCatch({ sp: F.sp, kg: F.kg, cm: F.cm, pos: from, vel, by: P.id, slap, size: F.size, v: F.v, zone: F.zone, mult: zoneValue(F.zone) * (F.v ? VARIANT_BY_ID[F.v].mult : 1) });
     }
     G.fx.splash(from.x, from.y, from.z, clamp(F.kg / 15, 0.6, 3));
     G.audio.splash(1);
@@ -515,7 +602,8 @@ export class Fishing {
     return {
       state: this.state, charge: this.charge, tension: this.tension, side: this.side, crank: this.crank,
       dist: F ? F.dist : this.bpos.distanceTo(this.player.pos), line: this.rod.line,
-      stamina: F ? clamp(F.stamina / F.staminaMax, 0, 1) : 0, fishDir: F ? F.dir : 0, run: F ? F.run : false,
+      stamina: F ? 1 - this.bar.catch : 0, fishDir: F ? F.dir : 0, run: false, pull: F ? this.pull : 0,
+      bar: F ? { zone: this.bar.zone, band: this.rod.band, fish: F.fishPos, target: F.fishTarget, catch: this.bar.catch, on: this.bar.on, phased: F.phased, over: F.fight - this.rod.rating, tier: F.tier, v: F.v, tired: this.bar.tired } : null,
       rarity: F ? FISH_BY_ID[F.sp].rarity : null, big: F ? (F.giant || !!F.lev) : false, window: this.state === 'bite' ? this.biteT / this.rod.window : 0,
     };
   }

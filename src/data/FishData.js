@@ -210,11 +210,71 @@ export const FISH_BY_ID = Object.fromEntries([...FISH, ...GIANTS].map(f => [f.id
 /** Median weight of a species. */
 export const midKg = f => (f.kg[0] + f.kg[1]) / 2;
 
-/** Coin value of one catch. */
+/* ---------------- depth progression ----------------
+   ZMIN is the zone a species belongs to. Outside it (shallower) it is a
+   rare stray; at or past it the rarer it is the more the deep favours it. */
+export const ZMIN = {
+  bass: 0, perch: 0, trout: 0, carp: 0, pike: 0, catfish: 0, goldtrout: 0, cod: 0, flounder: 0, mackerel: 0, rainbowkoi: 0, thief: 0, slapfish: 0,
+  seabass: 1, salmon: 1, char: 1, icecod: 1, burbot: 1, parrot: 1, reefdancer: 1, puffer: 1, bombfish: 1, eel: 1, magnetfish: 1,
+  frostpike: 2, barracuda: 2, mahi: 2, tuna: 2, halibut: 2, mimic: 2, sharkfish: 2, ghost: 2,
+  glaciersalmon: 3, swordfish: 3, sunfish: 3, marlin: 3, oarfish: 3, lantern: 3,
+  angler: 4, viper: 4, gulper: 4, coelacanth: 4,
+};
+export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
+
+/* Variants: something is not quite right with this one. Chance and pool
+   grow with the zone, so the strangest catches live the farthest out. */
+export const VARIANTS = [
+  { id: 'giant', name: 'Giant', mult: 2.2, size: 1.75, w: 1.0, zone: 0, fight: 0.25, css: '#ffb070' },
+  { id: 'golden', name: 'Golden', mult: 6, size: 1, w: 0.3, zone: 0, fight: 0.1, css: '#f2c14a' },
+  { id: 'albino', name: 'Albino', mult: 3, size: 1, w: 0.6, zone: 1, fight: 0, css: '#f4f0e8' },
+  { id: 'armored', name: 'Armoured', mult: 2.6, size: 1.15, w: 0.6, zone: 2, fight: 0.3, css: '#a8b8c8' },
+  { id: 'glowing', name: 'Glowing', mult: 4, size: 1, w: 0.55, zone: 3, fight: 0.15, css: '#8af0ff' },
+  { id: 'abyssal', name: 'Abyssal', mult: 7.5, size: 1.45, w: 0.45, zone: 4, fight: 0.45, css: '#c07af0' },
+];
+export const VARIANT_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v]));
+const ZONE_VALUE = [1.0, 1.4, 1.9, 2.7, 4.0];
+const ZONE_SIZE = [0, 0.12, 0.25, 0.42, 0.65];
+const ZONE_VARIANT = [0.03, 0.06, 0.10, 0.16, 0.24];
+export const zoneValue = z => ZONE_VALUE[Math.max(0, Math.min(4, z | 0))];
+
+export function rollVariant(zone, r = Math.random) {
+  if (r() > ZONE_VARIANT[Math.max(0, Math.min(4, zone | 0))]) return null;
+  const pool = VARIANTS.filter(v => v.zone <= zone);
+  let t = pool.reduce((a, v) => a + v.w, 0), x = r() * t;
+  for (const v of pool) { x -= v.w; if (x <= 0) return v.id; }
+  return pool[0].id;
+}
+export const zoneSizeBoost = z => ZONE_SIZE[Math.max(0, Math.min(4, z | 0))];
+
+/** How hard a fish fights on the bar (compared against a rod's rating). */
+export function fightOf(f, kg, variant = null) {
+  const F = f.fight;
+  let v = 0.45 + F.power * 0.33 + Math.log10(Math.max(0.05, kg) + 1) * 0.32;
+  if (variant && VARIANT_BY_ID[variant]) v += VARIANT_BY_ID[variant].fight;
+  return v;
+}
+
+/** Display name of a catch, variant first. */
+export function catchName(sp, variant) {
+  const f = typeof sp === 'string' ? FISH_BY_ID[sp] : sp;
+  const v = variant && VARIANT_BY_ID[variant];
+  return (v ? v.name + ' ' : '') + (f ? f.name : '?');
+}
+
+/** Coin value of one catch. `mult` carries depth zone and variant. */
 export function fishValue(f, kg, mult = 1) {
   if (f.beh === 'chest') return 0;
   const m = midKg(f);
   return Math.max(1, Math.round(f.value * Math.pow(Math.max(0.05, kg) / m, 0.7) * mult));
+}
+
+/** The pieces of a price, for the market receipt. */
+export function valueBreakdown(f, kg, zone = 0, variant = null) {
+  const m = midKg(f);
+  const size = Math.pow(Math.max(0.05, kg) / m, 0.7);
+  const zm = zoneValue(zone), vm = variant && VARIANT_BY_ID[variant] ? VARIANT_BY_ID[variant].mult : 1;
+  return { base: f.value, size, zone: zm, variant: vm, total: fishValue(f, kg, zm * vm) };
 }
 
 /** Roll a size in 0..1 skewed toward small; big ones are rare. */

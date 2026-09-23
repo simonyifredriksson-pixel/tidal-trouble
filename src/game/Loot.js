@@ -19,12 +19,12 @@
      bottle  a message; reading it adds a page to the story
      slap    handled at landing: it goes for your face */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790183165';
-import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790183165';
-import { MAT } from '../art/Materials.js?v=1790183165';
-import { clamp, uid } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790185859';
+import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790185859';
+import { MAT } from '../art/Materials.js?v=1790185859';
+import { clamp, uid } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -49,7 +49,7 @@ export class Loot {
       yaw: o.yaw ?? Math.random() * 6.28, roll: 0, spinY: (Math.random() - 0.5) * 6, spinR: (Math.random() - 0.5) * 8,
       boat: null, local: new THREE.Vector3(), held: null, state: 'free', t: 0, flop: o.flop ?? (sp.junk ? 0 : 22),
       inWater: 0, fuse: -1, puff: 0, mimic: sp.beh === 'mimic', opened: false, shockT: 0, stunned: !!o.stunned,
-      caughtBy: o.by || null, grounded: false, owner: o.owner || null,
+      caughtBy: o.by || null, grounded: false, owner: o.owner || null, v: o.v || null, zone: o.zone || 0,
     };
     it.r = sp.junk ? 0.3 : clamp(it.cm / 200, 0.12, 2.5);
     this._mesh(it);
@@ -71,7 +71,7 @@ export class Loot {
       m.add(c);
       m.scale.setScalar(0.75);
     } else {
-      m = fishMesh(sp, it.cm / 100);
+      m = fishMesh(sp, it.cm / 100, { variant: it.v });
     }
     it.mesh = m;
     it.baseScale = m.scale.x;
@@ -337,17 +337,17 @@ export class Loot {
     const out = [];
     for (const it of this.items.values()) {
       out.push([it.id, it.sp, +it.kg.toFixed(2), Math.round(it.cm), +it.pos.x.toFixed(2), +it.pos.y.toFixed(2), +it.pos.z.toFixed(2), +it.yaw.toFixed(2), +it.roll.toFixed(2),
-        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0]);
+        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone]);
     }
     return out;
   }
   applySnapshot(arr) {
     const seen = new Set();
     for (const a of arr) {
-      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned] = a;
+      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone] = a;
       seen.add(id);
       let it = this.items.get(id);
-      if (!it) it = this.spawn({ id, sp, kg, cm, pos: _v.set(x, y, z), flop: 0 });
+      if (!it) it = this.spawn({ id, sp, kg, cm, pos: _v.set(x, y, z), flop: 0, v: v || null, mult: mult || 1, zone: zone || 0 });
       if (!it) continue;
       it.pos.lerp(_w.set(x, y, z), 0.5);
       it.yaw = yaw; it.roll = roll; it.boat = boatId ? this.game.boatById(boatId) : null;
@@ -360,11 +360,11 @@ export class Loot {
 
   /* ---------------- persistence (host) ---------------- */
   saveOnBoat(boat) {
-    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult }));
+    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone }));
   }
   loadOnBoat(boat, list) {
     for (const o of list || []) {
-      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m });
+      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn });
       if (!it) continue;
       it.boat = boat; it.local.set(o.x, Math.max(o.y, boat.deck + 0.05), o.z); it.vel.set(0, 0, 0);
       if (o.c) { it.state = 'cooler'; it.mesh.visible = false; }

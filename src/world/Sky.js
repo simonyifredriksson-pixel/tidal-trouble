@@ -7,9 +7,9 @@
    trees do not go solid black. The Blackwater is the one place the game is
    allowed to be properly dark, and there it is the fog that closes in. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790183165';
-import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790185859';
+import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790185859';
 
 const KEYS = [
   // t,    top,      horizon,  fog,      sun,      sunI, hemiSky,  hemiGnd,  hemiI

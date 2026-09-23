@@ -34,7 +34,7 @@ export class Input {
 
     el.addEventListener('mousedown', e => {
       // the click that captures the mouse is not also a cast
-      if (!this.locked && this.wantLock && !this.blocked) { this.lock(); if (this.requireLock) return; }
+      if (!this.locked && this.wantLock && !this.blocked && (!this.canLock || this.canLock())) { this.lock(); if (this.requireLock) return; }
       this.mouse.buttons.add(e.button);
       this.mouse.clicked.add(e.button);
     });

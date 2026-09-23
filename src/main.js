@@ -1,4 +1,4 @@
-/* main.js - boots Tidal Trouble.
+/* main.js - boots Hooked.
 
    Loading screen -> the world is generated -> the title screen (the camera
    drifts round Driftwood Bay at golden hour) -> solo, host, or join.
@@ -10,17 +10,17 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790183165';
-import { Input } from './core/Input.js?v=1790183165';
-import { Audio } from './core/Audio.js?v=1790183165';
-import { World } from './world/World.js?v=1790183165';
-import { Game } from './game/Game.js?v=1790183165';
-import { UI } from './ui/UI.js?v=1790183165';
-import { State } from './game/State.js?v=1790183165';
-import { Net } from './net/Net.js?v=1790183165';
-import { Remote } from './game/Remote.js?v=1790183165';
-import { heightAt } from './world/Terrain.js?v=1790183165';
-import { U } from './art/Materials.js?v=1790183165';
+import * as THREE from '../lib/three.module.js?v=1790185859';
+import { Input } from './core/Input.js?v=1790185859';
+import { Audio } from './core/Audio.js?v=1790185859';
+import { World } from './world/World.js?v=1790185859';
+import { Game } from './game/Game.js?v=1790185859';
+import { UI } from './ui/UI.js?v=1790185859';
+import { State } from './game/State.js?v=1790185859';
+import { Net } from './net/Net.js?v=1790185859';
+import { Remote } from './game/Remote.js?v=1790185859';
+import { heightAt } from './world/Terrain.js?v=1790185859';
+import { U } from './art/Materials.js?v=1790185859';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -59,7 +59,8 @@ let game = null, ui = null;
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 async function boot() {
-  const setBar = (f, t) => { document.querySelector('#loading .load-bar i').style.width = Math.round(f * 100) + '%'; document.querySelector('#loading .load-step').textContent = t; };
+  const setBar = (f, t) => { document.querySelector('#intro .load-bar i').style.width = Math.round(f * 100) + '%'; document.querySelector('#intro .load-step').textContent = t; };
+  introFx();
   let n = 0;
   const steps = 8;
   const T0 = performance.now(); const lap = l => window.__log && window.__log('load ' + l + ' ' + Math.round(performance.now() - T0) + 'ms');
@@ -78,11 +79,24 @@ async function boot() {
   lap('prebuild done');
   setBar(1, 'Ready.');
   await tick();
-  document.getElementById('loading').classList.add('gone');
   window.TT = { game, world, state, net, THREE, renderer, scene, camera, heightAt };
-  if (Q.has('netjoin')) { const code = Q.get('netjoin'); ui.open('lobby', { mode: 'join' }); joinRoom(code); netProbe('client'); }
-  else if (Q.has('auto')) startGame(Q.get('auto') === 'continue' && State.hasSave() ? 'continue' : 'new');
-  else showTitle();
+  const intro = document.getElementById('intro');
+  if (Q.has('netjoin')) { intro.classList.add('gone'); const code = Q.get('netjoin'); ui.open('lobby', { mode: 'join' }); joinRoom(code); netProbe('client'); }
+  else if (Q.has('uijoin')) { intro.classList.add('gone'); showTitle(); uiJoinProbe(Q.get('uijoin')); }
+  else if (Q.has('auto')) { intro.classList.add('gone'); startGame(Q.get('auto') === 'continue' && State.hasSave() ? 'continue' : 'new'); }
+  else {
+    // PRESS ANYWHERE TO PLAY: the click opens the menu with the cursor free
+    intro.classList.add('ready');
+    const go = () => {
+      intro.removeEventListener('pointerdown', go); removeEventListener('keydown', go);
+      audio.unlock();
+      input.unlock();
+      intro.classList.add('gone');
+      showTitle();
+    };
+    intro.addEventListener('pointerdown', go);
+    addEventListener('keydown', go);
+  }
   if (Q.has('loop')) setInterval(() => loop(performance.now()), 50); else requestAnimationFrame(loop);
 }
 
@@ -101,16 +115,16 @@ function titleActs(act, arg) {
     case 'wipeStart': ui.close(); state.wipe(); startGame('new'); return true;
     case 'settings': ui.open('settings'); return true;
     case 'controls': ui.open('controls'); return true;
-    case 'host': startGame(State.hasSave() ? 'continue' : 'new'); hostRoom(); return true;
+    case 'host': startGame(State.hasSave() ? 'continue' : 'new', false); hostRoom(); return true;
     case 'hostNow': hostRoom(); return true;
     case 'join': ui.open('lobby', { mode: 'join' }); return true;
-    case 'joinGo': joinRoom(document.getElementById('joincode')?.value || ''); return true;
+    case 'joinGo': joinRoom(document.getElementById('joincode')?.value || ui.data?.code || ''); return true;
     case 'leaveRoom': net.leave(); ui.close(); if (state.remote) location.reload(); return true;
   }
   return undefined;
 }
 
-function startGame(mode) {
+function startGame(mode, lock = true) {
   if (game.running) return;
   ui.hideTitle();
   ui.close();
@@ -123,9 +137,9 @@ function startGame(mode) {
     world.prebuild(x, z);
   }
   if (Q.has('stage')) stage(Q.get('stage'));
-  input.lock();
+  if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790183165').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790185859').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -140,6 +154,8 @@ async function hostRoom() {
 }
 
 async function joinRoom(code) {
+  if (!code || code.replace(/[^A-Za-z0-9]/g, '').length !== 5) { net._status('Room codes are five letters.'); ui.render(); return; }
+  net._status('Connecting...');
   ui.render();
   try {
     await net.join(code, { name: state.settings.name || 'Fisher', look: state.settings.look });
@@ -218,6 +234,29 @@ function netProbe(role) {
   }, 1500);
 }
 
+/* ---------------- the real join flow, driven through the DOM (test) ---------------- */
+function uiJoinProbe(code) {
+  const log = window.__log || (() => {});
+  setTimeout(() => {
+    const btn = document.querySelector('#title [data-act="join"]');
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    setTimeout(() => {
+      const inp = document.getElementById('joincode');
+      const r = inp.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      log('join box on top of everything: ' + (hit === inp) + ' (hit ' + (hit && (hit.id || hit.className)) + ')');
+      inp.focus();
+      log('join box focused: ' + (document.activeElement === inp) + ', pointer locked: ' + !!document.pointerLockElement);
+      for (const ch of code.toLowerCase()) { inp.value += ch; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+      inp.value = inp.value.slice(0, -1); inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.value += code.slice(-1); inp.dispatchEvent(new Event('input', { bubbles: true }));
+      log('typed (with a delete) -> "' + inp.value + '", still focused: ' + (document.activeElement === document.getElementById('joincode')));
+      inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      netProbe('client');
+    }, 400);
+  }, 800);
+}
+
 /* ---------------- stages for screenshots ---------------- */
 function stage(name) {
   const G = game, P = G.player, A = world.settlement.anchors;
@@ -233,6 +272,42 @@ function stage(name) {
   if (name === 'storm') { G.events.start('storm', P.pos); G.events.storm = 1; }
   if (name === 'lev') { G.state.s.clues = {}; G.creatures.startLev('gloop', -75, -45); P.place(A.lakePier.clone(), -1.57); G.tod = 0.9; }
   if (name === 'giant') { P.attach(b, new THREE.Vector3(0, b.deck, 0)); G.creatures.spawnGiant(b.pos); }
+}
+
+/* ---------------- the intro's background life ---------------- */
+function introFx() {
+  const cv = document.getElementById('introfx');
+  if (!cv) return;
+  const c = cv.getContext('2d');
+  const B = [], FSH = [];
+  for (let i = 0; i < 46; i++) B.push({ x: Math.random(), y: Math.random(), r: 2 + Math.random() * 7, s: 0.02 + Math.random() * 0.05, w: Math.random() * 6 });
+  for (let i = 0; i < 7; i++) FSH.push({ x: Math.random(), y: 0.55 + Math.random() * 0.35, s: (0.012 + Math.random() * 0.02) * (Math.random() < 0.5 ? -1 : 1), k: 18 + Math.random() * 30 });
+  let last = performance.now();
+  const draw = now => {
+    const intro = document.getElementById('intro');
+    if (intro.classList.contains('gone')) return;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const W = cv.width = innerWidth, H = cv.height = innerHeight;
+    c.clearRect(0, 0, W, H);
+    // fish silhouettes, low-poly, drifting past far below
+    c.fillStyle = 'rgba(8,40,90,0.35)';
+    for (const f of FSH) {
+      f.x += f.s * dt; if (f.x > 1.15) f.x = -0.15; if (f.x < -0.15) f.x = 1.15;
+      const x = f.x * W, y = f.y * H + Math.sin(now / 900 + f.k) * 6, k = f.k, d = Math.sign(f.s);
+      c.beginPath(); c.moveTo(x + d * k, y); c.lineTo(x + d * k * 0.2, y - k * 0.34); c.lineTo(x - d * k * 0.6, y - k * 0.16); c.lineTo(x - d * k, y - k * 0.38); c.lineTo(x - d * k * 0.86, y);
+      c.lineTo(x - d * k, y + k * 0.38); c.lineTo(x - d * k * 0.6, y + k * 0.16); c.lineTo(x + d * k * 0.2, y + k * 0.34); c.closePath(); c.fill();
+    }
+    // rising bubbles
+    for (const b of B) {
+      b.y -= b.s * dt; if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); }
+      const x = b.x * W + Math.sin(now / 700 + b.w) * 8, y = b.y * H;
+      c.strokeStyle = 'rgba(230,248,255,0.5)'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(x, y, b.r, 0, 6.283); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(x - b.r * 0.35, y - b.r * 0.35, b.r * 0.28, 0, 6.283); c.fill();
+    }
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
 }
 
 /* ---------------- loop ---------------- */
@@ -273,7 +348,14 @@ addEventListener('resize', () => {
 addEventListener('mousedown', () => audio.unlock(), { once: false });
 addEventListener('keydown', () => audio.unlock(), { once: true });
 addEventListener('beforeunload', () => { if (game && game.running) game.save(); });
-input.onLockChange = locked => { if (locked) input.requireLock = true; if (!locked && game && game.running && !ui.isOpen && !ui.talkEl && !input.blocked) ui.open('pause'); };
+input.onLockChange = locked => {
+  if (locked) input.requireLock = true;
+  // menus always keep the cursor: a lock that lands while one is open is undone
+  if (locked && (!game || !game.running || ui.isOpen || ui.talkEl)) { input.unlock(); return; }
+  if (!locked && game && game.running && !ui.isOpen && !ui.talkEl && !input.blocked) ui.open('pause');
+};
+// the canvas only captures the mouse in play, never in a menu
+input.canLock = () => !!(game && game.running && !ui.isOpen && !ui.talkEl);
 
 boot().catch(e => {
   console.error(e);

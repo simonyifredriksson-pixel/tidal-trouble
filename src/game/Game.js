@@ -7,31 +7,31 @@
    arrive in the next snapshot. So solo play and co-op are the same code,
    and there is no way for two clients to both sell the same Bombfish. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { Player } from './Player.js?v=1790183165';
-import { Boat } from './Boat.js?v=1790183165';
-import { Loot } from './Loot.js?v=1790183165';
-import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790183165';
-import { Tools } from './Tools.js?v=1790183165';
-import { ViewModel } from './ViewModel.js?v=1790183165';
-import { Effects } from './Effects.js?v=1790183165';
-import { Creatures } from './Creatures.js?v=1790183165';
-import { Events } from './Events.js?v=1790183165';
-import { NPCs } from './NPCs.js?v=1790183165';
-import { Cabin } from './Cabin.js?v=1790183165';
-import { Remote } from './Remote.js?v=1790183165';
-import { State } from './State.js?v=1790183165';
-import { PLAYER_LOOKS } from '../art/Character.js?v=1790183165';
-import { fishMesh } from '../art/FishArt.js?v=1790183165';
-import { FISH_BY_ID, RARITY, fishValue, GIANTS } from '../data/FishData.js?v=1790183165';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790183165';
-import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790183165';
-import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790183165';
-import { LAKES, REGIONS, waveAmp } from '../world/MapData.js?v=1790183165';
-import { nearLake } from '../world/Terrain.js?v=1790183165';
-import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
-import { ic } from '../ui/Icons.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { Player } from './Player.js?v=1790185859';
+import { Boat } from './Boat.js?v=1790185859';
+import { Loot } from './Loot.js?v=1790185859';
+import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790185859';
+import { Tools } from './Tools.js?v=1790185859';
+import { ViewModel } from './ViewModel.js?v=1790185859';
+import { Effects } from './Effects.js?v=1790185859';
+import { Creatures } from './Creatures.js?v=1790185859';
+import { Events } from './Events.js?v=1790185859';
+import { NPCs } from './NPCs.js?v=1790185859';
+import { Cabin } from './Cabin.js?v=1790185859';
+import { Remote } from './Remote.js?v=1790185859';
+import { State } from './State.js?v=1790185859';
+import { PLAYER_LOOKS } from '../art/Character.js?v=1790185859';
+import { fishMesh } from '../art/FishArt.js?v=1790185859';
+import { FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790185859';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790185859';
+import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790185859';
+import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790185859';
+import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790185859';
+import { nearLake } from '../world/Terrain.js?v=1790185859';
+import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
+import { ic } from '../ui/Icons.js?v=1790185859';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 const SHOUTS = { KeyZ: 'WHAT WAS THAT?', KeyX: 'GUYS I GOT A RARE ONE!', KeyC: 'WE SHOULD PROBABLY LEAVE.', KeyV: 'HELP!' };
@@ -186,7 +186,7 @@ export class Game {
       case 'netFish': {
         const sp = FISH_BY_ID[c.c.sp];
         const pos = P.pos.clone().add(new THREE.Vector3(0, 1.4, 0));
-        this.landCatch({ sp: sp.id, kg: c.c.kg, cm: c.c.cm, pos, vel: new THREE.Vector3(0, 2, 0), by: from, size: c.c.size });
+        this.landCatch({ sp: sp.id, kg: c.c.kg, cm: c.c.cm, pos, vel: new THREE.Vector3(0, 2, 0), by: from, size: c.c.size, v: c.c.v, zone: c.c.zone, mult: c.c.mult });
         if (c.thief) { const n = 4 + Math.floor(Math.random() * 5); S.addBait(c.thief, n); S.addBait(BAITS[Math.floor(Math.random() * BAITS.length)].id, 3); this.tell(from, `The thief's hoard: ${n} ${BAIT_BY_ID[c.thief].name} and more!`, 'good'); }
         break;
       }
@@ -209,8 +209,8 @@ export class Game {
         const n = 1 + Math.floor(Math.random() * 4);
         for (let i = 0; i < n; i++) {
           const sp = pickSpecies({ region: this.world.region(t.x, t.z), water: this.isLake(t.x, t.z) ? 'lake' : 'sea', bait: 'pieces', night: this.isNight() });
-          const cc = rollCatch(sp);
-          this.landCatch({ sp: sp.id, kg: cc.kg, cm: cc.cm, pos: P.pos.clone().add(new THREE.Vector3((Math.random() - 0.5), 1.5, (Math.random() - 0.5))), vel: new THREE.Vector3(0, 2, 0), by: from, size: cc.size, quiet: i > 0 });
+          const cc = rollCatch(sp, Math.random, 0, zoneAt(t.x, t.z));
+          this.landCatch({ sp: sp.id, kg: cc.kg, cm: cc.cm, pos: P.pos.clone().add(new THREE.Vector3((Math.random() - 0.5), 1.5, (Math.random() - 0.5))), vel: new THREE.Vector3(0, 2, 0), by: from, size: cc.size, quiet: i > 0, v: cc.v, zone: cc.zone, mult: cc.mult });
         }
         this.tell(from, `The trap had ${n} catch${n > 1 ? 'es' : ''} in it!`, 'good');
         break;
@@ -297,7 +297,7 @@ export class Game {
   }
 
   _staminaHit(pid, n) {
-    if (pid === this.player.id || pid === this.net?.selfId) { if (this.fishing.fish) this.fishing.fish.stamina -= n; }
+    if (pid === this.player.id || pid === this.net?.selfId) this.fishing.assist(n);
     else this.net.sendEvent({ t: 'stamina', to: pid, n });
   }
 
@@ -307,14 +307,14 @@ export class Game {
   landCatch(o) {
     if (!this.isHost) { this.net.sendAction({ t: 'catch', sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos.toArray(), vel: o.vel.toArray(), slap: o.slap, size: o.size }); return; }
     const sp = FISH_BY_ID[o.sp];
-    const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by });
+    const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by, v: o.v || null, zone: o.zone || 0, mult: o.mult || 1 });
     if (!it) return;
     // record first, announce second
     const junk = sp.rarity === 'junk' || sp.beh === 'mimic';
-    const rec = junk && sp.beh !== 'chest' ? { isNew: false, record: false } : this.state.record(sp.id, o.kg, o.cm);
+    const rec = junk && sp.beh !== 'chest' ? { isNew: false, record: false } : this.state.record(sp.id, o.kg, o.cm, o.v);
     if (sp.beh === 'bottle') { /* read on pickup */ }
-    const value = fishValue(sp, o.kg);
-    const card = { sp: sp.beh === 'mimic' ? 'chest' : sp.id, kg: o.kg, cm: o.cm, value: sp.beh === 'mimic' ? 0 : value, isNew: rec.isNew, record: rec.record };
+    const value = fishValue(sp, o.kg, o.mult || 1);
+    const card = { sp: sp.beh === 'mimic' ? 'chest' : sp.id, kg: o.kg, cm: o.cm, value: sp.beh === 'mimic' ? 0 : value, isNew: rec.isNew, record: rec.record, v: sp.beh === 'mimic' ? null : o.v || null, zone: o.zone || 0 };
     if (!o.quiet) this._cardTo(o.by, card);
     if (o.slap) this.slaps.push({ id: it.id, pid: o.by, t: 0 });
     // tutorial and clues
@@ -518,7 +518,7 @@ export class Game {
     this.passing = true;
     this.fishing.cancel(true);
     this.dropHeld(P, true);
-    this.ui.fade(true, why === 'drown' ? 'You blacked out under the water...' : 'Everything goes dark...');
+    this.ui.fade(true, why === 'drown' ? 'You blacked out under the water...' : why === 'exhausted' ? 'Too tired to swim... someone fishes you out.' : 'Everything goes dark...');
     setTimeout(() => {
       const A = this.world.settlement.anchors;
       P.place(A.spawn.clone(), Math.PI);
@@ -600,9 +600,13 @@ export class Game {
   }
   _sell(list, from) {
     let total = 0, n = 0;
+    const rows = [];
     for (const it of list) {
       if (!this.loot.items.has(it.id)) continue;
       const v = this.loot.value(it);
+      const sp = FISH_BY_ID[it.sp];
+      const bd = valueBreakdown(sp, it.kg, it.zone || 0, it.v);
+      rows.push({ sp: it.sp, v: it.v || null, kg: +it.kg.toFixed(2), zone: it.zone || 0, value: v, base: bd.base, size: +bd.size.toFixed(2), zm: bd.zone, vm: bd.variant });
       total += v; n++;
       if (it.held) { const P = this.playerById(it.held); if (P) P.held = null; }
       this.loot.remove(it);
@@ -613,6 +617,9 @@ export class Game {
     const m = this.world.settlement.anchors.market.pos;
     this.fx.coins(m.x, m.y + 1.5, m.z, Math.min(40, 6 + n * 2));
     this.tell(from, `Sold ${n} for ${fmtInt(total)} coins.`, 'good');
+    rows.sort((a, b) => b.value - a.value);
+    const receipt = { t: 'receipt', to: from, rows: rows.slice(0, 40), more: Math.max(0, rows.length - 40), total, purse: this.state.s.money };
+    if (from === this.player.id || !this.net?.isOnline) this._event(this.player.id, receipt); else this.net.sendEvent(receipt);
     if (this.state.s.tut === 2) this._tut(3);
     this._saveDirty = true;
   }
@@ -743,6 +750,32 @@ export class Game {
     this.cabin.update();
     this.fx.update(dt);
 
+    // how far out are we? The world says so.
+    this.zoneT = (this.zoneT || 0) - dt;
+    if (this.zoneT <= 0) {
+      this.zoneT = 0.5;
+      const z = zoneAt(P.pos.x, P.pos.z, -this.world.height(P.pos.x, P.pos.z));
+      if (z !== this.zone) {
+        const was = this.zone ?? 0;
+        this.zone = z;
+        this._seenZone = this._seenZone || {};
+        if (z > was && !this._seenZone[z] && z > 0) {
+          this._seenZone[z] = true;
+          const Z = ZONES[z];
+          this.ui.banner(Z.name.toUpperCase(), Z.blurb + '  Fish here are worth x' + Z.value.toFixed(1) + '.', 'wave', 3.6);
+          this.audio.eventSting('zone');
+          const rod = ROD_BY_ID[this.state.s.rod];
+          if (rod.tier < z) setTimeout(() => this.ui.toast('Your ' + rod.name + ' will struggle out here. Melvin sells stronger ones.', 'warn'), 3800);
+        }
+      }
+      // the abyss in the dark with no lights: something keeps bumping the hull
+      if (this.isHost && P.boat && this.zone >= 4 && P.boat.stats.lights < 1 && Math.random() < 0.06) {
+        P.boat.impulse((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, 0.6, 1);
+        P.boat.damage(6, 'abyss');
+        this.ui.toast('Something big just bumped the hull. You need lights out here.', 'bad');
+        this.audio.crash();
+      }
+    }
     // clues nearby
     this.clueT -= dt;
     if (this.clueT <= 0) { this.clueT = 1; this._checkZoneClues(); }
@@ -769,7 +802,15 @@ export class Game {
     this.world.darkAt = (x, z) => this.world.weights(x, z).black;
     const L = this.world.sky;
     this.vm.syncLights(L.sun.color, L.sun.intensity, L.hemi.color, L.hemi.groundColor, L.hemi.intensity);
-    const vmState = { moving: P.speed > 0.5 && P.mode === 'walk', sprint: P.sprint, look: I.blocked ? { x: 0, y: 0 } : { x: I.mouse.dx * 0.0022, y: I.mouse.dy * 0.0022 }, fishing: this.fishing.hud(), busy: this.tools.busy, holding: !!P.held, aim: false };
+    const vmState = { moving: P.speed > 0.5 && P.mode === 'walk', sprint: P.sprint, look: I.blocked ? { x: 0, y: 0 } : { x: I.mouse.dx * 0.0022, y: I.mouse.dy * 0.0022 }, fishing: this.fishing.hud(), busy: this.tools.busy, holding: !!P.held && P.mode !== 'swim', aim: false,
+      swim: P.mode === 'swim' ? { moving: P.speed > 0.4, exhausted: P.exhausted } : null };
+    if (!this.vm.onStroke) this.vm.onStroke = () => this.audio.stroke();
+    // a big fish on the line tugs the whole view, not just the rod
+    if (this.fishing.state === 'fight') {
+      const pull = this.fishing.pull || 0, k = Math.max(0, pull - 0.8) * 0.004 + Math.max(0, this.fishing.tension - 0.9) * 0.006;
+      this._tug = (this._tug || 0) + dt * 17;
+      this.camera.rotation.x += Math.sin(this._tug) * k; this.camera.rotation.z += Math.cos(this._tug * 0.8) * k;
+    }
     this.vm.visible = P.mode !== 'drive' || true;
     this.vm.update(dt, vmState, this.camera);
 
@@ -1043,6 +1084,12 @@ export class Game {
     Bus.on('boat:wave', ({ boat }) => { if (this.player.boat === boat) this.ui.toast('These waves are too big for this boat!', 'bad'); });
     Bus.on('player:overboard', () => { this.state.s.stats.overboard++; this.ui.banner('OVERBOARD!', 'Swim back and press E at the hull to climb aboard.', 'wave', 2.5); this.audio.splash(1.5); });
     Bus.on('player:knocked', () => this.audio.ouch());
+    Bus.on('player:swim', ({ p }) => {
+      if (p !== this.player || this._swimTold) return;
+      this._swimTold = true;
+      this.ui.toast('Deep water. You can only swim for about ten seconds - boats go farther.', 'warn');
+    });
+    Bus.on('player:exhausted', ({ p }) => { if (p === this.player) { this.ui.banner('EXHAUSTED', 'Your arms are done. Get to a boat or the shore.', 'wave', 2.6); this.audio.ouch(); } });
     Bus.on('bomb:lit', ({ it }) => { if (this.isHost) this._everyone({ t: 'toast', text: 'The Bombfish fuse is lit! THROW IT!', kind: 'bad' }); });
     Bus.on('loot:escaped', ({ it }) => { if (this.isHost && it.held == null) this._everyone({ t: 'toast', text: (FISH_BY_ID[it.sp]?.name || 'A fish') + ' flopped back into the water and swam off.', kind: 'warn' }); });
     Bus.on('loot:floataway', ({ it }) => { if (this.isHost) this._everyone({ t: 'toast', text: 'The puffer floated off into the sky. Bye!', kind: 'warn' }); });
@@ -1089,7 +1136,7 @@ export class Game {
       case 'knock': this.player.knock(new THREE.Vector3(...e.d), e.f, e.why); this.addShake(0.4); break;
       case 'hurt': this.player.hurt(e.n, e.why); this.ui.hurt(); break;
       case 'shock': this.player.stunT = 1.3; this.dropHeld(this.player, true); this.player.hurt(8, 'shock'); this.ui.banner('ZAP!', 'Electric Eel!', 'alert', 2); break;
-      case 'stamina': if (this.fishing.fish) this.fishing.fish.stamina -= e.n; break;
+      case 'stamina': this.fishing.assist(e.n); break;
       case 'overboard': this.player.detach(); this.player.mode = 'swim'; break;
       case 'shake': this.addShake(e.a); break;
       case 'boom': { const p = new THREE.Vector3(...e.p); if (e.k === 'water') this.fx.eruption(p.x, this.world.sea(p.x, p.z), p.z, 3); this.fx.explosion(p.x, p.y + (e.k === 'water' ? 0.3 : 0), p.z, 1); this.audio.explosion(1, p); this.addShake(Math.max(0, 0.9 - this.player.pos.distanceTo(p) / 20)); break; }
@@ -1117,6 +1164,7 @@ export class Game {
         break;
       }
       case 'ending': this.ui.open('ending'); break;
+      case 'receipt': this.ui.open('receipt', { rows: e.rows, more: e.more, total: e.total, purse: e.purse }); break;
       case 'fade': this.ui.fade(e.on, e.text || ''); break;
     }
   }

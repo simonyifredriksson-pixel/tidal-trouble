@@ -6,8 +6,8 @@
    allocated per frame. Anything that emits calls a named effect, never the
    pool directly, so the look of an explosion lives in one place. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { MeshBuilder } from '../art/Geo.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { MeshBuilder } from '../art/Geo.js?v=1790185859';
 
 const MAX = 1800;
 

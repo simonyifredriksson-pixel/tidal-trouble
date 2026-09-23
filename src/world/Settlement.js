@@ -13,13 +13,14 @@
      cabin         the mount slots of your cabin museum
      clues         world objects for leviathan clues (by clue id) */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790183165';
-import { MAT } from '../art/Materials.js?v=1790183165';
-import * as BA from '../art/BuildingArt.js?v=1790183165';
-import { heightAt, groundAt, ICE_Y } from './Terrain.js?v=1790183165';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790183165';
-import { rng, TAU } from '../core/Util.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790185859';
+import { MAT } from '../art/Materials.js?v=1790185859';
+import * as BA from '../art/BuildingArt.js?v=1790185859';
+import { heightAt, groundAt, ICE_Y } from './Terrain.js?v=1790185859';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790185859';
+import { ZONES, HOME_CENTRE } from './MapData.js?v=1790185859';
+import { rng, TAU } from '../core/Util.js?v=1790185859';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -117,6 +118,7 @@ export class Settlement {
     this._open();
     this._black();
     this._clues();
+    this._zoneBuoys();
   }
 
   _house(spec, X, Z, rot, key = null) {
@@ -479,6 +481,41 @@ export class Settlement {
     this.C.box(gx - 4, gz, 0.95, 0.95, 0, gy - 2, gy + 12); this.C.box(gx + 4, gz, 0.95, 0.95, 0, gy - 2, gy + 12);
     this.lights.push({ pos: V(gx, gy + 6, gz + 2), color: 0x6af0ff, intensity: 2.5, dist: 40, night: false });
     this.interact.push({ id: 'gate', kind: 'gate', pos: V(gx, gy + 1.5, gz), r: 6, label: 'Touch the Drowned Gate' });
+  }
+
+  /* The progression, written on the sea: a ring of coloured buoys at every
+     zone boundary. Past the yellow ring the fish get bigger; past the red
+     one you need a real boat and a real rod. */
+  _zoneBuoys() {
+    const b = new MeshBuilder(rng(77));
+    const g = new MeshBuilder(rng(78));
+    for (const Z of ZONES) {
+      if (!Z.r) continue;
+      const n = Math.round(Z.r * Math.PI * 2 / 55);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * TAU;
+        const x = HOME_CENTRE.x + Math.cos(a) * Z.r, z = HOME_CENTRE.z + Math.sin(a) * Z.r;
+        if (heightAt(x, z) > -3) continue;
+        b.push(x, 0, z);
+        b.color(Z.color).cyl(0.55, 0.4, -0.3, 1.0, 7, true);
+        b.color(0xf4f0e8).cyl(0.57, 0.57, 0.45, 0.65, 7, false);
+        b.color(0x2a2a2e).cyl(0.06, 0.06, 1.0, 2.6, 4, true);
+        b.color(Z.color).card([0, 2.55, 0], [0, 2.05, 0], [0.8, 2.3, 0]);
+        b.pop();
+        g.push(x, 0, z); g.color(Z.color).blob(0.14, 0.14, 0.14, 0, 2.75, 0, 5, 3); g.pop();
+      }
+    }
+    const m = new THREE.Mesh(b.build(), MAT.solid);
+    m.name = 'zoneBuoys'; m.castShadow = true;
+    this.group.add(m);
+    const gm = new THREE.Mesh(g.build(), MAT.glow);
+    this.group.add(gm);
+    // and a sign on the pier that says so
+    const A = this.anchors.pierEnd;
+    const sg = BA.signBoard('BEYOND THE BUOYS: BIGGER FISH', 3.4, 0.5);
+    sg.position.set(A.x - 1.45, 2.6, A.z - 2); sg.rotation.y = Math.PI / 2;
+    this.group.add(sg);
+    this._props(bb => bb.color(0x4a3526).box(0.14, 2.4, 0.14, 0, 1.2, 0), A.x - 1.5, A.z - 2, 0, 1.25);
   }
 
   wreckAt(x, z, depthOffset, len, bitten, clueId = null, name = null) {

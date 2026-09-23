@@ -12,13 +12,13 @@
    Chaos without complication: one director, one list, and each event is a
    start, an update and an end. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { Character } from '../art/Character.js?v=1790183165';
-import { THIEF, RADIO } from '../data/NPCData.js?v=1790183165';
-import { MeshBuilder } from '../art/Geo.js?v=1790183165';
-import { MAT } from '../art/Materials.js?v=1790183165';
-import { clamp, damp, smoothstep, uid, wrapAngle } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { Character } from '../art/Character.js?v=1790185859';
+import { THIEF, RADIO } from '../data/NPCData.js?v=1790185859';
+import { MeshBuilder } from '../art/Geo.js?v=1790185859';
+import { MAT } from '../art/Materials.js?v=1790185859';
+import { clamp, damp, smoothstep, uid, wrapAngle } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 const _v = new THREE.Vector3();
 
@@ -50,7 +50,7 @@ export class Events {
     if (host) {
       this.timer -= dt;
       if (this.timer <= 0) {
-        this.timer = 140 + Math.random() * 160;
+        this.timer = (140 + Math.random() * 160) / (1 + (G.zone || 0) * 0.25);
         if (G.state.s.tut >= 4 && !G.creatures.lev) this.startRandom();
       }
       for (let i = this.list.length - 1; i >= 0; i--) {
@@ -82,7 +82,7 @@ export class Events {
     const w = [
       { k: 'storm', w: this.active('storm') ? 0 : reg === 'open' ? 2 : 1 },
       { k: 'migration', w: wet ? 1.3 : 0.4 },
-      { k: 'giant', w: wet && G.creatures.giants.size === 0 ? 1 : 0.1 },
+      { k: 'giant', w: wet && G.creatures.giants.size === 0 ? 1 + (G.zone || 0) * 1.1 : 0.1 },
       { k: 'thief', w: boat && !boat.stolen && !G.allPlayers().some(pl => pl.boat === boat) && boat.pos.distanceTo(p) > 35 && boat.pos.distanceTo(p) < 250 ? 1.6 : 0 },
       { k: 'whirlpool', w: wet && reg !== 'home' ? 0.8 : wet ? 0.3 : 0 },
       { k: 'meteor', w: G.isNight() ? 1.2 : 0.5 },

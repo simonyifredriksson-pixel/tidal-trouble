@@ -1,5 +1,5 @@
 /* Icons.js - every icon in the game, drawn as low-poly SVG art.
-   There is not a single emoji anywhere in Tidal Trouble; test_static
+   There is not a single emoji anywhere in Hooked; test_static
    greps the source to keep it that way.
 
    Each icon is a list of faceted polygons on a 48x48 grid with explicit

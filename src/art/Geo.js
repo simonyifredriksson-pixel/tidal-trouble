@@ -1,5 +1,5 @@
 /* Geo.js - the low-poly geometry toolkit. There are no model files in
-   Tidal Trouble: every cabin, rod, fish, boat and leviathan is written as
+   Hooked: every cabin, rod, fish, boat and leviathan is written as
    triangles by code into a MeshBuilder.
 
    THE LOOK is flat-shaded facets with per-vertex colour. The builder writes
@@ -15,8 +15,8 @@
    triangle away from their own centre, so none of them can come out inside
    out. Hand-built quads take an explicit `out` hint for the same reason. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { TAU, clamp } from '../core/Util.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { TAU, clamp } from '../core/Util.js?v=1790185859';
 
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) {

@@ -11,7 +11,7 @@
      The Open Sea    everything west - big swell, few rocks, a lighthouse
      The Blackwater  deep trench to the south-west ringed by black spires */
 
-import { smoothstep, clamp } from '../core/Util.js?v=1790183165';
+import { smoothstep, clamp } from '../core/Util.js?v=1790185859';
 
 export const WORLD = {
   half: 1300,          // playable half-extent
@@ -183,3 +183,29 @@ export const PLACES = [
   { name: 'Old Lighthouse', x: -820, z: -60, kind: 'isle' },
   { name: 'The Drowned Gate', x: -680, z: 820, kind: 'mystery' },
 ];
+
+/* ---------------- depth zones: the farther out, the crazier it gets ----------------
+   Distance from Driftwood Bay decides the zone, and very deep water adds
+   one more. The zone scales what bites, how big it grows, what it is
+   worth and how often something strange turns up - and the world shows it:
+   ring buoys mark each boundary, the sea darkens and the swell grows. */
+export const ZONES = [
+  { id: 0, name: 'Driftwood Shallows', short: 'Shallows', r: 0, color: 0x6ac86a, css: '#7fd07a', value: 1.0, size: 0.0, variant: 0.03, blurb: 'Easy fish, easy water. A good place to learn.' },
+  { id: 1, name: 'Coastal Waters', short: 'Coastal', r: 270, color: 0xf2d24a, css: '#f2d24a', value: 1.4, size: 0.12, variant: 0.06, blurb: 'Bigger fish and the first strange ones. A reinforced rod helps.' },
+  { id: 2, name: 'Offshore', short: 'Offshore', r: 540, color: 0xf08a2a, css: '#f08a2a', value: 1.9, size: 0.25, variant: 0.10, blurb: 'Rare fish, rough swell, things that fight back. Bring a boat.' },
+  { id: 3, name: 'Deep Water', short: 'Deep', r: 820, color: 0xe0402a, css: '#ff6a4a', value: 2.7, size: 0.42, variant: 0.16, blurb: 'Massive fish and giant predators. Heavy rods and strong hulls only.' },
+  { id: 4, name: 'The Abyss', short: 'Abyss', r: 1080, color: 0x9a4ae0, css: '#c07af0', value: 4.0, size: 0.65, variant: 0.24, blurb: 'Nothing down here is normal. Leviathan country.' },
+];
+export const HOME_CENTRE = { x: 0, z: 80 };
+
+/** Zone index 0..4 at a point. Lakes are always the shallows. */
+export function zoneAt(x, z, depth = 0) {
+  for (const L of LAKES) if (!L.ice && Math.hypot(x - L.x, z - L.z) < L.r * 1.2) return 0;
+  const d = Math.hypot(x - HOME_CENTRE.x, z - HOME_CENTRE.z);
+  let zi = 0;
+  for (const Z of ZONES) if (d >= Z.r) zi = Z.id;
+  if (depth > 70 && zi < 4) zi++;
+  // the Blackwater is always the abyss
+  if (Math.hypot(x + 680, z - 820) < 300) zi = 4;
+  return zi;
+}

@@ -9,10 +9,10 @@
    Returns { solid, glow } geometries - `glow` is drawn unlit (lights,
    lures, fuses) and may be null. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790183165';
-import { rng, TAU, clamp } from '../core/Util.js?v=1790183165';
-import { MAT } from './Materials.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790185859';
+import { rng, TAU, clamp } from '../core/Util.js?v=1790185859';
+import { MAT } from './Materials.js?v=1790185859';
 
 const ST = [0, 0.07, 0.18, 0.32, 0.47, 0.62, 0.76, 0.88, 0.96, 1];
 const PR = [0.2, 0.3, 0.55, 0.82, 0.98, 1.0, 0.9, 0.7, 0.42, 0.12];
@@ -275,11 +275,24 @@ export function fishGeos(species) {
 }
 
 /** A Group holding a species model, scaled to `lengthM` metres. */
+const VMAT = {};
+function variantMat(v) {
+  if (VMAT[v]) return VMAT[v];
+  const o = { vertexColors: true };
+  if (v === 'golden') Object.assign(o, { color: 0xffd060, emissive: 0x4a3200 });
+  else if (v === 'albino') Object.assign(o, { color: 0xffffff, emissive: 0x9a9088 });
+  else if (v === 'armored') Object.assign(o, { color: 0xb0bcc8, emissive: 0x1a2026 });
+  else if (v === 'glowing') Object.assign(o, { color: 0xc8fff4, emissive: 0x1a7a70 });
+  else if (v === 'abyssal') Object.assign(o, { color: 0x6a4a9a, emissive: 0x1a0a30 });
+  return (VMAT[v] = new THREE.MeshLambertMaterial(o));
+}
+
 export function fishMesh(species, lengthM, opts = {}) {
   const geos = fishGeos(species);
   const grp = new THREE.Group();
   const ghost = (species.art?.extras || []).includes('ghost');
-  const m = new THREE.Mesh(geos.solid, ghost ? MAT.ghost : MAT.solid);
+  const vm = opts.variant && opts.variant !== 'giant' ? variantMat(opts.variant) : null;
+  const m = new THREE.Mesh(geos.solid, ghost ? MAT.ghost : vm || MAT.solid);
   m.castShadow = !ghost; m.receiveShadow = true;
   grp.add(m);
   if (geos.glow) { const gm = new THREE.Mesh(geos.glow, MAT.glow); grp.add(gm); }

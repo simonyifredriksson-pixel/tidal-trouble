@@ -107,7 +107,7 @@ export const LEVIATHANS = [
 
   { id: 'lanternking', name: 'The Lantern King', title: 'Light of the Blackwater', region: 'black', kind: 'angler', size: 26,
     colors: { back: 0x2a2630, belly: 0x3a343e, fin: 0x221e28, glow: 0x9affd8 },
-    lure: { x: -780, z: 700, r: 60, time: 'any', water: 'sea', lights: 1 }, rod: 4, hp: 150, stamina: 230, power: 6, reward: 18000,
+    lure: { x: -780, z: 700, r: 60, time: 'any', water: 'sea', lights: 1 }, rod: 5, hp: 150, stamina: 230, power: 6, reward: 18000,
     clues: [
       { id: 'lk1', type: 'mark', text: 'Captain Mare\'s wreck, the Tidesinger. Something has been nesting in the hold.', at: [-560, 742], obj: 'founderwreck' },
       { id: 'lk2', type: 'sound', text: 'In the Blackwater at night: a clicking, like a lantern being lit and lit and lit.', at: [-720, 720], r: 150, time: 'night' },
@@ -117,7 +117,7 @@ export const LEVIATHANS = [
 
   { id: 'hollow', name: 'The Hollow Eel', title: 'The Mouth Below', region: 'black', kind: 'eel', size: 42,
     colors: { back: 0x1e1a24, belly: 0x2e2a34, fin: 0x16121c, glow: 0xff5a8a },
-    lure: { x: -540, z: 930, r: 60, time: 'night', water: 'sea', lights: 1 }, rod: 4, hp: 150, stamina: 250, power: 7, reward: 20000,
+    lure: { x: -540, z: 930, r: 60, time: 'night', water: 'sea', lights: 1 }, rod: 5, hp: 150, stamina: 250, power: 7, reward: 20000,
     clues: [
       { id: 'he1', type: 'catch', text: 'The Gulper Eel you landed was full of rocks. It had been eating stones to be heavier. To hide.', species: 'gulper', region: 'black' },
       { id: 'he2', type: 'scale', text: 'A shed skin wrapped round the black spire. It goes round nine times.', at: [-470, 712], obj: 'skin' },
@@ -127,7 +127,7 @@ export const LEVIATHANS = [
 
   { id: 'tidemother', name: 'The Tidemother', title: 'Guardian of the Heart', region: 'black', kind: 'mother', size: 60, final: true,
     colors: { back: 0x1a2a3a, belly: 0x4a6a8a, fin: 0x1a3a5a, glow: 0x6af0ff },
-    lure: { x: -680, z: 845, r: 60, time: 'night', water: 'sea', lights: 1 }, rod: 4, hp: 260, stamina: 360, power: 8, reward: 60000,
+    lure: { x: -680, z: 845, r: 60, time: 'night', water: 'sea', lights: 1 }, rod: 5, hp: 260, stamina: 360, power: 8, reward: 60000,
     clues: [],
     story: 'She was never a monster. She was the keeper of the Heart, and when the Heart broke she fell asleep beneath the Gate to wait for someone to bring it home.' },
 ];

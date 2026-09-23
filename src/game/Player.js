@@ -15,9 +15,9 @@
    turning is added to your yaw, so standing on a turning boat turns you
    with it instead of making the world spin round you. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790183165';
-import { Bus } from '../core/Bus.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790185859';
+import { Bus } from '../core/Bus.js?v=1790185859';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -46,7 +46,12 @@ export class Player {
     this.coyote = 0;
     this.sprint = false;
     this.name = 'You';
+    this.stamina = 10;          // seconds of swimming before you are spent
+    this.exhausted = false; this.exhaustT = 0;
+    this.wade = 0;
   }
+
+  get maxStamina() { return this.game.state.has('diving') ? 16 : 10; }
 
   get maxBreath() { return this.game.state.has('diving') ? 90 : 20; }
 
@@ -136,7 +141,7 @@ export class Player {
     }
     this.sprint = sprint;
     const heavy = this.held && G.loot.get(this.held)?.kg > 40;
-    let spd = this.mode === 'swim' ? (G.state.has('diving') ? 3.1 : 2.1) : sprint ? 6.2 : 3.7;
+    let spd = this.mode === 'swim' ? (G.state.has('diving') ? 3.1 : 2.1) * (this.exhausted ? 0.22 : 1) : (sprint ? 6.2 : 3.7) * (1 - this.wade * 0.45);
     if (heavy) spd = Math.min(spd, 1.8);
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
@@ -167,6 +172,7 @@ export class Player {
       const m = b.hull.mount;
       this.local.set(m[0], b.deck, m[2] - 0.9);
     } else if (this.boat) {
+      this.wade = 0;
       this._walkBoat(dt, wx * spd, wz * spd, jump);
     } else if (this.mode === 'swim') {
       this._swim(dt, wx * spd, wz * spd, jump || (input.held('Space') && !blocked), dive);
@@ -175,6 +181,19 @@ export class Player {
     }
     if (this.boat) this.boat.toWorld(this.local, this.pos);
 
+    // swimming stamina: roughly ten seconds, then you are spent
+    if (this.mode === 'swim') {
+      this.stamina = Math.max(0, this.stamina - dt * (sprint ? 1.5 : 1) * (this.exhausted ? 0 : 1));
+      if (this.stamina <= 0 && !this.exhausted) { this.exhausted = true; this.exhaustT = 0; Bus.emit('player:exhausted', { p: this }); }
+      if (this.exhausted) {
+        this.exhaustT += dt;
+        if (this.exhaustT > 12) { this.exhausted = false; this.stamina = this.maxStamina; G.passOut(this, 'exhausted'); }
+      }
+    } else {
+      this.stamina = Math.min(this.maxStamina, this.stamina + dt * (this.boat ? 4 : 3));
+      if (this.exhausted && this.stamina > 3) this.exhausted = false;
+      this.exhaustT = 0;
+    }
     // breath
     const head = this.pos.y + EYE - 0.05;
     const sea = world.waterAt(this.pos.x, this.pos.z);
@@ -284,18 +303,29 @@ export class Player {
         return;
       }
     }
-    // into deep water
+    // wading, then swimming once the water reaches about your head
     const sea = G.waterAt(P.x, P.z);
-    if (P.y < sea - 1.15) { this.mode = 'swim'; this.game.fx.splash(P.x, sea, P.z, 1.1); this.game.audio?.splash(1); Bus.emit('player:swim', { p: this }); }
+    const depth = sea > -Infinity ? sea - P.y : 0;
+    this.wade = Math.max(0, Math.min(1, depth / 1.4));
+    if (depth > 0.2 && this.speed > 1 && Math.random() < 0.15) this.game.fx.ripple(P.x, sea, P.z, 0.9, 0.8);
+    if (depth > 1.45 && this.onGround) {
+      this.mode = 'swim'; this.vel.y = 0;
+      this.game.audio?.splash(0.5);
+      Bus.emit('player:swim', { p: this });
+    } else if (depth > 1.45 && V.y < -3) {
+      this.mode = 'swim'; this.game.fx.splash(P.x, sea, P.z, 1.2); this.game.audio?.splash(1);
+      Bus.emit('player:swim', { p: this });
+    }
   }
 
   _swim(dt, wx, wz, up, down) {
     const G = this.game.world, P = this.pos, V = this.vel;
     const sea = G.waterAt(P.x, P.z);
     V.x = damp(V.x, wx, 3, dt); V.z = damp(V.z, wz, 3, dt);
-    const surf = sea - 1.35;
-    if (down) V.y = damp(V.y, -2.2, 3, dt);
-    else if (up) V.y = damp(V.y, 2.4, 3, dt);
+    const tired = this.exhausted;
+    const surf = sea - 1.35 - (tired ? 0.22 + Math.sin(this.game.world.time * 2.2) * 0.1 : 0);
+    if (down && !tired) V.y = damp(V.y, -2.2, 3, dt);
+    else if (up && !tired) V.y = damp(V.y, 2.4, 3, dt);
     else V.y = damp(V.y, (surf - P.y) * 3, 4, dt);
     // if you are under the surface and not diving you float up
     P.x += V.x * dt; P.y += V.y * dt; P.z += V.z * dt;
@@ -305,8 +335,8 @@ export class Player {
     P.x = r.x; P.z = r.z;
     const g = G.ground(P.x, P.z);
     if (P.y < g) P.y = g;
-    // shallow enough to stand
-    if (g > sea - 1.1 || sea === -Infinity) { this.mode = 'walk'; P.y = Math.max(P.y, g); }
+    // shallow enough to stand: you find your feet and walk out
+    if (g > sea - 1.35 || sea === -Infinity) { this.mode = 'walk'; this.onGround = false; V.y = 0; P.y = Math.max(P.y, g); }
     this.speed = Math.hypot(V.x, V.z);
     if (Math.random() < dt * 3 && this.speed > 0.5) this.game.fx.ripple(P.x, sea, P.z, 1.2, 1);
   }

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tidal Trouble</title>
-<meta name="description" content="A chaotic low-poly fishing adventure for 1-4 players. Catch weird fish, upgrade your boat, hunt the leviathans of Driftwood Bay.">
+<title>Hooked</title>
+<meta name="description" content="Hooked - a chaotic low-poly fishing adventure for 1-4 players. The farther out you go, the crazier the fish get.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Nunito:wght@400;700;800&family=Alegreya:wght@600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/main.css?v=1790183165">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 24 L14 14 L30 12 L40 20 L40 28 L30 36 L14 34Z' fill='%233fa3c4'/%3E%3Cpath d='M40 20 L46 12 L46 36 L40 28Z' fill='%231f6384'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Bree+Serif&family=Nunito:wght@400;700;800;900&family=Alegreya:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/main.css?v=1790185859">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M26 4 L30 4 L30 30 Q30 42 20 42 Q10 42 10 32 L10 26 L6 30 L12 20 L16 30 L14 28 L14 32 Q14 38 20 38 Q26 38 26 30Z' fill='%23ffffff' stroke='%231a4a7a' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -17,15 +17,24 @@
   <div id="title" class="gone"></div>
   <div id="screens"></div>
 </div>
-<div id="loading">
-  <div class="load-box">
-    <div class="load-logo">TIDAL TROUBLE<small>DRIFTWOOD BAY</small></div>
-    <div class="load-bar"><i></i></div>
-    <div class="load-step">Waking up...</div>
+<div id="intro">
+  <canvas id="introfx"></canvas>
+  <div class="rays"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="intro-center">
+    <div class="hookline"><svg viewBox="0 0 60 150" aria-hidden="true"><path d="M30 0 L30 92" stroke="#e8f6ff" stroke-width="3" fill="none"/><path d="M27 88 L33 88 L33 118 Q33 136 20 136 Q6 136 6 122 L6 114 L1 120 L9 104 L14 118 L11 116 L11 122 Q11 130 20 130 Q27 130 27 118Z" fill="#ffffff" stroke="#1a4a7a" stroke-width="2.5"/></svg></div>
+    <h1 class="hooked" aria-label="Hooked"><span>H</span><span>O</span><span>O</span><span>K</span><span>E</span><span>D</span></h1>
+    <div class="intro-sub">A CHAOTIC FISHING ADVENTURE FOR 1-4 PLAYERS</div>
+    <div class="intro-load"><div class="load-bar"><i></i></div><div class="load-step">Waking up...</div></div>
+    <div class="press">PRESS ANYWHERE TO PLAY</div>
   </div>
+  <svg class="waves" viewBox="0 0 1440 200" preserveAspectRatio="none" aria-hidden="true">
+    <path class="w1" d="M0 90 L120 70 L240 96 L360 64 L480 92 L600 60 L720 94 L840 66 L960 96 L1080 62 L1200 90 L1320 68 L1440 92 L1560 66 L1680 94 L1800 64 L1920 92 L2040 68 L2160 90 L2280 66 L2400 94 L2520 64 L2640 90 L2760 70 L2880 90 L2880 200 L0 200Z"/>
+    <path class="w2" d="M0 130 L160 112 L320 138 L480 108 L640 136 L800 110 L960 138 L1120 112 L1280 136 L1440 110 L1600 136 L1760 112 L1920 138 L2080 110 L2240 136 L2400 112 L2560 138 L2720 110 L2880 132 L2880 200 L0 200Z"/>
+    <path class="w3" d="M0 168 L200 152 L400 172 L600 150 L800 174 L1000 152 L1200 172 L1400 154 L1600 172 L1800 150 L2000 174 L2200 152 L2400 172 L2600 154 L2880 170 L2880 200 L0 200Z"/>
+  </svg>
 </div>
-<noscript><p style="color:#fff;padding:20px">Tidal Trouble needs JavaScript and WebGL.</p></noscript>
+<noscript><p style="color:#fff;padding:20px">Hooked needs JavaScript and WebGL.</p></noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" async></script>
-<script type="module" src="src/main.js?v=1790183165"></script>
+<script type="module" src="src/main.js?v=1790185859"></script>
 </body>
 </html>

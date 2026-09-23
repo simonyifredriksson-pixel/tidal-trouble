@@ -9,16 +9,16 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790183165';
-import { fishThumb, rodThumb, boatThumb, levThumb } from './Thumbs.js?v=1790183165';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue } from '../data/FishData.js?v=1790183165';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID } from '../data/GearData.js?v=1790183165';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790183165';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790183165';
-import { REGIONS, PLACES, WORLD } from '../world/MapData.js?v=1790183165';
-import { heightAt } from '../world/Terrain.js?v=1790183165';
-import { worldMapCanvas } from './MapArt.js?v=1790183165';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790183165';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790185859';
+import { fishThumb, rodThumb, boatThumb, levThumb } from './Thumbs.js?v=1790185859';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, valueBreakdown } from '../data/FishData.js?v=1790185859';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID } from '../data/GearData.js?v=1790185859';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790185859';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790185859';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790185859';
+import { heightAt } from '../world/Terrain.js?v=1790185859';
+import { worldMapCanvas } from './MapArt.js?v=1790185859';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790185859';
 
 const $ = (s, r = document) => r.querySelector(s);
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
@@ -53,9 +53,8 @@ export class UI {
     el.classList.remove('gone');
     el.innerHTML = `<div class="title-inner live">
       <div class="logo">
-        <svg class="fishlogo" viewBox="0 0 120 72">${ic('fish').replace(/<svg[^>]*>|<\/svg>/g, '').replace(/d="/g, 'transform="scale(2.4) translate(0,-6)" d="')}</svg>
-        <h1>TIDAL<span>TROUBLE</span></h1>
-        <p>Go fishing. Catch weird things. Upgrade your boat. Explore dangerous waters. Try not to get eaten.</p>
+        <h1 class="hooked small"><span>H</span><span>O</span><span>O</span><span>K</span><span>E</span><span>D</span></h1>
+        <p>Go fishing. Catch weird things. Sail farther out, where the fish get bigger and stranger. Try not to get eaten.</p>
       </div>
       <div class="menu">
         ${opts.hasSave ? `<button class="btn gold" data-act="continue">${ic('play')} Continue <small>Day ${opts.day}</small></button>` : ''}
@@ -87,6 +86,7 @@ export class UI {
         <span class="chip money">${ic('coin')}<b>0</b></span>
         <span class="chip clock"><span class="ci"></span><span class="ct"></span></span>
         <span class="chip region-chip"><span class="ri"></span><span class="rt"></span></span>
+        <span class="chip zone-chip"><span class="zp"></span><span class="zt"></span></span>
       </div>
       <div class="radar hide"><canvas width="150" height="150"></canvas></div>
       <div class="eventchips"></div>
@@ -94,8 +94,13 @@ export class UI {
         <div class="bitemark">${ic('hook')}</div>
         <div class="charge hide"><i></i></div>
         <div class="fishdir hide"></div>
-        <div class="tension hide"><div class="track"><div class="zone"></div><div class="danger"></div><div class="needle"></div></div>
-          <div class="stam"><i></i></div><div class="lbl"><span class="tl">TENSION</span><span class="ll"></span></div></div>
+        <div class="tension hide"><div class="fbar">
+            <div class="water"><i></i><i></i><i></i></div>
+            <div class="czone"></div>
+            <div class="bfish">${ic('fish')}</div>
+          </div>
+          <div class="cmeter"><i></i></div>
+          <div class="lbl"><span class="tl"></span><span class="ll"></span></div></div>
       </div>
       <div class="hint hide"></div>
       <div class="hand-label"></div>
@@ -111,6 +116,8 @@ export class UI {
       <div class="stats">
         <span class="chip hpchip hide">${ic('heart')}<div class="bar"><i style="background:var(--red)"></i></div></span>
         <span class="chip breath hide">${ic('bubble')}<div class="bar water"><i></i></div></span>
+      </div>
+      <div class="swimring hide"><svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="25" class="bg"/><circle cx="30" cy="30" r="25" class="fg"/></svg><span>${ic('wave')}</span><b></b>
       </div>
       <div class="toasts"></div>
       <div class="radios"></div>
@@ -148,29 +155,40 @@ export class UI {
     const fu = this.el('.tension');
     const fighting = F.state === 'fight';
     fu.classList.toggle('hide', !fighting);
+    this.root.classList.toggle('fighting', fighting);   // story subtitles step aside for the fight hint
     this.el('.charge').classList.toggle('hide', F.state !== 'charge');
     this.el('.charge i').style.width = Math.round(F.charge * 100) + '%';
     this.el('.bitemark').classList.toggle('on', F.state === 'bite');
     const fd = this.el('.fishdir');
     fd.classList.toggle('hide', !fighting);
-    if (fighting) {
-      this.el('.needle').style.left = clamp(F.tension * 100 / 1.05, 0, 100) + '%';
-      this.el('.stam i').style.width = Math.round(F.stamina * 100) + '%';
-      this.el('.ll').textContent = Math.round(F.dist) + ' / ' + F.line + ' m';
-      this.el('.tl').textContent = F.tension > 0.95 ? 'TOO MUCH TENSION' : F.tension < 0.25 ? 'SLACK' : 'TENSION';
-      fd.innerHTML = ic('arrow');
-      fd.style.transform = `rotate(${F.fishDir < -0.1 ? 180 : 0}deg) scale(${Math.abs(F.fishDir) > 0.1 ? 1 : 0.001})`;
+    if (fighting && F.bar) {
+      const b = F.bar;
+      const z = this.el('.czone');
+      z.style.bottom = clamp((b.zone - b.band / 2) * 100, 0, 100 - b.band * 100) + '%';
+      z.style.height = b.band * 100 + '%';
+      z.classList.toggle('on', b.on > 0.5);
+      const fe = this.el('.bfish');
+      fe.style.bottom = (b.fish * 100) + '%';
+      fe.style.opacity = b.phased ? 0.12 : 1;
+      fe.style.transform = `translate(-50%, 50%) rotate(${(b.target - b.fish) * -160}deg)`;
+      fe.style.color = RARITY[F.rarity]?.css || '#fff';
+      this.el('.cmeter i').style.height = Math.round(b.catch * 100) + '%';
+      this.el('.cmeter').classList.toggle('low', b.catch < 0.2);
+      this.el('.tl').textContent = b.over > 0.2 ? 'TOO STRONG FOR THIS ROD' : b.tier >= 5 ? 'MONSTER' : b.tier >= 3 ? 'FIGHTING HARD' : b.on > 0.5 ? 'ON IT' : 'KEEP IT IN THE ZONE';
+      this.el('.tl').classList.toggle('warnlbl', b.over > 0.2);
+      this.el('.ll').textContent = Math.round(F.dist) + ' m';
+      fd.innerHTML = '';
     }
     // hint line
     const hint = this.el('.hint');
     let ht = '';
-    if (F.state === 'fight') ht = `Hold <span class="key">LMB</span> to reel  -  pull against the run with <span class="key">A</span><span class="key">D</span>  -  release when the line screams`;
+    if (F.state === 'fight') ht = `Hold <span class="key">LMB</span> to lift the zone and reel  -  let go to drop it  -  keep the fish inside`;
     else if (F.state === 'bite') ht = `<span class="key">CLICK</span> NOW to strike!`;
     else if (F.state === 'wait' || F.state === 'nibble') ht = `Wait for the bobber to go under...  <span class="key">Hold LMB</span> reel in`;
     else if (F.state === 'charge') ht = `Release to cast`;
     else if (P.mode === 'drive') ht = `<span class="key">W</span><span class="key">S</span> throttle  <span class="key">A</span><span class="key">D</span> steer  <span class="key">X</span> stop  <span class="key">E</span> leave the helm`;
     else if (P.mode === 'mount') ht = `<span class="key">LMB</span> fire harpoon  <span class="key">E</span> leave the gun`;
-    else if (P.mode === 'swim') ht = `<span class="key">SPACE</span> up  <span class="key">CTRL</span> dive  <span class="key">E</span> climb out`;
+    else if (P.mode === 'swim') ht = P.exhausted ? 'Exhausted - drift to the shore or a boat and press E' : `<span class="key">SPACE</span> up  <span class="key">CTRL</span> dive  <span class="key">E</span> climb out`;
     else if (P.held) { const it = G.loot.get(P.held); ht = it ? `<span class="key">LMB</span> throw  <span class="key">F</span> drop  <span class="key">E</span> ${it.kg > 40 ? 'drag it somewhere' : 'store / mount'}` : ''; }
     hint.innerHTML = ht;
     hint.classList.toggle('hide', !ht);
@@ -185,6 +203,10 @@ export class UI {
     const reg = G.world.region(P.pos.x, P.pos.z);
     this.el('.region-chip .ri').innerHTML = ic(REGION_ICON[reg]);
     this.el('.region-chip .rt').textContent = REGIONS[reg].name;
+    const zi = G.zone || 0, Z = ZONES[zi];
+    this.el('.zone-chip .zp').innerHTML = ZONES.map((q, i) => `<i style="background:${i <= zi ? q.css : 'rgba(255,255,255,0.15)'}"></i>`).join('');
+    this.el('.zone-chip .zt').textContent = Z.name;
+    this.el('.zone-chip').style.color = Z.css;
     const bait = BAIT_BY_ID[s.bait];
     this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
     this.el('.baitchip').classList.toggle('hide', P.tool !== 'rod');
@@ -214,6 +236,12 @@ export class UI {
     this.el('.breath').classList.toggle('hide', br > 0.99);
     this.el('.breath .bar i').style.width = Math.round(br * 100) + '%';
     this.el('.underwater').classList.toggle('on', !!P.underwater);
+    const sw = this.el('.swimring');
+    const sf = P.stamina / P.maxStamina;
+    sw.classList.toggle('hide', P.mode !== 'swim' && sf > 0.99);
+    sw.classList.toggle('low', sf < 0.3 || P.exhausted);
+    sw.querySelector('.fg').style.strokeDashoffset = String(157 * (1 - sf));
+    sw.querySelector('b').textContent = P.exhausted ? 'EXHAUSTED' : P.mode === 'swim' ? 'SWIM' : '';
     // events
     this.el('.eventchips').innerHTML = G.events.list.map(e => `<span class="chip">${ic(EVENT_ICON[e.k])} ${EVENT_NAME[e.k]}</span>`).join('') + (G.creatures.lev ? `<span class="chip">${ic('crown')} ${esc(G.creatures.lev.def.name)} ${this._levBar()}</span>` : '');
     // objective
@@ -313,7 +341,9 @@ export class UI {
     el.querySelector('.panel').innerHTML = `
       <span class="tag" style="background:${R.css}">${R.name}</span>
       <img src="${fishThumb(c.sp)}" alt="">
-      <h3>${esc(sp.name)}${c.isNew ? '<span class="new">NEW</span>' : c.record ? '<span class="new" style="background:#3a8a3a">RECORD</span>' : ''}</h3>
+      ${c.v && VARIANT_BY_ID[c.v] ? `<div class="vtag" style="background:${VARIANT_BY_ID[c.v].css}">${VARIANT_BY_ID[c.v].name.toUpperCase()} VARIANT  x${VARIANT_BY_ID[c.v].mult}</div>` : ''}
+      <div class="ztag" style="color:${ZONES[c.zone || 0].css}">${esc(ZONES[c.zone || 0].name)}  -  depth x${ZONES[c.zone || 0].value}</div>
+      <h3>${esc(catchName(sp, c.v))}${c.isNew ? '<span class="new">NEW</span>' : c.record ? '<span class="new" style="background:#3a8a3a">RECORD</span>' : ''}</h3>
       <div class="meta"><span>${ic('fish')} <b>${fmtKg(c.kg)}</b></span><span><b>${fmtCm(c.cm)}</b></span><span>${ic('coin')} <b>${fmtInt(c.value)}</b></span></div>
       <div class="blurb">${esc(sp.blurb || '')}</div>`;
     el.classList.add('on');
@@ -378,6 +408,9 @@ export class UI {
     const s = $('#screens');
     s.classList.add('on');
     this.root.classList.add('menu');
+    const t = $('#title');
+    if (!t.classList.contains('gone')) { t.classList.add('gone'); this._titleUnder = true; }
+    this.game.input.unlock();
     this.render();
     this.game.onScreen(true);
   }
@@ -387,6 +420,9 @@ export class UI {
     this.screen = null;
     $('#screens').classList.remove('on');
     $('#screens').innerHTML = '';
+    this.root.classList.remove('menu');
+    if (this._titleUnder && !this.game.running) $('#title').classList.remove('gone');
+    this._titleUnder = false;
     this.game.onScreen(false, was);
   }
   render() {
@@ -399,6 +435,18 @@ export class UI {
     const nb = sc.querySelector('.sbody');
     if (nb) nb.scrollTop = scroll;
     if (this.screen === 'map' || this.screen === 'guild') this._drawMap();
+    const jc = sc.querySelector('#joincode');
+    if (jc) {
+      jc.focus();
+      const n = jc.value.length; try { jc.setSelectionRange(n, n); } catch (x) { /* */ }
+      jc.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { this.data.code = jc.value; this.game.uiAct('joinGo'); } if (e.key === 'Escape') this.close(); });
+    }
+    const cu = sc.querySelector('.countup');
+    if (cu) {
+      const to = +cu.dataset.to, t0 = performance.now() + (+cu.dataset.delay || 0) * 1000;
+      const step = () => { const f = Math.min(1, Math.max(0, (performance.now() - t0) / 1100)); cu.textContent = fmtInt(to * (1 - Math.pow(1 - f, 3))); if (f < 1 && cu.isConnected) requestAnimationFrame(step); else if (f >= 1) this.game.audio.coin(); };
+      requestAnimationFrame(step);
+    }
   }
 
   _click(e) {
@@ -415,6 +463,12 @@ export class UI {
   }
   _input(e) {
     const el = e.target;
+    if (el.id === 'joincode') {
+      const v = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+      if (el.value !== v) { const p = el.selectionStart; el.value = v; try { el.setSelectionRange(p, p); } catch (x) { /* */ } }
+      this.data.code = v;
+      return;
+    }
     if (el.dataset.set) this.game.uiSetting(el.dataset.set, el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value);
   }
 
@@ -495,7 +549,8 @@ export class UI {
         const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
           <h3>${esc(R.name)}</h3><p>${esc(R.blurb)}</p>
-          ${bar('Max fish', Math.min(R.maxKg, 1000), 500, Math.min(cur.maxKg, 1000))}${bar('Line (m)', R.line, 260, cur.line)}${bar('Reel', R.reel, 7.2, cur.reel)}${bar('Cast', R.cast, 30, cur.cast)}
+          ${bar('Strength', R.rating, 3.3, cur.rating)}${bar('Control', R.control, 2.1, cur.control)}${bar('Zone', Math.round(R.band * 100), 25, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 260, cur.line)}
+          <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(4, R.tier - 1)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
           <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
       }).join('')}</div>`;
     } else if (t.cur === 'bait') {
@@ -577,7 +632,8 @@ export class UI {
     const body = items.length ? `<div class="list">${items.map(it => {
       const sp = FISH_BY_ID[it.sp], R = RARITY[sp.rarity], v = G.loot.value(it);
       const big = it.kg >= 150 || sp.rarity === 'giant';
-      return `<div class="li"><img src="${fishThumb(it.sp)}" alt=""><span>${esc(sp.name)} <span class="rar" style="background:${R.css}">${R.name}</span><small>${fmtKg(it.kg)}  ${fmtCm(it.cm)}  ${it.state === 'cooler' ? '- in the cooler' : it.held ? '- in your hands' : ''}</small></span>
+      const V = it.v && VARIANT_BY_ID[it.v];
+      return `<div class="li"><img src="${fishThumb(it.sp)}" alt=""><span>${esc(catchName(sp, it.v))} <span class="rar" style="background:${R.css}">${R.name}</span>${V ? `<span class="rar" style="background:${V.css};color:#2a1a0a">${V.name} x${V.mult}</span>` : ''}<span class="rar" style="background:${ZONES[it.zone || 0].css};color:#2a1a0a">${ZONES[it.zone || 0].short} x${ZONES[it.zone || 0].value}</span><small>${fmtKg(it.kg)}  ${fmtCm(it.cm)}  ${it.state === 'cooler' ? '- in the cooler' : it.held ? '- in your hands' : ''}</small></span>
         <span class="price">${ic('coin')}${fmtInt(v)}</span>
         <span>${big ? `<button class="btn dark" data-act="yard" data-arg="${it.id}">To trophy yard</button> ` : ''}<button class="btn gold" data-act="sell" data-arg="${it.id}">Sell</button></span></div>`;
     }).join('')}</div>` : `<div class="empty">${G.boatAtMarket() ? 'Nothing to sell. Go catch something weird.' : 'Bring your boat up to the pier (or carry a fish here) and Pim will buy the lot.'}</div>`;
@@ -585,6 +641,24 @@ export class UI {
       <div class="sbody">${body}</div>
       <div class="foot"><span class="spacer"></span><span class="price" style="font:400 20px var(--display);color:#8a5a10">${ic('coin')} ${fmtInt(total)}</span>
       <button class="btn gold" data-act="sellAll" ${items.length ? '' : 'disabled'}>Sell everything</button></div>`);
+  }
+
+  /* ---------- the receipt: fish caught -> fish value -> total ---------- */
+  _receipt(d) {
+    const rows = d.rows || [];
+    const html = rows.map((r, i) => {
+      const sp = FISH_BY_ID[r.sp], Z = ZONES[r.zone || 0], V = r.v && VARIANT_BY_ID[r.v];
+      return `<div class="rrow" style="animation-delay:${Math.min(i, 14) * 0.09}s"><img src="${fishThumb(r.sp)}" alt="">
+        <span><b>${esc(catchName(sp, r.v))}</b><small>${fmtKg(r.kg)}  -  ${esc(Z.name)}</small></span>
+        <span class="calc">${r.base} <i>x</i> ${r.size.toFixed(2)} size <i>x</i> ${r.zm} depth${V ? ` <i>x</i> ${r.vm} ${esc(V.name.toLowerCase())}` : ''}</span>
+        <span class="price">${ic('coin')}${fmtInt(r.value)}</span></div>`;
+    }).join('');
+    const delay = Math.min(rows.length, 14) * 0.09 + 0.2;
+    return this._wrap(`${this._head('sell', 'Sold!', 'Pim counts it all out on the counter')}
+      <div class="sbody receipt">${html}${d.more ? `<div class="empty">...and ${d.more} more</div>` : ''}</div>
+      <div class="foot rtotal" style="animation-delay:${delay}s"><span>${rows.length + (d.more || 0)} catches</span><span class="spacer"></span>
+        <span class="bigsum">${ic('coin')}<b class="countup" data-to="${d.total}" data-delay="${delay}">0</b></span>
+        <button class="btn gold" data-act="close">Nice.</button></div>`);
   }
 
   /* ---------- guild (Odessa) ---------- */
@@ -600,7 +674,7 @@ export class UI {
           return `<div class="lev ${caught ? 'caught' : ''}"><img src="${levThumb(L.id, caught)}" alt="">
             <h3>${known || caught ? esc(L.name) : '? ? ?'}</h3><small>${esc(REGIONS[L.region].name)}${caught ? '  -  CAUGHT' : ''}</small>
             <ul>${L.final ? `<li class="${ready ? '' : 'todo'}">${ic(ready ? 'check' : 'lock')}Recover all eleven shards.</li>` : L.clues.map(c => s.clues[c.id] ? `<li>${ic('check')}${esc(c.text)}</li>` : `<li class="todo">${ic(CLUE_ICON[c.type])}${esc(clueHint(c))}</li>`).join('')}</ul>
-            ${!caught && ready ? `<div class="ready">${ic('target')}Lure point marked on the map${L.lure.time !== 'any' ? ' - go at ' + (L.lure.time === 'storm' ? 'the height of a storm' : L.lure.time) : ''}. Needs a ${esc(['', 'Basic', 'Reinforced', 'Deepwater', 'Titan'][L.rod])} Rod or better.</div>` : ''}
+            ${!caught && ready ? `<div class="ready">${ic('target')}Lure point marked on the map${L.lure.time !== 'any' ? ' - go at ' + (L.lure.time === 'storm' ? 'the height of a storm' : L.lure.time) : ''}. Needs a ${esc((RODS.find(r => r.tier === L.rod) || RODS[0]).name)} or better.</div>` : ''}
           </div>`;
         }).join('')}</div>`;
     } else if (t.cur === 'map') {
@@ -722,7 +796,7 @@ export class UI {
     const G = this.game, N = G.net;
     if (d.mode === 'join' && !N.isOnline) {
       return this._wrap(`${this._head('radio', 'Join a Crew', 'Ask your friend for their room code', false)}
-        <div class="lobby"><p style="font-weight:700">Room code</p><input id="joincode" maxlength="5" placeholder="ABCDE" autofocus>
+        <div class="lobby"><p style="font-weight:700">Room code</p><input id="joincode" maxlength="5" placeholder="ABCDE" autocomplete="off" spellcheck="false" value="${esc(d.code || '')}">
         <div class="foot" style="justify-content:flex-start"><button class="btn gold" data-act="joinGo">${ic('play')} Join</button><span class="spacer"></span><span style="font-weight:800;color:var(--ink2)">${esc(N.status || '')}</span></div></div>`);
     }
     const list = N.lobbyList || [];

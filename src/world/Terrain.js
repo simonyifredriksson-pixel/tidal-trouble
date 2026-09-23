@@ -12,11 +12,11 @@
    3 m skirt on every edge so the seam between a detailed and a coarse
    chunk is a wall of ground, never a crack you can see the sky through. */
 
-import * as THREE from '../../lib/three.module.js?v=1790183165';
-import { Noise2D } from '../core/Noise.js?v=1790183165';
-import { smoothstep, clamp, lerp, hash3 } from '../core/Util.js?v=1790183165';
-import { hexToLinear, mixHex } from '../art/Geo.js?v=1790183165';
-import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights } from './MapData.js?v=1790183165';
+import * as THREE from '../../lib/three.module.js?v=1790185859';
+import { Noise2D } from '../core/Noise.js?v=1790185859';
+import { smoothstep, clamp, lerp, hash3 } from '../core/Util.js?v=1790185859';
+import { hexToLinear, mixHex } from '../art/Geo.js?v=1790185859';
+import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights } from './MapData.js?v=1790185859';
 
 const N = new Noise2D(WORLD.seed);
 const N2 = new Noise2D(WORLD.seed + 101);

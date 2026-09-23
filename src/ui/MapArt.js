@@ -1,8 +1,8 @@
 /* MapArt.js - the painted map of the waters, drawn once from the terrain
    and shared by the map screen and the great map on the guild hall wall. */
 
-import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790183165';
-import { regionAt, WORLD, PLACES } from '../world/MapData.js?v=1790183165';
+import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790185859';
+import { regionAt, WORLD, PLACES } from '../world/MapData.js?v=1790185859';
 
 const cache = new Map();
 

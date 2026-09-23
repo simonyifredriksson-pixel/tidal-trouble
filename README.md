@@ -1,4 +1,4 @@
-# Tidal Trouble
+# Hooked
 
 A chaotic low-poly fishing adventure for 1-4 players, in the browser.
 
