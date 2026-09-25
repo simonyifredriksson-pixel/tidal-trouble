@@ -9,10 +9,10 @@
          spaces on the bottom shelf or on top of the bookcase
    tier  how grand its stand is: 0 wood, 1 brass, 2 silver, 3 gold, 4 relic */
 
-import { FISH, FISH_BY_ID } from './FishData.js?v=1790356418';
-import { LEVIATHANS } from './LeviathanData.js?v=1790356418';
-import { GREAT } from './GreatData.js?v=1790356418';
-import { BEASTS } from './BeastData.js?v=1790356418';
+import { FISH, FISH_BY_ID } from './FishData.js?v=1790358905';
+import { LEVIATHANS } from './LeviathanData.js?v=1790358905';
+import { GREAT } from './GreatData.js?v=1790358905';
+import { BEASTS } from './BeastData.js?v=1790358905';
 
 const T = [];
 // the milestones, each with its own object
@@ -27,6 +27,8 @@ T.push(
   { id: 'vigil', name: "Vigil's End", size: 'S', tier: 2, model: 'lantern', text: 'A vigil lantern. You made it to the edge of the sea.' },
   { id: 'legend', name: 'The Legend', size: 'S', tier: 3, model: 'logbook', text: 'Ada\'s copy of the logbook. You heard all six of them out.' },
   { id: 'survivor', name: 'Kraken Survivor', size: 'S', tier: 3, model: 'jar', text: 'The tip of a kraken arm, in a jar. It still twitches.' },
+  { id: 'relic', name: 'The Temple Relic', size: 'S', tier: 3, model: 'orb', text: 'The glowing orb from the altar of the Drowned Temple. It hums when the tide turns.' },
+  { id: 'explorer', name: 'Off the Charts', size: 'S', tier: 3, model: 'logbook', text: 'Your own logbook of the places that are on no map: the grotto, the temple, the wreck and the key.' },
   { id: 'hoard', name: 'The Hoard', size: 'L', tier: 4, model: 'hoard', text: 'One hundred thousand coins earned. A chest that will not close.' },
 );
 // every rare, epic and legendary species, mounted

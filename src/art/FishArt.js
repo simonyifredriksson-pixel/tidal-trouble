@@ -9,10 +9,10 @@
    Returns { solid, glow } geometries - `glow` is drawn unlit (lights,
    lures, fuses) and may be null. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790356418';
-import { rng, TAU, clamp } from '../core/Util.js?v=1790356418';
-import { MAT } from './Materials.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790358905';
+import { rng, TAU, clamp } from '../core/Util.js?v=1790358905';
+import { MAT } from './Materials.js?v=1790358905';
 
 const ST = [0, 0.07, 0.18, 0.32, 0.47, 0.62, 0.76, 0.88, 0.96, 1];
 const PR = [0.2, 0.3, 0.55, 0.82, 0.98, 1.0, 0.9, 0.7, 0.42, 0.12];

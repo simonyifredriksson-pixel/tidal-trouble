@@ -17,13 +17,13 @@
    Fish right on it and a Sunken Strongbox comes up; inside is coin and a
    Drowned Journal Page, and every page is about one of the ocean beasts. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder } from '../art/Geo.js?v=1790356418';
-import { MAT } from '../art/Materials.js?v=1790356418';
-import { buildBoat } from '../art/BoatArt.js?v=1790356418';
-import { buildBarrel, buildCrate } from '../art/BuildingArt.js?v=1790356418';
-import { BEASTS } from '../data/BeastData.js?v=1790356418';
-import { clamp, uid, rng } from '../core/Util.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder } from '../art/Geo.js?v=1790358905';
+import { MAT } from '../art/Materials.js?v=1790358905';
+import { buildBoat } from '../art/BoatArt.js?v=1790358905';
+import { buildBarrel, buildCrate } from '../art/BuildingArt.js?v=1790358905';
+import { BEASTS } from '../data/BeastData.js?v=1790358905';
+import { clamp, uid, rng } from '../core/Util.js?v=1790358905';
 
 const _v = new THREE.Vector3();
 const HOT_R = { birds: 26, boil: 22, bubbles: 16, glow: 28, debris: 20 };

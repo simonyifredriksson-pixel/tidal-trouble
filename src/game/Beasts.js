@@ -13,12 +13,12 @@
    with a pseudo-species so the fight, the rod rating and the pace all work
    the same way as for everything else. Peers render from the snapshot. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { BEASTS, BEAST_BY_ID, WHALE_ROUTE } from '../data/BeastData.js?v=1790356418';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790356418';
-import { buildBeast } from '../art/BeastArt.js?v=1790356418';
-import { zoneAt } from '../world/MapData.js?v=1790356418';
-import { clamp, damp, wrapAngle, lerp, smoothstep } from '../core/Util.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { BEASTS, BEAST_BY_ID, WHALE_ROUTE } from '../data/BeastData.js?v=1790358905';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
+import { buildBeast } from '../art/BeastArt.js?v=1790358905';
+import { zoneAt } from '../world/MapData.js?v=1790358905';
+import { clamp, damp, wrapAngle, lerp, smoothstep } from '../core/Util.js?v=1790358905';
 
 const _v = new THREE.Vector3(), _e = new THREE.Euler();
 

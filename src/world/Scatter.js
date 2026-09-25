@@ -9,12 +9,12 @@
    genuinely clear. Blockers (building footprints) are passed in from the
    settlement so nothing grows through a cabin. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt } from './Terrain.js?v=1790356418';
-import { regionWeights, WORLD } from './MapData.js?v=1790356418';
-import { hash3, smoothstep, rng } from '../core/Util.js?v=1790356418';
-import { MAT } from '../art/Materials.js?v=1790356418';
-import * as F from '../art/FloraArt.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt } from './Terrain.js?v=1790358905';
+import { regionWeights, WORLD } from './MapData.js?v=1790358905';
+import { hash3, smoothstep, rng } from '../core/Util.js?v=1790358905';
+import { MAT } from '../art/Materials.js?v=1790358905';
+import * as F from '../art/FloraArt.js?v=1790358905';
 
 const BLOCK = 200;
 

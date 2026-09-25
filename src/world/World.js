@@ -5,14 +5,15 @@
    the settlement DECLARES light sources and a pool of eight real lights is
    handed to the nearest, brightest ones each frame. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { Terrain, buildIce, heightAt, groundAt, iceAt, ICE_Y, isOpenWater } from './Terrain.js?v=1790356418';
-import { Water } from './Water.js?v=1790356418';
-import { Sky } from './Sky.js?v=1790356418';
-import { Scatter, Grass } from './Scatter.js?v=1790356418';
-import { Settlement } from './Settlement.js?v=1790356418';
-import { Colliders } from './Colliders.js?v=1790356418';
-import { waveHeight, regionAt, regionWeights, WORLD } from './MapData.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { Terrain, buildIce, heightAt, groundAt, iceAt, ICE_Y, isOpenWater } from './Terrain.js?v=1790358905';
+import { Water } from './Water.js?v=1790358905';
+import { Sky } from './Sky.js?v=1790358905';
+import { Scatter, Grass } from './Scatter.js?v=1790358905';
+import { Settlement } from './Settlement.js?v=1790358905';
+import { Secrets } from './Secrets.js?v=1790358905';
+import { Colliders } from './Colliders.js?v=1790358905';
+import { waveHeight, regionAt, regionWeights, WORLD } from './MapData.js?v=1790358905';
 
 export class World {
   constructor(scene) {
@@ -33,6 +34,8 @@ export class World {
     this.scene.add(this.ice);
     await step('Building Driftwood Bay');
     this.settlement = new Settlement(this.scene, this.colliders);
+    await step('Hiding a few things');
+    this.secrets = new Secrets(this.scene, this.colliders, this.settlement);
     await step('Growing the forest');
     this.flora = new Scatter(this.scene, this.colliders, this.settlement.blockers, this.terrain);
     this.grass = new Grass(this.scene, this.settlement.blockers);
@@ -79,6 +82,7 @@ export class World {
     this.terrain.update(cam.x, cam.z, 5);
     this.flora.update(cam);
     this.grass.update(cam);
+    this.secrets.update(dt);
     const light = this.sky.update(dt, env.tod, cam, focus, env);
     this.water.update(dt, cam, this.time, 1 + this.storm * 1.6, this.whirl, this.glow, light);
     // light pool

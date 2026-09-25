@@ -25,10 +25,10 @@
    Every builder returns { group, animate(t, a), pose(t) } plus named parts
    the encounter code needs (head, tail, wings, segs...). */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790356418';
-import { MAT } from './Materials.js?v=1790356418';
-import { rng, TAU } from '../core/Util.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790358905';
+import { MAT } from './Materials.js?v=1790358905';
+import { rng, TAU } from '../core/Util.js?v=1790358905';
 
 const mesh = (b, mat = MAT.solid) => { const m = new THREE.Mesh(b.build(), mat); m.castShadow = true; return m; };
 const holder = (b, g) => { const G = new THREE.Group(); if (b.tris) G.add(mesh(b)); if (g && g.tris) G.add(new THREE.Mesh(g.build(), MAT.glow)); return G; };

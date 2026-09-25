@@ -15,19 +15,32 @@
    three chase their targets through a spring, so a boat rides a swell
    instead of snapping to it. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { buildBoat } from '../art/BoatArt.js?v=1790356418';
-import { boatStats, HULL_BY_ID } from '../data/BoatData.js?v=1790356418';
-import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790356418';
-import { waveAmp } from '../world/MapData.js?v=1790356418';
-import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js?v=1790356418';
-import { MeshBuilder } from '../art/Geo.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { buildBoat } from '../art/BoatArt.js?v=1790358905';
+import { boatStats, HULL_BY_ID } from '../data/BoatData.js?v=1790358905';
+import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790358905';
+import { waveAmp } from '../world/MapData.js?v=1790358905';
+import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js?v=1790358905';
+import { MeshBuilder } from '../art/Geo.js?v=1790358905';
+import { MAT } from '../art/Materials.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 
 const _v = new THREE.Vector3();
 const MAT_HOLE = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
 let _holeGeo = null;
 /** A ragged hole punched through planks: a dark gap ringed with splinters. */
+let _breakGeo = null;
+/** A snapped rail: two jagged stumps and a hanging splintered plank. */
+function breakGeo() {
+  if (_breakGeo) return _breakGeo;
+  const b = new MeshBuilder(rng(12));
+  b.color(0xc8a070);
+  for (const z of [-0.5, 0.5]) { b.box(0.08, 0.35, 0.08, 0, 0.17, z); b.cone(0.06, 0.35, 0.5, 4, 0, z); }
+  b.color(0x8a6848).push(0.05, 0.1, 0.1, 0, 0, 0.9); b.box(0.06, 0.8, 0.12, 0, -0.3, 0); b.pop();
+  b.color(0xe8c898); for (let k = 0; k < 5; k++) b.cone(0.03, 0.3, 0.42 + k * 0.03, 3, 0, -0.1 + k * 0.05);
+  _breakGeo = b.build();
+  return _breakGeo;
+}
 function holeGeo() {
   if (_holeGeo) return _holeGeo;
   const b = new MeshBuilder(rng(9));
@@ -76,7 +89,7 @@ export class Boat {
       this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     }
     this.cfg = JSON.parse(JSON.stringify(cfg));
-    this.holes = [];
+    this.holes = []; this.breakMeshes = [];
     const art = buildBoat(this.cfg);
     this.art = art;
     this.group = art.group;
@@ -110,6 +123,18 @@ export class Boat {
       for (const sx of [-1, 1]) this.obstacles.push({ x: sx * (d + (C.hw - d) / 2), z: C.z - C.hl, hw: (C.hw - d) / 2, hd: t });
     }
     this.obstacles.push({ x: H.cooler[0], z: H.cooler[2], hw: 0.45, hd: 0.35 });
+    for (const [mx, mz] of H.masts || []) this.obstacles.push({ x: mx, z: mz, hw: 0.25, hd: 0.25 });
+    if (H.hold) {
+      const Hd = H.hold;
+      // below deck: the mast feet, the pillars, the shelves, the workbench, the barrels
+      this.holdObstacles = [
+        ...(H.masts || []).filter(([, mz]) => mz > Hd.z0 && mz < Hd.z1).map(([mx, mz]) => ({ x: mx, z: mz, hw: 0.22, hd: 0.22 })),
+        { x: 0, z: Hd.z0 + 2.2, hw: 0.16, hd: 0.16 }, { x: 0, z: Hd.z0 + 5.4, hw: 0.16, hd: 0.16 },
+        { x: -Hd.hw + 0.3, z: -4, hw: 0.28, hd: 1.1 }, { x: -Hd.hw + 0.3, z: -1.4, hw: 0.28, hd: 1.1 },
+        { x: Hd.hw - 0.5, z: -3.8, hw: 0.45, hd: 0.9 }, { x: Hd.hw - 0.9, z: Hd.z0 + 0.6, hw: 0.8, hd: 0.38 },
+      ];
+    }
+    this.breaks = this.breaks || [];
     if (H.fuel) this.obstacles.push({ x: H.fuel[0], z: H.fuel[2], hw: 0.28, hd: 0.2 });
     this._updateMatrix();
   }
@@ -162,7 +187,7 @@ export class Boat {
     const sh = Math.sin(this.heading), ch = Math.cos(this.heading);
     let vf = this.vel.x * sh + this.vel.y * ch;
     let vr = this.vel.x * ch - this.vel.y * sh;
-    const hurt = this.hp < st.hp * 0.25 ? 0.6 : 1;
+    const hurt = (this.hp < st.hp * 0.25 ? 0.6 : 1) * (this.broken('engine') ? 0.45 : 1);
     const maxSp = st.speed * hurt * (1 - over * 0.45) * (1 - this.water * 0.6);
     const acc = st.accel * hurt;
     const thr = this.driver || this.autopilot ? this.throttle : 0;
@@ -173,7 +198,7 @@ export class Boat {
     const steer = this.driver || this.autopilot ? this.steer : 0;
     const turnF = clamp(Math.abs(vf) / 3.5, 0.2, 1) * (vf < -0.2 ? -1 : 1);
     // a flooded boat is heavy and slow to answer the helm
-    this.yawRate = damp(this.yawRate, steer * st.turn * turnF * (1 - over * 0.3) * (1 - this.water * 0.6), 3.5 * (1 - this.water * 0.5), dt);
+    this.yawRate = damp(this.yawRate, steer * st.turn * turnF * (1 - over * 0.3) * (1 - this.water * 0.6) * (this.broken('wheel') ? 0.3 : 1), 3.5 * (1 - this.water * 0.5), dt);
     this.heading = wrapAngle(this.heading + this.yawRate * dt);
     this.vel.set(vf * sh + vr * ch, vf * ch - vr * sh);
     // external pulls: towing fish, whirlpools, thieves
@@ -287,14 +312,49 @@ export class Boat {
     if (this.sinking > 0 || amount <= 0 || !isFinite(amount)) return;
     this.hp = Math.max(0, this.hp - amount);
     // heavy hits open leaks
-    if (amount > 8 && this.leaks.length < 6 && Math.random() < Math.min(0.9, amount / 30)) {
-      const H = this.hull;
-      const z = (Math.random() * 2 - 1) * H.hl * 0.8, side = Math.random() < 0.5 ? -1 : 1;
-      this.leaks.push({ x: side * this.halfWidth(z) * 0.95, y: H.deck + 0.05, z, size: 0.5 + Math.random() * 0.7, fix: 0 });
-      Bus.emit('boat:leak', { boat: this });
-    }
+    if (amount > 8 && this.leaks.length < 6 && Math.random() < Math.min(0.9, amount / 30)) this.addHole();
+    // really heavy hits break equipment too: a rail, the wheel, the engine, the harpoon mount
+    if (amount > 12 && this.breaks.length < 4 && Math.random() < Math.min(0.55, amount / 50)) this.breakSomething();
     Bus.emit('boat:damage', { boat: this, amount, why });
   }
+
+  /** Break one piece of equipment. Returns what broke. */
+  /** Knock a hole in the hull (a leak you can see, and hammer shut). */
+  addHole(size = 0.5 + Math.random() * 0.7) {
+    const H = this.hull;
+    const z = (Math.random() * 2 - 1) * H.hl * 0.8, side = Math.random() < 0.5 ? -1 : 1;
+    const L = { x: side * this.halfWidth(z) * 0.95, y: H.deck + 0.05, z, size, fix: 0 };
+    this.leaks.push(L);
+    Bus.emit('boat:leak', { boat: this });
+    return L;
+  }
+
+  breakSomething(kind = null) {
+    const H = this.hull, have = new Set(this.breaks.map(b => b.kind));
+    const pool = ['rail', 'rail', 'wheel', 'engine'];
+    if (this.stats.mount) pool.push('mount');
+    const avail = pool.filter(k => k === 'rail' || !have.has(k));
+    kind = kind || avail[Math.floor(Math.random() * avail.length)] || 'rail';
+    let x = 0, z = 0;
+    if (kind === 'rail') { z = (Math.random() * 1.6 - 0.8) * H.hl; x = (Math.random() < 0.5 ? -1 : 1) * this.halfWidth(z) / 0.9; }
+    else if (kind === 'wheel') { x = H.helm[0]; z = H.helm[2]; }
+    else if (kind === 'engine') { x = 0; z = -H.hl + 0.6; }
+    else if (kind === 'mount' && H.mount) { x = H.mount[0]; z = H.mount[2]; }
+    const B = { kind, x, z, fix: 0 };
+    this.breaks.push(B);
+    Bus.emit('boat:break', { boat: this, b: B });
+    return B;
+  }
+  broken(kind) { return this.breaks.some(b => b.kind === kind); }
+  /** Local height of the water in the hold (the hold fills first), or -Infinity. */
+  holdWaterLocal() {
+    const Hd = this.hull.hold;
+    if (!Hd || this.water < 0.02) return -Infinity;
+    return Hd.floor + 0.02 + Math.min(1, this.water / 0.75) * (this.deck - Hd.floor - 0.12);
+  }
+
+  /** Is there a snapped rail near this local point? (you can fall through it) */
+  railGap(lx, lz) { return this.breaks.some(b => b.kind === 'rail' && Math.sign(b.x) === Math.sign(lx) && Math.abs(b.z - lz) < 1.1); }
 
   ignite(lx, lz) {
     if (this.fires.length >= 6 || this.sinking) return;
@@ -361,7 +421,7 @@ export class Boat {
     this.heading = t.h;
     this.vel.set(0, 0); this.yawRate = 0;
     this.y = 0; this.vy = 0; this.pitch = 0; this.roll = 0; this.vp = 0; this.vr = 0;
-    this.sinking = 0; this.water = 0; this.fires = []; this.leaks = [];
+    this.sinking = 0; this.water = 0; this.fires = []; this.leaks = []; this.breaks = [];
     this.hp = Math.max(this.hp, Math.round(this.stats.hp * (towed ? 0.6 : 1)));
     this.docked = true; this.driver = null; this.stolen = false; this.autopilot = null;
     this._updateMatrix();
@@ -417,8 +477,31 @@ export class Boat {
     });
     // flooding sheet
     const fl = this.parts.flood;
-    fl.visible = this.water > 0.02;
-    fl.position.y = this.deck + 0.02 + this.water * Math.min(0.5, this.art.rail * 0.8);
+    if (this.parts.holdFlood) {
+      // a ship floods from the bottom: the hold fills first, then the deck goes under
+      const Hd = this.hull.hold, span = this.deck - Hd.floor;
+      const lvl = Math.min(1, this.water / 0.75);
+      this.parts.holdFlood.visible = this.water > 0.02;
+      this.parts.holdFlood.position.y = Hd.floor + 0.02 + lvl * (span - 0.12);
+      fl.visible = this.water > 0.78;
+      fl.position.y = this.deck + 0.02 + (this.water - 0.75) * 1.6;
+    } else {
+      fl.visible = this.water > 0.02;
+      fl.position.y = this.deck + 0.02 + this.water * Math.min(0.5, this.art.rail * 0.8);
+    }
+    // broken equipment: splinters where a rail was, smoke from a dead engine, sparks off a jammed wheel
+    this.breakMeshes = this.breakMeshes || [];
+    while (this.breakMeshes.length < this.breaks.length) { const m = new THREE.Mesh(breakGeo(), MAT.solid); this.group.add(m); this.breakMeshes.push(m); }
+    this.breakMeshes.forEach((m, i) => {
+      const B = this.breaks[i];
+      m.visible = !!B && B.kind === 'rail';
+      if (!B) return;
+      const w = this.toWorld(_v.set(B.x, this.deck + 0.6, B.z));
+      if (B.kind === 'rail') { m.position.set(B.x, this.railY(B.z) - 0.35, B.z); m.rotation.y = B.x > 0 ? 0 : Math.PI; m.scale.setScalar(1 - B.fix * 0.6); }
+      else if (B.kind === 'engine' && Math.random() < 0.3) fx.smoke(w.x, w.y + 0.5, w.z, 0x2a2a2a);
+      else if (B.kind === 'wheel' && Math.random() < 0.06) fx.sparks(w.x, w.y + 0.3, w.z, 4, 0xffd27a);
+      else if (B.kind === 'mount' && Math.random() < 0.1) fx.smoke(w.x, w.y + 0.3, w.z, 0x5a5a5a);
+    });
     // lights
     const dark = world.darkAt ? world.darkAt(this.pos.x, this.pos.z) : 0;
     const want = this.stats.lights > 0 ? Math.min(1, night * 1.4 + dark) : 0;
@@ -435,7 +518,7 @@ export class Boat {
       p: +this.pitch.toFixed(3), r: +this.roll.toFixed(3), vx: +this.vel.x.toFixed(2), vz: +this.vel.y.toFixed(2),
       hp: Math.round(this.hp), w: +this.water.toFixed(3), sk: +this.sinking.toFixed(2), th: +this.throttle.toFixed(2), st: +this.steer.toFixed(2),
       dr: this.driver, f: this.fires.map(F => [+F.x.toFixed(2), +F.z.toFixed(2), +F.i.toFixed(2)]), l: this.leaks.map(L => [+L.x.toFixed(2), +L.z.toFixed(2), +L.size.toFixed(2), +L.fix.toFixed(2)]),
-      dk: this.docked ? 1 : 0, cfg: this.cfgKey(),
+      dk: this.docked ? 1 : 0, cfg: this.cfgKey(), bk: this.breaks.map(B => [B.kind, +B.x.toFixed(2), +B.z.toFixed(2), +B.fix.toFixed(2)]),
     };
   }
   cfgKey() { return JSON.stringify(this.cfg); }
@@ -452,6 +535,7 @@ export class Boat {
     this.hp = s.hp; this.water = s.w; this.sinking = s.sk; this.throttle = s.th; this.steer = s.st; this.driver = s.dr; this.docked = !!s.dk;
     this.fires = s.f.map(a => ({ x: a[0], z: a[1], i: a[2], t: 0 }));
     this.leaks = s.l.map(a => ({ x: a[0], y: this.deck + 0.05, z: a[1], size: a[2], fix: a[3] }));
+    this.breaks = (s.bk || []).map(a => ({ kind: a[0], x: a[1], z: a[2], fix: a[3] }));
     this._updateMatrix();
   }
 }

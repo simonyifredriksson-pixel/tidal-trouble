@@ -9,14 +9,14 @@
 
    Frame: +Z bow, y = 0 waterline, deck at hull.deck. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790356418';
-import { MAT } from './Materials.js?v=1790356418';
-import { rng, TAU } from '../core/Util.js?v=1790356418';
-import { HULL_BY_ID, PAINT_BY_ID, boatStats } from '../data/BoatData.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790358905';
+import { MAT } from './Materials.js?v=1790358905';
+import { rng, TAU } from '../core/Util.js?v=1790358905';
+import { HULL_BY_ID, PAINT_BY_ID, boatStats } from '../data/BoatData.js?v=1790358905';
 
-const RAIL = { dinghy: 0.42, motor: 0.55, trawler: 0.85, expedition: 0.95 };
-const BOW = { dinghy: 0.25, motor: 0.55, trawler: 0.9, expedition: 1.2 };
+const RAIL = { dinghy: 0.42, motor: 0.55, trawler: 0.85, expedition: 0.95, wayfarer: 1.0 };
+const BOW = { dinghy: 0.25, motor: 0.55, trawler: 0.9, expedition: 1.2, wayfarer: 1.6 };
 
 function sections(H) {
   const n = 12, out = [];
@@ -192,6 +192,39 @@ export function buildBoat(cfg) {
     engine.add(prop);
     parts.prop = prop;
     engine.position.set(0, S[0].g - 0.25, S[0].z - (big ? 0.3 : 0.2));
+  } else if (H.engine === 'sail') {
+    // two masts, square sails, rigging down to the rails, a crow's nest
+    parts.sails = [];
+    for (const [mx, mz] of H.masts) {
+      const tall = mz > 0 ? 11 : 9;
+      b.color(0x6a4a2e).cyl(0.2, 0.14, D, D + tall, 8, true, mx, mz);
+      for (const [y, w] of [[D + tall * 0.42, 3.4], [D + tall * 0.78, 2.6]]) b.color(0x5a3e28).box(w * 2, 0.16, 0.16, mx, y, mz);
+      if (mz > 0) { b.color(0x5a3e28).cyl(0.7, 0.6, D + tall - 1.3, D + tall - 0.9, 8, true, mx, mz); b.color(0x6a4a2e); for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; b.box(0.06, 0.5, 0.06, mx + Math.cos(a) * 0.65, D + tall - 0.65, mz + Math.sin(a) * 0.65); } }
+      b.color(0xc8b48a);
+      for (const sx of [-1, 1]) for (const zz of [-1.2, 1.2]) b.beam([mx, D + tall * 0.95, mz], [sx * (S[Math.round((mz + zz + H.hl) / (H.hl * 2) * 12)].w - 0.05), S[6].g + 0.05, mz + zz], 0.025, 0.025);
+      const sg = new MeshBuilder(r);
+      for (const [y0, y1, w] of [[tall * 0.44, tall * 0.76, 3.2], [tall * 0.8, tall * 0.98, 2.4]]) {
+        for (let k = 0; k < 6; k++) {
+          const xa = -w + k * w / 3, xb = xa + w / 3, bulge = 0.5;
+          sg.color(k % 2 ? 0xf2ead4 : 0xe6dcc0).card([xa, y1, 0], [xb, y1, 0], [xb, y0, bulge * (1 - Math.abs(k - 2.5) / 3)], [xa, y0, bulge * (1 - Math.abs(k - 2.5) / 3)]);
+        }
+      }
+      if (mz > 0) sg.color(0xa83a2a).card([-0.8, tall * 0.62, 0.3], [0.8, tall * 0.62, 0.3], [0, tall * 0.54, 0.34]);
+      const sail = new THREE.Mesh(sg.build(), MAT.solidDS);
+      sail.position.set(mx, D, mz + 0.2); sail.castShadow = true;
+      group.add(sail); parts.sails.push(sail);
+    }
+    // a raised quarterdeck rail and the stern wheel on its pedestal
+    b.color(0x5a3e28).box(0.2, 1.1, 0.2, 0, D + 0.55, H.helm[2] - 0.1);
+    // the hatch down to the hold: a dark opening with a raised coaming
+    const Hd = H.hold, [hx, hz] = Hd.hatch;
+    b.color(0x100c08).box(Hd.hatchHW * 2, 0.02, Hd.hatchHD * 2, hx, D + 0.012, hz);
+    b.color(0x4a3222);
+    for (const sx of [-1, 1]) b.box(0.12, 0.18, Hd.hatchHD * 2 + 0.24, hx + sx * (Hd.hatchHW + 0.06), D + 0.09, hz);
+    for (const sz of [-1, 1]) b.box(Hd.hatchHW * 2 + 0.24, 0.18, 0.12, hx, D + 0.09, hz + sz * (Hd.hatchHD + 0.06));
+    // bowsprit
+    b.color(0x6a4a2e).tube([0, S[12].g - 0.2, S[12].z - 0.4], [0, S[12].g + 0.9, S[12].z + 3.2], 0.16, 0.08, 6);
+    const prop = new THREE.Group(); engine.add(prop); parts.prop = prop;
   } else {
     const pb = new MeshBuilder(r);
     pb.color(0xb8a060);
@@ -357,6 +390,50 @@ export function buildBoat(cfg) {
     mount.position.set(H.mount[0], D, H.mount[2]);
     group.add(mount);
     parts.mount = { group: mount, yaw, pitch };
+  }
+
+  // the hold: a room under the deck, built facing inward so it has walls
+  // from inside - floor, plank walls, beams, shelves, a ladder, lanterns
+  if (H.hold) {
+    const Hd = H.hold, hb = new MeshBuilder(r), hg = new MeshBuilder(r);
+    const y0 = Hd.floor, y1 = D - 0.06, w = Hd.hw, z0 = Hd.z0, z1 = Hd.z1;
+    for (let k = 0; k < Math.round(w * 2 / 0.3); k++) hb.color(shadeHex(0x6a4a30, 0.85 + (k % 4) * 0.06)).box(0.3, 0.06, z1 - z0, -w + 0.15 + k * 0.3, y0 - 0.03, (z0 + z1) / 2);
+    hb.color(0x1e160e).quad([-w - 0.2, y0 - 0.07, z0], [w + 0.2, y0 - 0.07, z0], [w + 0.2, y0 - 0.07, z1], [-w - 0.2, y0 - 0.07, z1], [0, 1, 0]);
+    const plank = (a, c, n, out) => { for (let k = 0; k < n; k++) { const f0 = k / n, f1 = (k + 1) / n; hb.color(shadeHex(0x7a5838, 0.8 + (k % 3) * 0.08)); hb.quad(a(f0, 0), a(f1, 0), a(f1, 1), a(f0, 1), out); } void c; };
+    for (const s of [-1, 1]) plank((f, v) => [s * w, y0 + (y1 - y0) * v, z0 + (z1 - z0) * f], null, 24, [-s, 0, 0]);
+    plank((f, v) => [-w + 2 * w * f, y0 + (y1 - y0) * v, z0], null, 12, [0, 0, 1]);
+    plank((f, v) => [-w + 2 * w * f, y0 + (y1 - y0) * v, z1], null, 12, [0, 0, -1]);
+    // the ceiling (the underside of the deck) with a hole for the hatch
+    const [hx, hz] = Hd.hatch, hw2 = Hd.hatchHW, hd2 = Hd.hatchHD;
+    const ceil = (xa, xb, za, zb) => hb.color(0x8a6a48).quad([xa, y1, za], [xb, y1, za], [xb, y1, zb], [xa, y1, zb], [0, -1, 0]);
+    ceil(-w, w, z0, hz - hd2); ceil(-w, w, hz + hd2, z1); ceil(-w, hx - hw2, hz - hd2, hz + hd2); ceil(hx + hw2, w, hz - hd2, hz + hd2);
+    // and a dark underlay facing up, so you never see into the hold between the deck planks
+    const under = (xa, xb, za, zb) => hb.color(0x1e160e).quad([xa, y1 + 0.02, za], [xb, y1 + 0.02, za], [xb, y1 + 0.02, zb], [xa, y1 + 0.02, zb], [0, 1, 0]);
+    under(-w, w, z0, hz - hd2); under(-w, w, hz + hd2, z1); under(-w, hx - hw2, hz - hd2, hz + hd2); under(hx + hw2, w, hz - hd2, hz + hd2);
+    for (let z = z0 + 1; z < z1; z += 1.5) hb.color(0x3a2818).box(w * 2, 0.18, 0.2, 0, y1 - 0.09, z);
+    for (const z of [z0 + 2.2, z0 + 5.4]) hb.color(0x4a3222).cyl(0.14, 0.14, y0, y1, 6, true, 0, z);
+    // the ladder up through the hatch
+    hb.color(0x6a4a30); for (const sx of [-1, 1]) hb.box(0.07, y1 - y0 + 0.3, 0.07, hx + sx * 0.3, (y0 + y1) / 2 + 0.15, hz + hd2 - 0.1);
+    for (let k = 0; k < 6; k++) hb.box(0.6, 0.05, 0.05, hx, y0 + 0.3 + k * 0.3, hz + hd2 - 0.1);
+    // shelves of stores along the port wall, a workbench, barrels, nets, spare planks
+    for (const [sy, sz] of [[0.6, -4], [1.2, -4], [0.6, -1.4], [1.2, -1.4]]) {
+      hb.color(0x5a3e28).box(0.5, 0.05, 2.2, -w + 0.3, y0 + sy, sz);
+      for (let k = 0; k < 5; k++) hb.color([0x7a5236, 0x8a6a44, 0x5a6a7a, 0xa87a4a][k % 4]).box(0.34, 0.28, 0.34, -w + 0.3, y0 + sy + 0.17, sz - 0.9 + k * 0.45);
+    }
+    hb.color(0x6a4a30).box(0.9, 0.08, 1.8, w - 0.5, y0 + 0.85, -3.8);
+    for (const zz of [-4.5, -3.1]) for (const xx of [w - 0.85, w - 0.15]) hb.box(0.08, 0.85, 0.08, xx, y0 + 0.42, zz);
+    hb.color(0x9aa0a8).box(0.3, 0.05, 0.08, w - 0.5, y0 + 0.92, -4.2); hb.color(0x6a4a30).box(0.12, 0.04, 0.3, w - 0.6, y0 + 0.92, -3.4);
+    for (let k = 0; k < 4; k++) hb.color(shadeHex(0x7a5838, 0.8 + k * 0.05)).box(2, 0.08, 0.26, w - 1.1, y0 + 0.05 + k * 0.08, z1 - 0.5 - (k % 2) * 0.1);
+    hb.color(0xc4b48a).blob(0.6, 0.25, 0.5, -w + 0.7, y0 + 0.2, z1 - 0.8, 7, 3, 0.3);
+    hb.color(0x7a5232).cyl(0.35, 0.35, y0, y0 + 0.9, 8, true, w - 0.5, z0 + 0.6); hb.color(0x7a5232).cyl(0.35, 0.35, y0, y0 + 0.9, 8, true, w - 1.3, z0 + 0.6);
+    // lanterns on hooks along the walls, above head height
+    for (const [lx, lz] of [[w - 0.2, z0 + 1.6], [-w + 0.2, 0.6], [w - 0.2, z1 - 2.4]]) { hb.color(0x2a2a2a).box(0.02, 0.14, 0.02, lx, y1 - 0.1, lz); hb.box(0.2, 0.03, 0.2, lx, y1 - 0.2, lz); hg.color(0xffd890).box(0.13, 0.18, 0.13, lx, y1 - 0.32, lz); }
+    const hm = new THREE.Mesh(hb.build(), MAT.solid); hm.receiveShadow = true;
+    group.add(hm); group.add(new THREE.Mesh(hg.build(), MAT.glow));
+    // the water that rises in the hold when you are holed
+    const hf = new MeshBuilder(); hf.color(0x2e6a78).quad([-w, 0, z0], [w, 0, z0], [w, 0, z1], [-w, 0, z1], [0, 1, 0]);
+    const holdFlood = new THREE.Mesh(hf.build(), new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false }));
+    holdFlood.visible = false; holdFlood.renderOrder = 3; group.add(holdFlood); parts.holdFlood = holdFlood;
   }
 
   // flooding: a sheet of water inside the hull that rises with the leak level

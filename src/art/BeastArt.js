@@ -5,10 +5,10 @@
    { group, animate(t, a), ...named parts } so Beasts.js can move limbs,
    raise heads and show only the pieces that break the surface. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790356418';
-import { MAT } from './Materials.js?v=1790356418';
-import { rng, TAU } from '../core/Util.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790358905';
+import { MAT } from './Materials.js?v=1790358905';
+import { rng, TAU } from '../core/Util.js?v=1790358905';
 
 const mesh = (b, mat = MAT.solid) => { const m = new THREE.Mesh(b.build(), mat); m.castShadow = true; m.frustumCulled = false; return m; };
 const hold = (b, g = null, mat = MAT.solid) => { const G = new THREE.Group(); if (b.tris) G.add(mesh(b, mat)); if (g && g.tris) { const m = new THREE.Mesh(g.build(), MAT.glow); m.frustumCulled = false; G.add(m); } return G; };

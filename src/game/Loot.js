@@ -19,17 +19,19 @@
      bottle  a message; reading it adds a page to the story
      slap    handled at landing: it goes for your face */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790356418';
-import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790356418';
-import { MAT } from '../art/Materials.js?v=1790356418';
-import { MeshBuilder } from '../art/Geo.js?v=1790356418';
-import { clamp, uid } from '../core/Util.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790358905';
+import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790358905';
+import { MAT } from '../art/Materials.js?v=1790358905';
+import { MeshBuilder } from '../art/Geo.js?v=1790358905';
+import { clamp, uid } from '../core/Util.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 
 const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 let chestGeo = null, starGeo = null;
+/** Is this boat-local point inside the ship's hold (below deck)? */
+const inHold = (b, L) => { const H = b.hull.hold; return !!H && L.y > H.floor - 0.4 && L.y < b.deck && Math.abs(L.x) < H.hw && L.z > H.z0 && L.z < H.z1; };
 
 export class Loot {
   constructor(game) {
@@ -149,7 +151,7 @@ export class Loot {
     it.boat = null;
     it.t = Math.min(it.t, 1);
     it.grounded = false;
-    const b = this.game.boatAt(pos, 1.2);
+    const b = this.game.boatAt(pos, 1.2) || this.game.boats.find(bb => inHold(bb, bb.toLocal(pos, _w)));
     if (b) this._attach(it, b);
   }
   toCooler(it, boat) {
@@ -195,6 +197,16 @@ export class Loot {
   _simBoat(it, dt) {
     const b = it.boat;
     const L = it.local, V = it.vel;
+    // anything below the deck inside the hold sits on the hold floor (stores, the catch)
+    const Hd = b.hull.hold;
+    if (Hd && L.y < b.deck - 0.3 && Math.abs(L.x) < Hd.hw && L.z > Hd.z0 && L.z < Hd.z1) {
+      V.y -= G * dt; L.addScaledVector(V, dt);
+      const fl = Hd.floor + it.r * 0.25;
+      if (L.y < fl) { L.y = fl; V.y = 0; V.x *= Math.exp(-4 * dt); V.z *= Math.exp(-4 * dt); }
+      L.x = clamp(L.x, -Hd.hw + 0.2, Hd.hw - 0.2); L.z = clamp(L.z, Hd.z0 + 0.2, Hd.z1 - 0.2);
+      b.toWorld(L, it.pos);
+      return;
+    }
     const deck = b.deck + it.r * 0.25;
     // gravity and the slope of the deck
     V.y -= G * dt;
@@ -280,7 +292,7 @@ export class Loot {
       const b = this.game.boatAt(P, 0.3);
       if (b) {
         const L = b.toLocal(P, _w);
-        if (L.y < b.deck + 2.5 && L.y > b.deck - 0.4) this._attach(it, b);
+        if ((L.y < b.deck + 2.5 && L.y > b.deck - 0.4) || inHold(b, L)) this._attach(it, b);
       }
     }
     // cap lifetime of items abandoned on land far from anyone

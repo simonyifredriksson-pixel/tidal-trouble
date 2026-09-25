@@ -10,11 +10,11 @@
    A common fish that lives in several places appears in each of them - the
    journal is a collection map, and each section counts on its own. */
 
-import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js?v=1790356418';
-import { LEVIATHANS } from './LeviathanData.js?v=1790356418';
-import { GREAT, KRAKEN } from './GreatData.js?v=1790356418';
-import { BEASTS } from './BeastData.js?v=1790356418';
-import { REGIONS, ZONES } from '../world/MapData.js?v=1790356418';
+import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js?v=1790358905';
+import { LEVIATHANS } from './LeviathanData.js?v=1790358905';
+import { GREAT, KRAKEN } from './GreatData.js?v=1790358905';
+import { BEASTS } from './BeastData.js?v=1790358905';
+import { REGIONS, ZONES } from '../world/MapData.js?v=1790358905';
 
 const listed = f => f.rarity !== 'junk' || f.id === 'chest';
 const inRegion = r => f => Array.isArray(f.where) && f.where.includes(r) && f.zoneOnly === undefined && listed(f);
@@ -28,6 +28,7 @@ export const SECTIONS = [
   { id: 'kraken', name: "The Kraken's Water", icon: 'tentacle', blurb: 'The Offshore zone - the orange buoys and beyond, before the deep. Things live here that live nowhere else.', fish: f => f.zoneOnly === 2 && listed(f), creatures: [{ kind: 'kraken', id: 'kraken' }] },
   { id: 'reach', name: "Vigil's End", icon: 'light', blurb: 'The last island, at the edge of the sea. Fog, rocks, and the great ones.', fish: inRegion('reach'), creatures: GREAT.map(g => ({ kind: 'great', id: g.id })) },
   { id: 'beasts', name: 'Ocean Beasts', icon: 'leviathan', blurb: 'Ten things too big for any other page. Nobody tells you where they are. You find out.', fish: () => false, creatures: BEASTS.map(b => ({ kind: 'beast', id: b.id })) },
+  { id: 'hidden', name: 'Hidden Places', icon: 'eye', blurb: 'A cave, a temple under the sea, a lost wreck, an island on no chart. Nobody will tell you where. The fish that live there live nowhere else.', fish: f => f.where === 'site' && listed(f) },
   { id: 'any', name: 'All Waters', icon: 'fish', blurb: 'The strange ones that turn up anywhere - and the one that only falls from the sky.', fish: f => (f.where === 'all' || f.where === 'meteor') && listed(f) },
 ];
 
@@ -71,6 +72,7 @@ const WATER = { lake: 'lakes', sea: 'the sea', ice: 'ice holes', any: 'lakes and
 export function habitat(f) {
   if (f.zoneOnly === 2) return 'Offshore water - the kraken\'s zone, and nowhere else';
   if (f.where === 'meteor') return 'Only where a meteor has fallen into the sea';
+  if (f.where === 'site') return { grotto: "Only inside Smuggler's Grotto", temple: 'Only over the Drowned Temple', promise: 'Only over the wreck of the Bright Promise', castaway: 'Only in the water round Castaway Key' }[f.site] || 'Somewhere hidden';
   const HOT = { birds: 'where the birds are diving', boil: 'where the water boils with fish', bubbles: 'where bubbles rise from the deep', glow: 'in the patches of glowing water at night', debris: 'among floating wreckage' };
   if (f.hotspot) return 'Open sea, ' + HOT[f.hotspot];
   if (f.where === 'all') return 'Anywhere with water in it';

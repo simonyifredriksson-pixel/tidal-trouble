@@ -15,9 +15,9 @@
    turning is added to your yaw, so standing on a turning boat turns you
    with it instead of making the world spin round you. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -65,11 +65,13 @@ export class Player {
 
   attach(boat, local) {
     this.boat = boat;
+    this.inHold = false;
     this.local.copy(local);
     this.lastBoatHeading = boat.heading;
     this.mode = this.mode === 'swim' ? 'walk' : this.mode;
   }
   detach() {
+    this.inHold = false;
     if (!this.boat) return;
     const b = this.boat;
     b.toWorld(this.local, this.pos);
@@ -93,12 +95,15 @@ export class Player {
       const inv = new THREE.Matrix3().setFromMatrix4(b.inv);
       const ld = _w.copy(dir).applyMatrix3(inv);
       const hw = b.halfWidth(L.z);
-      const nearRail = Math.abs(L.x) > hw - 0.9 && Math.sign(ld.x) === Math.sign(L.x);
-      if (nearRail && force > 3.5 && Math.abs(ld.x) > 0.3) {
+      const nearRail = !this.inHold && Math.abs(L.x) > hw - 0.9 && Math.sign(ld.x) === Math.sign(L.x);
+      const gap = b.railGap(L.x, L.z);          // a snapped rail: much easier to go over
+      if (nearRail && force > (gap ? 1.5 : 3.5) && Math.abs(ld.x) > (gap ? 0.1 : 0.3)) {
         // over the side you go
         this.detach();
-        this.vel.copy(dir).multiplyScalar(force * 0.8); this.vel.y = 3.5;
+        // through a gap even a light shove carries you clear of the hull
+        this.vel.copy(dir).multiplyScalar(gap ? Math.max(force * 0.8, 3.4) : force * 0.8); this.vel.y = gap ? 2.5 : 3.5;
         this.pos.y += 0.5;
+        if (gap) this.pos.addScaledVector(dir, (hw - Math.abs(L.x) + 0.6) / Math.max(0.3, Math.hypot(dir.x, dir.z)));
         Bus.emit('player:overboard', { p: this, why });
         return;
       }
@@ -206,7 +211,7 @@ export class Player {
     // breath
     const head = this.pos.y + EYE - 0.05;
     const sea = world.waterAt(this.pos.x, this.pos.z);
-    this.underwater = head < sea - 0.05;
+    this.underwater = head < sea - 0.05 || (this.inHold && this.boat && this.local.y + EYE - 0.05 < this.boat.holdWaterLocal());
     if (this.underwater) {
       this.breath -= dt;
       if (this.breath <= 0) {
@@ -258,7 +263,26 @@ export class Player {
     this.vel.z = damp(this.vel.z, lz, 12, dt);
     if (this.bump) { this.vel.x += this.bump.x; this.vel.z += this.bump.z; this.bump = null; }
     this.vel.y -= 16 * dt;
-    if (jump && this.onGround) { this.vel.y = 5.2; this.onGround = false; }
+    if (jump && this.onGround) { this.vel.y = this.inHold ? 2.5 : 5.2; this.onGround = false; }
+    // below deck: a room with walls, a low ceiling and its own floor
+    const Hd = b.hull.hold;
+    if (this.inHold && !Hd) this.inHold = false;
+    if (this.inHold) {
+      let hx = L.x + this.vel.x * dt, hz = L.z + this.vel.z * dt, hy = L.y + this.vel.y * dt;
+      if (hy <= Hd.floor) { hy = Hd.floor; this.vel.y = 0; this.onGround = true; }
+      hy = Math.min(hy, Hd.floor + 0.35);
+      hx = clamp(hx, -Hd.hw + RADIUS, Hd.hw - RADIUS); hz = clamp(hz, Hd.z0 + RADIUS, Hd.z1 - RADIUS);
+      for (const o of b.holdObstacles || []) {
+        const dx = hx - o.x, dz = hz - o.z;
+        if (Math.abs(dx) < o.hw + RADIUS && Math.abs(dz) < o.hd + RADIUS) {
+          const px = o.hw + RADIUS - Math.abs(dx), pz = o.hd + RADIUS - Math.abs(dz);
+          if (px < pz) hx = o.x + Math.sign(dx || 1) * (o.hw + RADIUS); else hz = o.z + Math.sign(dz || 1) * (o.hd + RADIUS);
+        }
+      }
+      L.set(hx, hy, hz);
+      this.speed = Math.hypot(this.vel.x, this.vel.z);
+      return;
+    }
     const nx = L.x + this.vel.x * dt, nz = L.z + this.vel.z * dt;
     let ny = L.y + this.vel.y * dt;
     const deck = b.deck;
@@ -268,7 +292,8 @@ export class Player {
     const rail = b.railY(nz);
     let ox = nx, oz = nz;
     const overRail = ny > rail - 0.15;
-    if (Math.abs(ox) > hw && !overRail) ox = Math.sign(ox) * hw;
+    const gap = b.railGap(ox, oz);
+    if (Math.abs(ox) > hw && !overRail && !gap) ox = Math.sign(ox) * hw;
     const hl = b.hull.hl - 0.35;
     if (oz < -hl && !overRail) oz = -hl;
     if (oz > hl - 0.3 && !overRail) oz = hl - 0.3;
@@ -286,7 +311,7 @@ export class Player {
       let g = G.ground(w.x, w.z);
       const fl = G.colliders.floorAt(w.x, w.z, w.y, 0.9);
       if (fl > g) g = fl;
-      if (g > w.y - 0.9 || overRail || !b.over(ox, oz, -1.2)) {
+      if (g > w.y - 0.9 || overRail || gap || !b.over(ox, oz, -1.2)) {
         L.set(ox, ny, oz);
         this.detach();
         this.pos.copy(w);
@@ -446,7 +471,7 @@ export class Player {
     return {
       x: +this.pos.x.toFixed(2), y: +this.pos.y.toFixed(2), z: +this.pos.z.toFixed(2), yaw: +this.yaw.toFixed(3), pitch: +this.pitch.toFixed(3),
       b: this.boat ? this.boat.id : 0, lx: +this.local.x.toFixed(2), ly: +this.local.y.toFixed(2), lz: +this.local.z.toFixed(2),
-      m: this.mode, a: this.anim, t: this.tool, hp: Math.round(this.hp),
+      m: this.mode, a: this.anim, t: this.tool, hp: Math.round(this.hp), hd: this.inHold ? 1 : 0,
     };
   }
 }

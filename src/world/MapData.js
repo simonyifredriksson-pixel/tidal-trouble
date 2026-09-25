@@ -11,7 +11,7 @@
      The Open Sea    everything west - big swell, few rocks, a lighthouse
      The Blackwater  deep trench to the south-west ringed by black spires */
 
-import { smoothstep, clamp } from '../core/Util.js?v=1790356418';
+import { smoothstep, clamp } from '../core/Util.js?v=1790358905';
 
 export const WORLD = {
   half: 1300,          // playable half-extent
@@ -70,6 +70,8 @@ export const ISLANDS = [
   { id: 'spire4', x: -900, z: 690, r: 17, h: 30, rise: 0.25, shape: 0.5, hill: 2, ridge: 0, warp: 0.35, wf: 0.05, slope: 0.7, region: 'black' },
   { id: 'spire5', x: -640, z: 580, r: 14, h: 26, rise: 0.25, shape: 0.5, hill: 2, ridge: 0, warp: 0.35, wf: 0.05, slope: 0.7, region: 'black' },
   { id: 'wreckisle', x: -560, z: 740, r: 20, h: 5, rise: 0.4, shape: 1, hill: 1, ridge: 0, warp: 0.25, wf: 0.04, slope: 0.3, region: 'black' },
+  // --- Castaway Key: on no chart, alone in the deep between the bay and Vigil's End ---
+  { id: 'castaway', x: 430, z: 650, r: 21, h: 4, rise: 0.55, shape: 1, hill: 1.2, ridge: 0, warp: 0.2, wf: 0.03, slope: 0.18, region: 'tropic' },
   // --- Vigil's End: a cliff-walled island with a notch cut for the landing ---
   { id: 'vigil', x: 1015, z: 1005, r: 82, h: 17, rise: 0.2, shape: 0.7, hill: 3, ridge: 5, warp: 0.2, wf: 0.011, slope: 0.55, region: 'reach' },
   { id: 'vstackA', x: 1105, z: 925, r: 11, h: 22, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },

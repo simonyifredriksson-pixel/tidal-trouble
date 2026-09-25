@@ -7,43 +7,45 @@
    arrive in the next snapshot. So solo play and co-op are the same code,
    and there is no way for two clients to both sell the same Bombfish. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { Player } from './Player.js?v=1790356418';
-import { Boat } from './Boat.js?v=1790356418';
-import { Loot } from './Loot.js?v=1790356418';
-import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790356418';
-import { Tools } from './Tools.js?v=1790356418';
-import { ViewModel } from './ViewModel.js?v=1790356418';
-import { Effects } from './Effects.js?v=1790356418';
-import { Creatures } from './Creatures.js?v=1790356418';
-import { Events } from './Events.js?v=1790356418';
-import { NPCs } from './NPCs.js?v=1790356418';
-import { Cabin } from './Cabin.js?v=1790356418';
-import { Remote } from './Remote.js?v=1790356418';
-import { State } from './State.js?v=1790356418';
-import { PLAYER_LOOKS } from '../art/Character.js?v=1790356418';
-import { fishMesh } from '../art/FishArt.js?v=1790356418';
-import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790356418';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790356418';
-import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790356418';
-import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790356418';
-import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790356418';
-import { nearLake } from '../world/Terrain.js?v=1790356418';
-import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
-import { ic } from '../ui/Icons.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { Player } from './Player.js?v=1790358905';
+import { Boat } from './Boat.js?v=1790358905';
+import { Loot } from './Loot.js?v=1790358905';
+import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790358905';
+import { Tools } from './Tools.js?v=1790358905';
+import { ViewModel } from './ViewModel.js?v=1790358905';
+import { Effects } from './Effects.js?v=1790358905';
+import { Creatures } from './Creatures.js?v=1790358905';
+import { Events } from './Events.js?v=1790358905';
+import { NPCs } from './NPCs.js?v=1790358905';
+import { Cabin } from './Cabin.js?v=1790358905';
+import { Remote } from './Remote.js?v=1790358905';
+import { State } from './State.js?v=1790358905';
+import { PLAYER_LOOKS } from '../art/Character.js?v=1790358905';
+import { fishMesh } from '../art/FishArt.js?v=1790358905';
+import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790358905';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790358905';
+import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790358905';
+import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790358905';
+import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790358905';
+import { nearLake } from '../world/Terrain.js?v=1790358905';
+import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
+import { ic } from '../ui/Icons.js?v=1790358905';
 
-import { Chat } from '../ui/Chat.js?v=1790356418';
-import { Voice } from '../net/Voice.js?v=1790356418';
-import { Great } from './Great.js?v=1790356418';
-import { Beasts } from './Beasts.js?v=1790356418';
-import { Ocean } from './Ocean.js?v=1790356418';
-import { BEAST_BY_ID } from '../data/BeastData.js?v=1790356418';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790356418';
-import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790356418';
-import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790356418';
-import { SHOPS } from '../data/GearData.js?v=1790356418';
-import { mistAt, VIGIL } from '../world/MapData.js?v=1790356418';
+import { Chat } from '../ui/Chat.js?v=1790358905';
+import { Voice } from '../net/Voice.js?v=1790358905';
+import { Great } from './Great.js?v=1790358905';
+import { Beasts } from './Beasts.js?v=1790358905';
+import { Ocean } from './Ocean.js?v=1790358905';
+import { BEAST_BY_ID } from '../data/BeastData.js?v=1790358905';
+import { SECRETS, SECRET_BY_ID } from '../data/SecretData.js?v=1790358905';
+import { GROTTO } from '../world/Secrets.js?v=1790358905';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790358905';
+import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790358905';
+import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790358905';
+import { SHOPS } from '../data/GearData.js?v=1790358905';
+import { mistAt, VIGIL } from '../world/MapData.js?v=1790358905';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const fill = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] !== undefined ? o[k] : m));
@@ -263,6 +265,14 @@ export class Game {
         if (L.fix >= 1) { boat.leaks.splice(c.leak, 1); this.tell(from, 'Leak fixed.', 'good'); }
         break;
       }
+      case 'fixBreak': {
+        if (!boat) break;
+        const B = boat.breaks[c.i];
+        if (!B) break;
+        B.fix += c.dt / (B.kind === 'rail' ? 2.2 : 3.2);
+        if (B.fix >= 1) { boat.breaks.splice(c.i, 1); this.tell(from, { rail: 'Rail nailed back together.', wheel: 'The wheel turns freely again.', engine: 'The engine coughs back to life.', mount: 'The harpoon gun is unjammed.' }[B.kind], 'good'); }
+        break;
+      }
       case 'patch': if (boat) boat.hp = Math.min(boat.stats.hp, boat.hp + c.dt * 5); break;
       case 'scoop': if (boat && boat.water > 0) boat.water = Math.max(0, boat.water - 0.045); break;
       case 'bucket': {
@@ -335,6 +345,8 @@ export class Game {
       case 'krakenHook': if (this.great.kraken) this.great.kraken.hooked = c.by; break;
       case 'heard': s.heard[c.id] = true; if (VIGIL_FISHERMEN.every(k => s.heard[k])) this.award('legend', from); break;
       case 'admin': this._adminDo(c.cmd, c, P); break;
+      case 'discover': this._discover(c.id, from); break;
+      case 'plunder': this._plunder(c.id, from); break;
       case 'yard': { const x = this.loot.get(c.id); if (x) this._do({ t: 'yardPut', id: x.id }, from); break; }
       case 'trophyPick': {
         if (c.sp) { const d = s.dex[c.sp]; if (d) s.cabin.slots[c.slot] = { sp: c.sp, kg: d.bestKg, cm: d.bestCm }; }
@@ -370,6 +382,59 @@ export class Game {
     this._saveDirty = true;
     return true;
   }
+  /* ================= the hidden places ================= */
+  /** Is there something in this place's cache right now? */
+  cacheFull(id) {
+    const s = this.state.s, D = SECRET_BY_ID[id], d = s.caches?.[id];
+    return !!D && (d === undefined || s.day - d >= D.refill);
+  }
+  /** Host: somebody found a hidden place. */
+  _discover(id, from) {
+    const s = this.state.s, D = SECRET_BY_ID[id];
+    if (!D || s.secrets[id]) return;
+    s.secrets[id] = s.day;
+    this._everyone({ t: 'secret', id });
+    if (SECRETS.every(S => s.secrets[S.id])) this.award('explorer', from);
+    this._changed();
+  }
+  /** Host: open a cache. The first time is the big prize; after that it refills with less. */
+  _plunder(id, from) {
+    const s = this.state.s, D = SECRET_BY_ID[id], site = this.world.secrets.byId[id];
+    if (!D || !site) return;
+    if (!this.cacheFull(id)) { this.tell(from, 'Empty. Somebody has been here recently - give it a few days.', 'info'); return; }
+    const first = s.caches[id] === undefined;
+    s.caches[id] = s.day;
+    if (!s.secrets[id]) this._discover(id, from);
+    const at = site.cache.clone().add(new THREE.Vector3(0, 0.4, 0));
+    const drop = (sp, kg, cm, dx = 0) => this.loot.spawn({ sp, kg, cm, pos: at.clone().add(new THREE.Vector3(dx, 0, 0)), vel: new THREE.Vector3(dx, 2.2, 0), flop: 0 });
+    let coins = 0, text = '';
+    if (!first) {
+      coins = 150 + Math.floor(Math.random() * 350);
+      if (Math.random() < 0.4) drop(['coinpouch', 'oldkey', 'oldmap', 'journalpage'][Math.floor(Math.random() * 4)], 0.5, 15);
+      text = `Somebody has been topping it up. ${coins} coins.`;
+    } else if (id === 'grotto') {
+      coins = 1800 + Math.floor(Math.random() * 900);
+      drop('oldmap', 0.1, 30, -0.4); drop('coinpouch', 0.6, 15, 0.4);
+      text = `The smugglers' takings: ${coins} coins, a purse, and one of their charts.`;
+    } else if (id === 'temple') {
+      coins = 2500;
+      drop('artifact', 2.5, 25, -0.3); drop('journalpage', 0.05, 20, 0.3);
+      this.award('relic', from);
+      text = 'The relic comes away in your hands, warm. An idol and a page float up out of the altar. The offering bowl held 2500 coins.';
+    } else if (id === 'promise') {
+      coins = 1800;
+      drop('journalpage', 0.05, 20, -0.3); drop('oldkey', 0.3, 12, 0.3);
+      text = "Sarah Moore's sea chest: 1800 coins, her key, and the last page of her log.";
+    } else if (id === 'castaway') {
+      this.loot.spawn({ sp: 'strongbox', kg: 22, cm: 70, pos: at.clone().add(new THREE.Vector3(0, 0.3, 0)), vel: new THREE.Vector3(0, 3, 0), flop: 0 });
+      text = 'Two feet down, the shovel hits iron. A strongbox, chained shut. Open it (E).';
+    }
+    if (coins) this.state.earn(coins, 'cache');
+    this.fx.coins(at.x, at.y, at.z, coins ? 40 : 10); this.fx.confetti(at.x, at.y, at.z, 40);
+    this.tell(from, text, 'good');
+    this._changed();
+  }
+
   /** An older save: hand out what it has already earned. */
   _backfillTrophies() {
     const s = this.state.s, A = id => this.state.award(id);
@@ -872,7 +937,7 @@ export class Game {
     this._keys(blocked);
     P.update(dt, I, blocked);
     // hands
-    const fishingActive = P.tool === 'rod' && !P.held && P.mode !== 'drive' && P.mode !== 'mount' && P.mode !== 'down' && P.mode !== 'swim';
+    const fishingActive = P.tool === 'rod' && !P.held && !P.inHold && P.mode !== 'drive' && P.mode !== 'mount' && P.mode !== 'down' && P.mode !== 'swim';
     if (!fishingActive && this.fishing.active && this.fishing.state !== 'fight') this.fishing.cancel(true);
     if (P.mode === 'swim' && this.fishing.state === 'fight') this.fishing.cancel();
     this.fishing.update(dt, I, blocked || P.stunT > 0, fishingActive && P.stunT <= 0);
@@ -928,6 +993,17 @@ export class Game {
     // clues nearby
     this.clueT -= dt;
     if (this.clueT <= 0) { this.clueT = 1; this._checkZoneClues(); }
+    // the hidden places: found by going there, and what is left in each cache
+    this.secretT = (this.secretT || 0) - dt;
+    if (this.secretT <= 0) {
+      this.secretT = 0.5;
+      const SS = this.state.s.secrets || {};
+      for (const D of SECRETS) {
+        if (SS[D.id] || this._secretAsked?.[D.id] > this.world.time) continue;
+        if (Math.hypot(P.pos.x - D.x, P.pos.z - D.z) < D.r) { (this._secretAsked = this._secretAsked || {})[D.id] = this.world.time + 3; this.act({ t: 'discover', id: D.id }); }
+      }
+      this.world.secrets.sync(id => this.cacheFull(id));
+    }
 
     // camera
     P.applyCamera(this.camera);
@@ -946,7 +1022,7 @@ export class Game {
     const edge = clamp((Math.max(Math.abs(P.pos.x), Math.abs(P.pos.z)) - 1150) / 150, 0, 1);
     const mist = mistAt(P.pos.x, P.pos.z);
     this.mist = mist;
-    const env = { tod: this.tod, storm: this.world.storm, dark: Math.max(reg.black * 0.95, this.beasts.dark), frost: reg.frost, underwater: P.underwater, lights, edge, mist };
+    const env = { tod: this.tod, storm: this.world.storm, dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0), frost: reg.frost, underwater: P.underwater, lights, edge, mist };
     // the first time anyone reaches Vigil's End
     if (mist > 0.93 && !this.state.s.flags.vigil && this.isHost) {
       this.state.s.flags.vigil = this.state.s.day;
@@ -954,6 +1030,13 @@ export class Game {
       this._everyone({ t: 'banner', title: "VIGIL'S END", sub: 'The last island before the edge of the sea. Six old fishermen, waiting for something.', icon: 'light' });
     }
     this.world.extraLights = this.boats.filter(b => b.lampOn).map(b => b.lampSrc);
+    // the hold lanterns are real light while you are down there
+    if (P.inHold && P.boat?.hull.hold) {
+      const B = P.boat, Hd = B.hull.hold;
+      B._holdLight = B._holdLight || { pos: new THREE.Vector3(), color: 0xffc070, intensity: 1.5, dist: 9, flicker: true };
+      B.toWorld(B._holdLight.pos.set(0, B.deck - 0.5, clamp(P.local.z, Hd.z0 + 1, Hd.z1 - 1)));
+      this.world.extraLights.push(B._holdLight);
+    }
     const night = this._night();
     this.world.update(dt, this.camera.position, P.pos, env, night);
     this.world.darkAt = (x, z) => this.world.weights(x, z).black;
@@ -1114,7 +1197,7 @@ export class Game {
       }
       const it = P.held ? this.loot.get(P.held) : null;
       if (it) {
-        if (b && Math.hypot(P.local.x - b.hull.cooler[0], P.local.z - b.hull.cooler[2]) < 1.7) opt.push({ label: 'Put it in the cooler', run: () => this.act({ t: 'cooler', id: it.id }) });
+        if (b && !P.inHold && Math.hypot(P.local.x - b.hull.cooler[0], P.local.z - b.hull.cooler[2]) < 1.7) opt.push({ label: 'Put it in the cooler', run: () => this.act({ t: 'cooler', id: it.id }) });
         const slot = this.cabin.nearestSlot(look, 1.6);
         if (slot !== null && P.pos.distanceTo(this.world.settlement.anchors.cabinInside) < 5) opt.push({ label: 'Mount it on the wall', run: () => this.act({ t: 'mount', id: it.id, slot }) });
         const yard = this.world.settlement.cabin.yard.find(y => y.pos.distanceTo(P.pos) < 3);
@@ -1129,8 +1212,15 @@ export class Game {
       // traps
       const tr = this.tools.nearestTrap(P.pos, 3.6);
       if (tr) opt.push({ label: this.tools.trapReady(tr) ? 'Haul in the trap' : 'Haul in the trap (still empty)', run: () => this.act({ t: 'trapHaul', id: tr.id }) });
+      // the hatch: down into the hold, and back up the ladder
+      if (b && b.hull.hold) {
+        const Hd = b.hull.hold, L = P.local, [hx, hz] = Hd.hatch;
+        const near = Math.abs(L.x - hx) < Hd.hatchHW + 0.8 && Math.abs(L.z - hz) < Hd.hatchHD + 0.8;
+        if (near && !P.inHold) opt.push({ label: 'Climb down into the hold', icon: 'door', run: () => { P.inHold = true; P.local.set(hx, Hd.floor, hz - 0.4); P.vel.set(0, 0, 0); this.audio.step(true); this.fishing.cancel(true); } });
+        if (near && P.inHold) opt.push({ label: 'Climb up to the deck', icon: 'door', run: () => { P.inHold = false; P.local.set(hx, b.deck, hz + Hd.hatchHD + 0.5); P.vel.set(0, 0, 0); this.audio.step(true); } });
+      }
       // boat stations
-      if (b) {
+      if (b && !P.inHold) {
         const L = P.local;
         if (Math.hypot(L.x - b.hull.helm[0], L.z - b.hull.helm[2]) < 1.5) opt.push({ label: b.driver && b.driver !== P.id ? 'Someone else is steering' : 'Take the helm', run: () => { if (!b.driver || b.driver === P.id) { this.act({ t: 'helm', boat: b.id, on: true }); P.mode = 'drive'; this.fishing.cancel(true); } } });
         if (b.parts.mount && Math.hypot(L.x - b.hull.mount[0], L.z - b.hull.mount[2]) < 1.6) opt.push({ label: 'Man the harpoon gun', run: () => { P.mode = 'mount'; this.fishing.cancel(true); } });
@@ -1159,6 +1249,11 @@ export class Game {
         if (C.zone || s.clues[k]) continue;
         if (C.pos.distanceTo(P.pos) < C.r + 1.5) opt.push({ label: 'Inspect: ' + C.label, icon: 'eye', run: () => this.foundClue(k, P.id) });
       }
+    }
+    // a hidden place's cache - on a ledge, in the sand, or on the sea floor while you swim
+    if (P.mode !== 'drive' && P.mode !== 'mount') {
+      const cs = this.world.secrets.cacheNear(P.pos) || this.world.secrets.cacheNear(look);
+      if (cs) opt.unshift({ label: cs.D.cache + (this.cacheFull(cs.id) ? '' : ' (empty for now)'), icon: cs.D.icon, run: () => { this.act({ t: 'plunder', id: cs.id }); this.vm.play('throw'); } });
     }
     const o = opt[0];
     UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : null);
@@ -1313,6 +1408,13 @@ export class Game {
       { id: 'black', name: 'The Blackwater', water: [-600, 760] },
       { id: 'vigil', name: "Vigil's End", at: () => this._inst.world.settlement.anchors.vigilLanding },
       { id: 'vigilsea', name: "Vigil's End - the rock field (boat)", water: [860, 850] },
+      { id: 'grotto', name: "Smuggler's Grotto - inside (boat)", water: () => this._inst.world.settlement.anchors.grottoWater, heading: Math.atan2(-Math.cos(GROTTO.door), -Math.sin(GROTTO.door)) },
+      { id: 'grottoLedge', name: "Smuggler's Grotto - the ledge", at: () => this._inst.world.settlement.anchors.grottoLedge },
+      { id: 'temple', name: 'Drowned Temple - above it (boat)', water: () => this._inst.world.settlement.anchors.templeWater },
+      { id: 'templeDive', name: 'Drowned Temple - on the altar (dive)', dive: () => this._inst.world.settlement.anchors.templeFloor },
+      { id: 'promise', name: 'Bright Promise wreck - above it (boat)', water: () => this._inst.world.settlement.anchors.promiseWater },
+      { id: 'promiseDive', name: 'Bright Promise wreck - the sea chest (dive)', dive: () => this._inst.world.settlement.anchors.promiseFloor },
+      { id: 'castaway', name: 'Castaway Key', at: () => this._inst.world.settlement.anchors.castaway },
     ];
   }
   /** Put yourself somewhere; water spots bring your boat along. */
@@ -1321,9 +1423,13 @@ export class Game {
     if (!T) return;
     const P = this.player, b = this.boats[0];
     this.fishing.cancel(true);
-    if (T.water) {
-      const [x, z] = T.water;
-      if (this.isHost && b) { b.pos.set(x, 0, z); b.vel.set(0, 0); b.docked = false; b.stolen = false; b.autopilot = null; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); }
+    if (T.dive) {
+      const p = T.dive();
+      P.place(p.clone(), P.yaw); P.mode = 'swim'; P.breath = P.maxBreath;
+    } else if (T.water) {
+      const w = typeof T.water === 'function' ? T.water() : null;
+      const [x, z] = w ? [w.x, w.z] : T.water;
+      if (this.isHost && b) { b.pos.set(x, 0, z); b.vel.set(0, 0); if (T.heading !== undefined) { b.heading = T.heading; b.yawRate = 0; } b.docked = false; b.stolen = false; b.autopilot = null; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); }
       else P.place(new THREE.Vector3(x, 0, z), P.yaw);
     } else { const p = T.at(); if (p) P.place(p.clone().add(new THREE.Vector3(0, 0.1, 0)), P.yaw); }
     this.world.prebuild(P.pos.x, P.pos.z);
@@ -1361,6 +1467,18 @@ export class Game {
       case 'tools': for (const T of TOOLS) s.tools[T.id] = true; for (const g in GEAR_BY_ID) s.gear[g] = true; break;
       case 'tod': this.tod = c.v; break;
       case 'event': this.events.start(c.id, P.pos); break;
+      // the ship
+      case 'giveHull': if (HULL_BY_ID[c.id]) { if (!s.hulls.includes(c.id)) s.hulls.push(c.id); s.boat.hull = c.id; this._boatChanged(); } break;
+      case 'breakPart': if (b) { if (c.id === 'all') for (const k of ['rail', 'rail', 'wheel', 'engine', 'mount']) b.breakSomething(k); else b.breakSomething(c.id); } break;
+      case 'hole': if (b) b.addHole(0.6); break;
+      case 'bigHole': if (b) b.addHole(1.2); break;
+      case 'flood': if (b) b.water = clamp(b.water + (c.id ? +c.id : 0.3), 0, 0.95); break;
+      case 'fire': if (b) b.ignite((Math.random() - 0.5) * b.hull.hw, (Math.random() - 0.5) * b.hull.hl); break;
+      case 'repairAll': if (b) { b.leaks = []; b.breaks = []; b.fires = []; b.water = 0; b.hp = b.stats.hp; } break;
+      // the hidden places
+      case 'secretsAll': for (const D of SECRETS) this._discover(D.id, P.id); break;
+      case 'secretsReset': s.secrets = {}; s.caches = {}; this._changed(); break;
+      case 'refill': s.caches = {}; this._changed(); break;
     }
     this._saveDirty = true;
   }
@@ -1404,6 +1522,7 @@ export class Game {
       this._everyone({ t: 'radio', text: `Radio: Marge here. Towed your boat home. That will be ${fee} coins, thank you very much.` });
     });
     Bus.on('boat:fire', () => { if (this.isHost) this.state.s.stats.fires++; });
+    Bus.on('boat:break', ({ boat, b }) => { if (this.player.boat === boat) this.ui.toast({ rail: 'A section of rail just snapped - careful near the edge!', wheel: 'The wheel is jammed - she will barely turn. Hammer it!', engine: 'The engine is smashed - half power. Hammer it!', mount: 'The harpoon gun is jammed!' }[b.kind], 'bad'); });
     Bus.on('boat:leak', ({ boat }) => { if (this.player.boat === boat) this.ui.toast('The hull cracked - a leak! Use the hammer on it.', 'bad'); });
     Bus.on('boat:crash', ({ boat, force }) => {
       this.audio.crash();
@@ -1466,6 +1585,7 @@ export class Game {
       case 'toast': this.ui.toast(e.text, e.kind); break;
       case 'radio': this.ui.radio(e.text); break;
       case 'banner': this.ui.banner(e.title, e.sub, e.icon); break;
+      case 'secret': { const D = SECRET_BY_ID[e.id]; if (D) { this.ui.banner(D.name.toUpperCase(), D.found, D.icon, 6); this.audio.eventSting('zone'); this.audio.fanfare(2); } break; }
       case 'card': this._showCard(e.card); break;
       case 'knock': this.player.knock(new THREE.Vector3(...e.d), e.f, e.why); this.addShake(0.4); break;
       case 'hurt': this.player.hurt(e.n, e.why); this.ui.hurt(); break;
@@ -1621,7 +1741,12 @@ export class Game {
         else if (cmd === 'moneyAdd' || cmd === 'moneySet') this.act({ t: 'admin', cmd: 'money', set: cmd === 'moneySet', n: +(document.getElementById('admMoney')?.value || 0) });
         else if (cmd === 'tod') send({ v: +a });
         else if (cmd === 'event') send({ id: a });
-        else send({});
+        else if (cmd === 'hold') {
+          const P = this.player, B = P.boat;
+          if (!B || !B.hull.hold) this.ui.toast('Only the Wayfarer has a hold. Give yourself one first, and be on board.', 'warn');
+          else { const [hx, hz] = B.hull.hold.hatch; P.inHold = true; P.local.set(hx, B.hull.hold.floor, hz - 0.4); P.vel.set(0, 0, 0); P.mode = 'walk'; this.fishing.cancel(true); }
+        }
+        else send(a !== undefined ? { id: a } : {});
         break;
       }
       case 'look': this.uiSetting('look', +arg); break;

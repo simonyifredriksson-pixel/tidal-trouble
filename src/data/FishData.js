@@ -238,6 +238,23 @@ export const FISH = [
     blurb: 'Lives far below and breathes out the bubbles you see rising. Fish right where they break.' },
   { id: 'chest', name: 'Treasure Chest', rarity: 'rare', where: ['tropic', 'open', 'black', 'home'], water: 'sea', time: 'any', bait: { magnetic: 1.6, mystery: 0.7 }, kg: [10, 25], cm: [60, 90], value: 0, beh: 'chest', junk: 'chest',
     fight: { power: 1.3, stamina: 1.2, erratic: 0.1, jump: 0 }, art: A({}), blurb: 'Heavy, locked and dripping. Probably a real one. Probably.' },
+
+  /* ---------------- the hidden places: only where nobody tells you to look ---------------- */
+  { id: 'cavefin', name: 'Blind Cavefin', rarity: 'uncommon', where: 'site', site: 'grotto', water: 'sea', time: 'any', bait: { worm: 1, pieces: 1.1, glow: 1.4 }, kg: [0.6, 3], cm: [25, 50], value: 260,
+    fight: { power: 1.0, stamina: 1.0, erratic: 1.0, jump: 0 }, art: A({ h: 0.24, w: 0.1, back: 0xd8d0d8, belly: 0xf8f0f4, fin: 0xe8c8d0, tail: 'fork', extras: ['ghost'] }),
+    blurb: 'Pale pink and eyeless. It has lived so long in the dark of the grotto that it never grew eyes.' },
+  { id: 'crystaleel', name: 'Crystal Eel', rarity: 'epic', where: 'site', site: 'grotto', water: 'sea', time: 'any', bait: { glow: 1.8, mystery: 1, pieces: 0.5 }, kg: [3, 12], cm: [90, 190], value: 2600, beh: 'eel',
+    fight: { power: 1.8, stamina: 1.7, erratic: 1.2, jump: 0 }, art: A({ h: 0.08, w: 0.07, back: 0x6ad8f0, belly: 0xd8f8ff, fin: 0x9ae8ff, tail: 'eel', pat: 'lights', patCol: 0xffffff, extras: ['glow'] }),
+    blurb: 'Grows little crystals along its back, the same ones that light the grotto walls. It still bites like an eel - wear gloves.' },
+  { id: 'templekoi', name: 'Temple Koi', rarity: 'rare', where: 'site', site: 'temple', water: 'sea', time: 'any', bait: { worm: 0.8, pieces: 1, mystery: 1.4 }, kg: [4, 16], cm: [55, 95], value: 1300,
+    fight: { power: 1.5, stamina: 1.6, erratic: 0.6, jump: 0.2 }, art: A({ h: 0.3, w: 0.14, back: 0xe8a030, belly: 0xfff0d0, fin: 0xf0c060, pat: 'spots', patCol: 0xf8f8f0, tail: 'fork', extras: ['whiskers'] }),
+    blurb: 'Gold and white, like the ones carved on the temple columns. Someone kept these once, long before the sea came in.' },
+  { id: 'hullgrouper', name: 'Hullback Grouper', rarity: 'rare', where: 'site', site: 'promise', water: 'sea', time: 'any', bait: { pieces: 1.4, worm: 0.6, magnetic: 0.5 }, kg: [15, 60], cm: [80, 160], value: 900,
+    fight: { power: 2.2, stamina: 2.2, erratic: 0.3, jump: 0 }, art: A({ h: 0.34, w: 0.2, back: 0x5a4a3a, belly: 0xc8b898, fin: 0x4a3a2a, pat: 'bars', patCol: 0x3a2a1a, mouth: 1.8, head: 1.4, tail: 'round', extras: ['scar'] }),
+    blurb: 'Lives inside the wreck of the Bright Promise and will not leave it. Built like a door.' },
+  { id: 'sandskipper', name: 'Castaway Skipper', rarity: 'uncommon', where: 'site', site: 'castaway', water: 'sea', time: 'any', bait: { worm: 1.3, pieces: 0.8 }, kg: [0.4, 2], cm: [20, 40], value: 220,
+    fight: { power: 0.8, stamina: 0.7, erratic: 1.4, jump: 0.6 }, art: A({ h: 0.2, w: 0.1, back: 0xd8c090, belly: 0xfff8e8, fin: 0xc8a060, pat: 'spots', patCol: 0xa88040, tail: 'fork' }),
+    blurb: 'Skips across the water on its fins. Whoever was stranded on that little island lived on these.' },
 ];
 
 /* Giants: world-event fish, only hookable while the event is running. */

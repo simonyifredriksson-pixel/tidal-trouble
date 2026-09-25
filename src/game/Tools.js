@@ -11,16 +11,16 @@
      auger    drills a hole in the ice for ice fishing
      holders  extra lines on the boat; a bell rings when one bites */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder } from '../art/Geo.js?v=1790356418';
-import { MAT } from '../art/Materials.js?v=1790356418';
-import { buildRod, buildBobber } from '../art/RodArt.js?v=1790356418';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790356418';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790356418';
-import { zoneAt } from '../world/MapData.js?v=1790356418';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790356418';
-import { clamp, damp, uid } from '../core/Util.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder } from '../art/Geo.js?v=1790358905';
+import { MAT } from '../art/Materials.js?v=1790358905';
+import { buildRod, buildBobber } from '../art/RodArt.js?v=1790358905';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790358905';
+import { pickSpecies, rollCatch } from './Fishing.js?v=1790358905';
+import { zoneAt } from '../world/MapData.js?v=1790358905';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
+import { clamp, damp, uid } from '../core/Util.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
@@ -179,6 +179,7 @@ export class Tools {
     if (!M) { P.mode = 'walk'; return; }
     M.yaw.rotation.y = P.yaw - b.heading + Math.PI;
     M.pitch.rotation.x = -P.pitch;
+    if (!blocked && input.click(0) && this.cool <= 0 && b.broken('mount')) { G.ui.toast('The harpoon gun is jammed. Fix it with the hammer.', 'bad'); this.cool = 1; return; }
     if (!blocked && input.click(0) && this.cool <= 0) {
       const muzzle = new THREE.Vector3();
       M.pitch.getWorldPosition(muzzle);
@@ -288,7 +289,10 @@ export class Tools {
     b.leaks.forEach((l, i) => { const d = Math.hypot(l.x - L.x, l.z - L.z); if (d < bd) { bd = d; leak = i; } });
     this.hamT = (this.hamT || 0) + dt;
     if (this.hamT > 0.2) { this.hamT = 0; G.audio.hammer(); const w = b.toWorld(_v.set(L.x, b.deck + 0.2, L.z)); G.fx.sparks(w.x, w.y, w.z, 3, 0xd8b890); }
+    let brk = null, bb = 2.2;
+    b.breaks.forEach((B, i) => { const d = Math.hypot(B.x - L.x, B.z - L.z); if (d < bb) { bb = d; brk = i; } });
     if (leak !== null) G.act({ t: 'fix', leak, dt });
+    else if (brk !== null) G.act({ t: 'fixBreak', i: brk, dt });
     else if (b.hp < b.stats.hp) G.act({ t: 'patch', dt });
   }
   /* The bucket is a real bucket. Empty: click to scoop - from the flooded

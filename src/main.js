@@ -10,17 +10,17 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790356418';
-import { Input } from './core/Input.js?v=1790356418';
-import { Audio } from './core/Audio.js?v=1790356418';
-import { World } from './world/World.js?v=1790356418';
-import { Game } from './game/Game.js?v=1790356418';
-import { UI } from './ui/UI.js?v=1790356418';
-import { State } from './game/State.js?v=1790356418';
-import { Net } from './net/Net.js?v=1790356418';
-import { Remote } from './game/Remote.js?v=1790356418';
-import { heightAt } from './world/Terrain.js?v=1790356418';
-import { U } from './art/Materials.js?v=1790356418';
+import * as THREE from '../lib/three.module.js?v=1790358905';
+import { Input } from './core/Input.js?v=1790358905';
+import { Audio } from './core/Audio.js?v=1790358905';
+import { World } from './world/World.js?v=1790358905';
+import { Game } from './game/Game.js?v=1790358905';
+import { UI } from './ui/UI.js?v=1790358905';
+import { State } from './game/State.js?v=1790358905';
+import { Net } from './net/Net.js?v=1790358905';
+import { Remote } from './game/Remote.js?v=1790358905';
+import { heightAt } from './world/Terrain.js?v=1790358905';
+import { U } from './art/Materials.js?v=1790358905';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -139,7 +139,7 @@ function startGame(mode, lock = true) {
   if (Q.has('stage')) stage(Q.get('stage'));
   if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790356418').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790358905').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -295,7 +295,7 @@ function stage(name) {
   const look = (from, to, pitch = 0) => { P.place(from.clone(), Math.atan2(-(to.x - from.x), -(to.z - from.z))); P.pitch = pitch; };
   const C = A.cabinInside;
   if (name === 'hut' || name === 'hut2' || name === 'hutbare') {
-    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790356418').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
+    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790358905').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
     G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'oath'; G._rodChanged();
     G.tod = 0.5;
     if (name === 'hut2') look(C.clone().add(new THREE.Vector3(1.9, 0, -1.2)), C.clone().add(new THREE.Vector3(-3.4, 0.9, 1.6)), -0.12);
@@ -311,6 +311,23 @@ function stage(name) {
     look(pim.pos.clone().add(new THREE.Vector3(-3.9, 0, 0.6)), pim.pos.clone().add(new THREE.Vector3(0, 1.3, 0)), 0);
     setTimeout(() => { G._talk(pim); if (Q.get('opt') === 'rods') G._dRods(pim); if (Q.get('opt') === 'sell') G._dSellAll(pim); }, 500);
   }
+  // the big ship, its hold and its damage; the hidden places
+  const yawTo = (from, to) => Math.atan2(-(to.x - from.x), -(to.z - from.z));
+  if (name === 'wayfarer' || name === 'hold' || name === 'wreckage') {
+    G.tod = 0.45; G.state.s.boat.hull = 'wayfarer'; G._boatChanged();
+    b.pos.set(60, 0, 420); b.heading = 0.4; b.docked = false; b._updateMatrix(); world.prebuild(b.pos.x, b.pos.z);
+    const Hd = b.hull.hold;
+    if (name === 'wreckage') { b.addHole(1.1); b.addHole(0.7); b.breakSomething('rail'); b.breakSomething('engine'); b.water = 0.2; }
+    advance(1);
+    if (name === 'hold') { P.attach(b, new THREE.Vector3(Hd.hatch[0] - 0.5, Hd.floor, Hd.z1 - 0.8)); P.inHold = true; P.yaw = b.heading + Math.PI * 0 + 0.15; P.pitch = -0.12; }
+    else if (name === 'wreckage') { const R = b.breaks.find(x => x.kind === 'rail'); P.attach(b, new THREE.Vector3(-Math.sign(R.x) * 1.2, b.deck, R.z - 3.5)); const w = b.toWorld(new THREE.Vector3(R.x, b.deck, R.z)); P.yaw = yawTo(P.pos, w); P.pitch = -0.3; }
+    else { P.attach(b, new THREE.Vector3(0.6, b.deck, -8.4)); P.yaw = b.heading + Math.PI + 0.08; P.pitch = 0.18; }
+    advance(0.3);
+  }
+  if (name === 'grotto') { G.tod = 0.5; G.teleport('grotto'); advance(0.5); P.local.set(0.5, b.deck, 3); P.yaw = yawTo(P.pos, world.settlement.anchors.grottoLedge); P.pitch = 0.1; advance(0.2); }
+  if (name === 'grottoout') { G.tod = 0.45; const S = world.secrets, g = { x: 330, z: 470 }, d = world.settlement.anchors.grottoWater; const dx = d.x - g.x, dz = d.z - g.z, l = Math.hypot(dx, dz); b.pos.set(g.x + dx / l * 55, 0, g.z + dz / l * 55); b.docked = false; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); world.prebuild(b.pos.x, b.pos.z); advance(0.5); P.yaw = yawTo(P.pos, new THREE.Vector3(g.x, 4, g.z)); P.pitch = 0.08; void S; }
+  if (name === 'temple' || name === 'wreck') { G.tod = 0.5; G.teleport(name === 'temple' ? 'templeDive' : 'promiseDive'); const S = world.secrets.byId[name === 'temple' ? 'temple' : 'promise']; const c = S.cache; P.place(c.clone().add(new THREE.Vector3(7, 3, 7)), 0); P.mode = 'swim'; P.yaw = yawTo(P.pos, c); P.pitch = -0.25; advance(0.05); P.pos.copy(c.clone().add(new THREE.Vector3(7, 3, 7))); }
+  if (name === 'castaway') { G.tod = 0.4; const c = world.secrets.byId.castaway.cache; const from = new THREE.Vector3(430 + 9, 0, 650 + 9); from.y = heightAt(from.x, from.z); P.place(from, yawTo(from, new THREE.Vector3(430, 0, 650))); P.pitch = -0.12; void c; }
   if (name === 'vigil') { G.tod = 0.4; G.teleport('vigil'); look(P.pos.clone(), new THREE.Vector3(1015, 14, 1005), 0.12); }
   if (name === 'vigiltop') { G.tod = 0.42; const m = G.npcs.byId('mags'); look(m.pos.clone().add(new THREE.Vector3(-4, 0, -3)), m.pos.clone().add(new THREE.Vector3(0, 1, 0)), -0.05); }
   if (name === 'vigilsea' || name.startsWith('great:')) {

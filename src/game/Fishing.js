@@ -19,14 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790356418';
-import { zoneAt } from '../world/MapData.js?v=1790356418';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790356418';
-import { buildBobber } from '../art/RodArt.js?v=1790356418';
-import { fishMesh } from '../art/FishArt.js?v=1790356418';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790358905';
+import { zoneAt } from '../world/MapData.js?v=1790358905';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790358905';
+import { buildBobber } from '../art/RodArt.js?v=1790358905';
+import { fishMesh } from '../art/FishArt.js?v=1790358905';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -37,6 +37,7 @@ export function pickSpecies(ctx, r = Math.random) {
   for (const f of FISH) {
     if (f.where === 'meteor') { if (!ctx.meteor) continue; }
     else if (f.where === 'mystery') { if (!ctx.mystery) continue; }
+    else if (f.where === 'site') { if (ctx.site !== f.site) continue; }
     else if (f.where !== 'all' && !f.where.includes(ctx.region)) continue;
     if (f.zoneOnly !== undefined && (ctx.zone || 0) !== f.zoneOnly) continue;
     if (f.hotspot && ctx.hotspot !== f.hotspot) continue;
@@ -65,6 +66,9 @@ export function pickSpecies(ctx, r = Math.random) {
     if (ctx.hotspot && !f.hotspot && ['rare', 'epic', 'legendary'].includes(f.rarity)) w *= 2.2;
     if (ctx.hotspot === 'debris' && f.junk && f.junk !== 'chest') w *= 6;
     if (ctx.storm && f.weather === 'storm') w *= 8;
+    // a hidden place has its own fish, and the grotto keeps most of the others out
+    if (ctx.site && f.site === ctx.site) w *= 12;
+    else if (ctx.site === 'grotto' && !f.junk) w *= 0.3;
     if (ctx.storm && !f.weather && (f.rarity === 'rare' || f.rarity === 'epic')) w *= 1.4;
     // the farther out, the crazier it gets
     const z = ctx.zone || 0, zm = ZMIN[f.id] ?? 0;
@@ -143,6 +147,7 @@ export class Fishing {
       storm: ev.storm > 0.45 || (G.beasts?.stormy?.() ?? false),
       hotspot: G.ocean?.hotspotAt(p)?.kind || null,
       mystery: !!G.ocean?.mysteryAt(p),
+      site: G.world.secrets?.siteAt(p)?.id || null,
     };
   }
 

@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790356418';
-import { heightAt } from '../world/Terrain.js?v=1790356418';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790356418';
-import { Bus } from '../core/Bus.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790358905';
+import { heightAt } from '../world/Terrain.js?v=1790358905';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790358905';
+import { Bus } from '../core/Bus.js?v=1790358905';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -319,7 +319,7 @@ export async function runScripts(names, game) {
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790356418');
+        const { State } = await import('../game/State.js?v=1790358905');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();
@@ -329,7 +329,7 @@ export async function runScripts(names, game) {
         ok(S2.s.boatCargo.length >= 1, 'fish left on the deck survive (' + S2.s.boatCargo.length + ')');
         ok(!!S2.s.player, 'player position saved');
       }      if (name === 'beasts') {
-        const { BEASTS } = await import('../data/BeastData.js?v=1790356418');
+        const { BEASTS } = await import('../data/BeastData.js?v=1790358905');
         G.state.s.boat.hull = 'expedition'; G._boatChanged();
         const deep = [[-700, 700], [-950, 250], [60, 760], [860, 850]];
         for (const D of BEASTS) {
@@ -363,7 +363,7 @@ export async function runScripts(names, game) {
           ok(G.state.s.beasts[D.id] && G.state.s.trophies.got['beast:' + D.id], `  ... and landed: trophy earned, journal entry filled in`);
           void fishable;
         }
-        const J = await import('../data/JournalData.js?v=1790356418');
+        const J = await import('../data/JournalData.js?v=1790358905');
         ok(J.progress(G.state.s).per.beasts.got === 10, 'all ten are in the journal\'s Ocean Beasts section');
       }
       if (name === 'flood') {
@@ -391,12 +391,133 @@ export async function runScripts(names, game) {
         ok(b.water <= w3 + 0.001 && !G.tools.bucketFull, 'thrown over the rail, it is gone (' + w3.toFixed(3) + ' -> ' + b.water.toFixed(3) + ')');
         b.water = 0;
       }
+      if (name === 'ship') {
+        const prompt = () => { let t = ''; const o = G.ui.prompt.bind(G.ui); G.ui.prompt = h => { t = h || ''; o(h); }; step(2 / 30); G.ui.prompt = o; return t; };
+        const pressE = () => { I.fake('KeyE', true); step(1 / 30); I.fake('KeyE', false); step(2 / 30); };
+        const hull0 = G.state.s.boat.hull;
+        G._do({ t: 'admin', cmd: 'giveHull', id: 'wayfarer' }, P.id);
+        const H = b.hull, Hd = H.hold;
+        ok(H.id === 'wayfarer' && Hd && b.parts.holdFlood && b.parts.sails?.length >= 2, 'the Wayfarer: ' + (H.hl * 2).toFixed(0) + ' m long, two masts, a hold below deck');
+        b.pos.set(60, 0, 400); b.vel.set(0, 0); b.docked = false; b.leaks = []; b.breaks = []; b.water = 0; b.hp = b.stats.hp; b._updateMatrix();
+        P.attach(b, V(Hd.hatch[0], b.deck, Hd.hatch[1] + 0.9)); P.mode = 'walk'; step(0.3);
+        ok(prompt().includes('Climb down into the hold'), 'at the hatch: "Climb down into the hold"');
+        pressE(); step(1);
+        ok(P.inHold && P.boat === b && Math.abs(P.local.y - Hd.floor) < 0.15 && P.mode === 'walk' && !P.underwater, 'down the ladder: standing on the hold floor (y ' + P.local.y.toFixed(2) + ')');
+        // walk to the stern end of the hold: the walls keep you in
+        P.yaw = b.heading + Math.PI; I.fake('KeyW', true); step(4); I.fake('KeyW', false); step(0.3);
+        ok(P.inHold && P.local.z >= Hd.z0 && P.local.z < Hd.z1 && Math.abs(P.local.x) < Hd.hw && Math.abs(P.local.y - Hd.floor) < 0.15, 'walked to the end of the hold and stayed inside (z ' + P.local.z.toFixed(1) + ')');
+        ok(!G.fishing.active, 'no fishing through the deck from down here');
+        // a fish dropped down the hatch lands on the hold floor
+        const fish = G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(Hd.hatch[0], b.deck - 0.5, Hd.hatch[1])), vel: V(0, 0, 0), flop: 0 });
+        step(1.5);
+        ok(fish.boat === b && Math.abs(fish.local.y - Hd.floor) < 0.4, 'a fish dropped down the hatch ends up on the hold floor (y ' + (fish.local?.y ?? NaN).toFixed(2) + ')');
+        G.loot.remove(fish);
+        // the hold floods first, and deep enough it goes over your head
+        b.water = 0.4; step(0.4);
+        ok(b.parts.holdFlood.visible && !b.parts.flood.visible && !P.underwater, 'a little water: the hold fills, the deck stays dry, you are wading');
+        b.water = 0.745; step(0.4);
+        ok(P.underwater, 'a flooded hold: water over your head (' + b.holdWaterLocal().toFixed(2) + ' m)');
+        b.water = 0; P.breath = P.maxBreath; step(0.2);
+        // back up
+        P.local.set(Hd.hatch[0], Hd.floor, Hd.hatch[1] - 0.4); step(0.2);
+        ok(prompt().includes('Climb up to the deck'), 'at the ladder: "Climb up to the deck"');
+        pressE(); step(0.5);
+        ok(!P.inHold && Math.abs(P.local.y - b.deck) < 0.3, 'back on deck');
+        // breakage: engine, wheel, rail - and the hammer fixes them
+        b.breakSomething('engine'); b.breakSomething('wheel'); const R = b.breakSomething('rail');
+        step(0.3);
+        ok(b.broken('engine') && b.broken('wheel') && b.breakMeshes?.some(m => m.visible), 'engine, wheel and a rail broken, and you can see it');
+        ok(b.railGap(R.x, R.z) && !b.railGap(-R.x, R.z), 'a snapped rail leaves a gap on its side only');
+        // a shove that would not throw you over a rail throws you through the gap
+        const side = Math.sign(R.x), dir = V(Math.cos(b.heading), 0, -Math.sin(b.heading)).multiplyScalar(side);
+        const z2 = R.z > 0 ? R.z - 3 : R.z + 3;
+        P.attach(b, V(side * (b.halfWidth(z2) - 0.4), b.deck, z2)); P.mode = 'walk'; step(0.1);
+        G.knockPlayer(P, dir, 2.2, 'test'); step(1.6);
+        const safe = P.boat === b && !b.railGap(side, z2);
+        P.attach(b, V(side * (b.halfWidth(R.z) - 0.4), b.deck, R.z)); P.mode = 'walk'; step(0.1);
+        const atGap = b.railGap(P.local.x, P.local.z), lx0 = P.local.x.toFixed(2), hw0 = b.halfWidth(P.local.z).toFixed(2);
+        G.knockPlayer(P, dir, 2.2, 'test'); step(0.2);
+        ok(safe && P.boat !== b, 'the same shove: stays aboard at a whole rail, goes through the broken one (safe ' + safe + ', gap ' + atGap + ', x ' + lx0 + ' / ' + hw0 + ', aboard after: ' + (P.boat === b) + ')');
+        P.attach(b, V(0, b.deck, -H.hl + 1.2)); P.mode = 'walk'; P.tool = 'hammer'; G.vm.setTool('hammer'); step(0.3);
+        const n0 = b.breaks.length;
+        I.fakeBtn(0, true); step(4); I.fakeBtn(0, false); step(0.2);
+        ok(b.breaks.length < n0 && !b.broken('engine'), 'hammering at the stern fixes the engine (' + n0 + ' -> ' + b.breaks.length + ' broken)');
+        b.breaks = []; P.tool = 'rod'; G.vm.setTool('rod');
+        ok(G.ui.screen !== 'boatyard' && (await import('../data/BoatData.js?v=1790358905')).HULLS.some(h => h.id === 'wayfarer' && h.price > 30000), 'the Wayfarer is for sale at the boatyard');
+        G._do({ t: 'admin', cmd: 'giveHull', id: hull0 }, P.id);
+        P.attach(b, V(0, b.deck, 0));
+      }
+      if (name === 'secrets') {
+        const prompt = () => { let t = ''; const o = G.ui.prompt.bind(G.ui); G.ui.prompt = h => { t = h || ''; o(h); }; step(2 / 30); G.ui.prompt = o; return t; };
+        const pressE = () => { I.fake('KeyE', true); step(1 / 30); I.fake('KeyE', false); step(2 / 30); };
+        const { SECRETS } = await import('../data/SecretData.js?v=1790358905');
+        const { GROTTO } = await import('../world/Secrets.js?v=1790358905');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790358905');
+        const W = G.world.secrets, s = G.state.s;
+        s.secrets = {}; s.caches = {};
+        ok(W.sites.length === 4 && W.sites.every(x => x.cache), 'four hidden places, each with a cache: ' + SECRETS.map(D => D.name).join(', '));
+        // found by going there
+        let banner = ''; const ob = G.ui.banner.bind(G.ui); G.ui.banner = (t, ...r) => { banner = t; ob(t, ...r); };
+        G.teleport('castaway'); step(1.5);
+        ok(s.secrets.castaway && banner === 'CASTAWAY KEY', 'walking onto Castaway Key finds it (banner: ' + banner + ')');
+        ok(G.world.height(430, 650) > 2, 'Castaway Key is real ground, ' + G.world.height(430, 650).toFixed(1) + ' m high');
+        // dig
+        const cs = W.byId.castaway;
+        P.place(cs.cache.clone().setY(G.world.height(cs.cache.x, cs.cache.z) + 0.1).add(V(0.8, 0, 0)), 0); step(0.6);
+        ok(prompt().includes('Dig where the X is') && cs.full[0].visible, 'the X in the sand: "Dig where the X is"');
+        const n0 = G.loot.items.size; pressE(); step(0.8);
+        const box = [...G.loot.items.values()].find(it => it.sp === 'strongbox');
+        ok(box && G.loot.items.size > n0 && s.caches.castaway === s.day && !cs.full[0].visible, 'dug up a strongbox, the X is gone');
+        if (box) G.loot.remove(box);
+        ok(prompt().includes('(empty for now)'), 'dig again: empty for now');
+        // the grotto: a boat fits inside and the walls are solid
+        G.teleport('grotto'); step(0.5);
+        const gd = () => Math.hypot(b.pos.x - GROTTO.x, b.pos.z - GROTTO.z);
+        ok(W.inCave(P.pos) && gd() < GROTTO.ri && s.secrets.grotto, 'drove into the grotto (' + gd().toFixed(1) + ' m from the middle) and found it');
+        const back = GROTTO.door + Math.PI;
+        let maxD = 0;
+        step(5, () => { b.vel.set(Math.cos(back) * 7, Math.sin(back) * 7); maxD = Math.max(maxD, gd()); });
+        ok(maxD < GROTTO.ri + 1.5, 'rammed the back wall at full speed: the boat stays inside (max ' + maxD.toFixed(1) + ' m)');
+        b.vel.set(0, 0);
+        G.fishing.bpos.set(GROTTO.x, 0, GROTTO.z);
+        ok(G.fishing._ctx().site === 'grotto', 'a line cast in the grotto is in grotto water');
+        let cave = 0; for (let i = 0; i < 2000; i++) if (FISH_BY_ID[pickSpecies({ region: 'home', water: 'sea', bait: 'glow', zone: 1, site: 'grotto' }).id].site === 'grotto') cave++;
+        let out = 0; for (let i = 0; i < 2000; i++) if (FISH_BY_ID[pickSpecies({ region: 'home', water: 'sea', bait: 'glow', zone: 1 }).id].site) out++;
+        ok(cave > 300 && out === 0, 'cave fish bite in the grotto (' + cave + ' of 2000) and nowhere else (' + out + ')');
+        G.teleport('grottoLedge'); step(1.2);
+        ok(P.mode === 'walk' && Math.abs(P.pos.y - 1.3) < 0.35, 'standing on the smugglers\' ledge (y ' + P.pos.y.toFixed(2) + ')');
+        const m0 = s.money;
+        const gc = W.byId.grotto; P.place(gc.cache.clone().setY(1.35).add(V(0, 0, 0)).lerp(G.world.settlement.anchors.grottoLedge, 0.5), 0); step(0.4);
+        ok(prompt().includes("smugglers' cache"), 'at the chest: "' + prompt().replace(/<[^>]+>/g, '').trim() + '"');
+        pressE(); step(0.5);
+        ok(s.money > m0 + 1000, 'the smugglers\' takings: +' + (s.money - m0) + ' coins');
+        // the temple: swim down to the altar
+        G.teleport('templeDive'); I.fake('KeyQ', true); step(0.5);
+        ok(P.mode === 'swim' && P.underwater && s.secrets.temple, 'diving on the Drowned Temple, holding Q (' + P.pos.y.toFixed(1) + ' m)');
+        ok(prompt().includes('Take the relic'), 'underwater at the altar: "Take the relic from the altar"');
+        pressE(); I.fake('KeyQ', false); step(0.3);
+        const idol = [...G.loot.items.values()].find(it => it.sp === 'artifact');
+        const y0 = idol?.pos.y ?? 0; step(3);
+        ok(s.trophies.got.relic && idol && idol.pos.y > y0 + 1, 'the relic is yours (trophy), and the idol floats up to the surface (' + y0.toFixed(1) + ' -> ' + (idol?.pos.y ?? 0).toFixed(1) + ')');
+        for (const it of [...G.loot.items.values()]) if (['artifact', 'journalpage'].includes(it.sp)) G.loot.remove(it);
+        G.teleport('promiseDive'); I.fake('KeyQ', true); step(0.5);
+        ok(s.secrets.promise && prompt().includes('sea chest'), "the Bright Promise, and Sarah Moore's sea chest (" + P.pos.y.toFixed(1) + ' m)');
+        I.fake('KeyQ', false);
+        ok(s.trophies.got.explorer, 'all four found: "Off the Charts" trophy');
+        // they are on the map once found
+        G.ui.open('map'); G.ui.render(); step(0.1);
+        ok(!!document.querySelector('canvas.worldmap'), 'the map draws with the hidden places on it');
+        G.ui.close();
+        ok(G.cacheFull('castaway') === false && (s.day += 7, G.cacheFull('castaway')), 'caches refill after a few days');
+        s.day -= 7;
+        G.teleport('home'); step(0.5);
+      }
       if (name === 'ocean') {
         const O = G.ocean;
         b.pos.set(60, 0, 400); b._updateMatrix(); P.attach(b, V(0, b.deck, 0));
         O.hot = []; O.spawnT = 0; step(1);
         ok(O.hot.length > 0, 'the sea makes its own fishing spots: ' + O.hot.map(h => h.kind).join(', '));
-        const { pickSpecies } = await import('../game/Fishing.js?v=1790356418');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790358905');
         const hits = k => { let n = 0; for (let i = 0; i < 2000; i++) if (FISH_BY_ID[pickSpecies({ region: 'home', water: 'sea', bait: k === 'glow' ? 'glow' : 'pieces', night: k === 'glow', zone: 1, hotspot: k }).id].hotspot === k) n++; return n; };
         ok(hits('birds') > 50 && hits('glow') > 20 && hits('bubbles') > 20, 'each hotspot has its own fish (sprats ' + hits('birds') + ', jellies ' + hits('glow') + ', groupers ' + hits('bubbles') + ' in 2000 bites)');
         let storms = 0; for (let i = 0; i < 3000; i++) if (FISH_BY_ID[pickSpecies({ region: 'open', water: 'sea', bait: 'pieces', zone: 2, storm: true }).id].weather) storms++;
@@ -452,9 +573,9 @@ export async function runScripts(names, game) {
         ok(good === spots.length + 1, 'every fish landed from shore or pier stays on dry land (' + good + '/' + (spots.length + 1) + ')');
       }
       if (name === 'journal') {
-        const J = await import('../data/JournalData.js?v=1790356418');
-        const { pickSpecies } = await import('../game/Fishing.js?v=1790356418');
-        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790356418');
+        const J = await import('../data/JournalData.js?v=1790358905');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790358905');
+        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790358905');
         const pr = J.progress(G.state.s);
         ok(J.SECTIONS.length >= 8 && pr.of > 60, 'the field guide has ' + J.SECTIONS.length + ' places and ' + pr.of + ' entries: ' + J.SECTIONS.map(S => S.name + ' ' + pr.per[S.id].of).join(', '));
         // every fish listed under a place can really be caught there
@@ -467,7 +588,7 @@ export async function runScripts(names, game) {
             if (f.rarity === 'giant') continue;       // giants come with their world event
             const bait = Object.entries(f.bait).sort((a, b) => b[1] - a[1])[0][0];
             const region = S.id === 'kraken' ? f.where[0] : S.id;
-            const ctx = { region, water: f.water === 'any' ? 'sea' : f.water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false, hotspot: f.hotspot || null, storm: f.weather === 'storm' };
+            const ctx = { region, water: f.water === 'any' ? 'sea' : f.water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false, hotspot: f.hotspot || null, storm: f.weather === 'storm', site: f.site || null };
             let hit = false; for (let i = 0; i < 4000 && !hit; i++) if (pickSpecies(ctx).id === f.id) hit = true;
             if (!hit) bad.push(S.id + ':' + f.id);
           }
@@ -582,7 +703,7 @@ export async function runScripts(names, game) {
         ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:marlin', 'looking at a trophy tells you what it is');
       }
       if (name === 'great') {
-        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790356418');
+        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790358905');
         const c = {}; for (let i = 0; i < 20000; i++) { const g = rollGreat(); c[g.id] = (c[g.id] || 0) + 1; }
         const pc = k => (c[k] || 0) / 200;
         ok(Math.abs(pc('graveback') - 60) < 2 && Math.abs(pc('ninefold') - 30) < 2 && Math.abs(pc('hushwing') - 10) < 1.5, `spawn odds over 20000 rolls: Graveback ${pc('graveback').toFixed(1)}%, Ninefold ${pc('ninefold').toFixed(1)}%, Hushwing ${pc('hushwing').toFixed(1)}%`);
@@ -630,7 +751,7 @@ export async function runScripts(names, game) {
       }
       if (name === 'kraken') {
         G.teleport('offshore'); step(0.5);
-        const { zoneAt } = await import('../world/MapData.js?v=1790356418');
+        const { zoneAt } = await import('../world/MapData.js?v=1790358905');
         ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
         const K = G.great.startKraken(b);
         ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
@@ -684,6 +805,21 @@ export async function runScripts(names, game) {
         document.querySelector('#screens [data-arg="toggle:autoCatch"]').click();
         const m0 = G.state.s.money; document.getElementById('admMoney').value = 777; document.querySelector('#screens [data-arg="moneyAdd"]').click();
         ok(G.state.s.money === m0 + 777, 'money added: +777');
+        // the ship controls
+        const click = arg => { const el = document.querySelector(`#screens [data-arg="${arg}"]`); if (el) el.click(); step(0.1); G.ui.render(); return !!el; };
+        const hull0 = G.state.s.boat.hull;
+        ok(click('giveHull:wayfarer') && b.hull.id === 'wayfarer' && !!b.hull.hold, 'Give hull: the Wayfarer, with a hold');
+        b.pos.set(60, 0, 400); b.docked = false; b._updateMatrix(); P.attach(b, V(0, b.deck, 0));
+        ok(click('hole') && click('bigHole') && b.leaks.length >= 2, 'Small hole + big hole: ' + b.leaks.length + ' holes in the hull');
+        ok(click('breakPart:rail') && click('breakPart:engine') && b.broken('rail') && b.broken('engine'), 'Break the rail and the engine: ' + b.breaks.map(x => x.kind).join(', '));
+        ok(click('flood:0.3') && b.water >= 0.29, 'Flood +30%: water ' + Math.round(b.water * 100) + '%');
+        ok(click('hold') && P.inHold, 'Put me in the hold');
+        ok(document.querySelector('#screens .admin')?.textContent.includes('broken: rail, engine'), 'the panel shows what is broken');
+        ok(click('repairAll') && !b.leaks.length && !b.breaks.length && b.water === 0, 'Repair everything');
+        ok(click('secretsAll') && Object.keys(G.state.s.secrets).length === 4, 'Reveal all hidden places');
+        ok(click('secretsReset') && !Object.keys(G.state.s.secrets).length, 'Forget them all');
+        ok(click('tp:castaway') && Math.hypot(P.pos.x - 430, P.pos.z - 650) < 20, 'Teleport: Castaway Key');
+        ok(click('giveHull:' + hull0), 'back to the ' + hull0);
         for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, true);
         ok(G.ui.screen !== 'admin', 'the same combination closes it');
         for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, false);
@@ -702,7 +838,7 @@ export async function runScripts(names, game) {
         for (const n of fisher) { G._talk(n); step(0.05); }
         G.ui.closeTalk();
         ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
-        const { waveAmp } = await import('../world/MapData.js?v=1790356418');
+        const { waveAmp } = await import('../world/MapData.js?v=1790358905');
         ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
       }
       if (name === 'chat') {
@@ -730,7 +866,7 @@ export async function runScripts(names, game) {
         ok(!C.logEl.querySelector('img,b'), 'names and text from the network are never HTML');
         G.ui.open('pause'); tap(); ok(!C.open, 'the chat will not open over a menu'); G.ui.close();
         // voice maths: near is loud, far is silent, the walkie ignores distance
-        const { Voice } = await import('../net/Voice.js?v=1790356418');
+        const { Voice } = await import('../net/Voice.js?v=1790358905');
         ok(Voice.proximity(2) === 1 && Voice.proximity(17.5) > 0.2 && Voice.proximity(17.5) < 0.3 && Voice.proximity(40) === 0, 'proximity voice: 2 m full, 17 m ' + Voice.proximity(17.5).toFixed(2) + ', 40 m silent');
         const fakeR = { pos: P.pos.clone().add(V(200, 0, 0)), walkie: false, name: 'Far', color: '#fff' };
         G.remotes.set('fake', fakeR);

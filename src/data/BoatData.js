@@ -36,6 +36,16 @@ export const HULLS = [
     mount: [0, 0, 7.4], lights: [[0, 4.6, 2.6], [0, 1.6, 7.9], [-2.6, 3, -1], [2.6, 3, -1], [-2.6, 3, -6], [2.6, 3, -6]],
     cabin: { z: 2.8, hw: 2.0, hl: 1.9, h: 2.6, open: false }, crane: [2.1, 0, -2.2],
     blurb: 'Absolutely ridiculous. Twin engines, floodlights, a harpoon cannon and a trophy shelf in the galley.' },
+  { id: 'wayfarer', name: 'The Wayfarer', tier: 5, price: 60000,
+    hw: 3.3, hl: 9.5, deck: 2.2, draft: 1.5, mass: 20000, hp: 1800, cargoKg: 14000, waves: 5,
+    speed: 17, accel: 2.6, turn: 0.5, engine: 'sail',
+    helm: [0, 0, -7.6], seats: [[-2.4, 0, -8.2], [2.4, 0, -8.2]], cooler: [-2.2, 0, 5.4], fuel: null,
+    rodHolders: [[3.0, 0.5, -8.4], [-3.0, 0.5, -8.4], [3.0, 0.5, -6.2], [-3.0, 0.5, -6.2], [3.0, 0.5, 6], [-3.0, 0.5, 6]],
+    mount: [0, 0, 8.4], lights: [[0, 5.2, 3.6], [0, 1.4, 8.8], [-2.9, 2.4, -1], [2.9, 2.4, -1], [-2.9, 2.4, -6], [2.9, 2.4, -6]],
+    cabin: null, masts: [[0, 3.8], [0, -2.6]], crane: [2.4, 0, -4.6],
+    // the hold: a real room under the deck, down a hatch and a ladder
+    hold: { z0: -5.6, z1: 3.4, hw: 2.3, floor: 0.35, hatch: [1.5, 2.5], hatchHW: 0.55, hatchHD: 0.6 },
+    blurb: 'A proper ship. Two masts, a stern wheel, and a hold below deck with shelves, a workbench and room for a whole expedition\'s catch.' },
 ];
 export const HULL_BY_ID = Object.fromEntries(HULLS.map(h => [h.id, h]));
 

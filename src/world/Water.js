@@ -15,9 +15,9 @@
    terrain: turquoise over sand, deep blue in the open, near-black in the
    Blackwater, with foam where the water is thin. */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { heightAt } from './Terrain.js?v=1790356418';
-import { LAKES, WORLD } from './MapData.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { heightAt } from './Terrain.js?v=1790358905';
+import { LAKES, WORLD } from './MapData.js?v=1790358905';
 
 const TEX_N = 768;
 const TEX_HALF = WORLD.half + 200;

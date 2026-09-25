@@ -9,21 +9,22 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790356418';
-import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790356418';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790356418';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790356418';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790356418';
-import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790356418';
-import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790356418';
-import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js?v=1790356418';
-import { buildBeast } from '../art/BeastArt.js?v=1790356418';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790356418';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790356418';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790356418';
-import { heightAt } from '../world/Terrain.js?v=1790356418';
-import { worldMapCanvas } from './MapArt.js?v=1790356418';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790356418';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790358905';
+import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790358905';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790358905';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790358905';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790358905';
+import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790358905';
+import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790358905';
+import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js?v=1790358905';
+import { buildBeast } from '../art/BeastArt.js?v=1790358905';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790358905';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790358905';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790358905';
+import { SECRETS } from '../data/SecretData.js?v=1790358905';
+import { heightAt } from '../world/Terrain.js?v=1790358905';
+import { worldMapCanvas } from './MapArt.js?v=1790358905';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790358905';
 
 const $ = (s, r = document) => r.querySelector(s);
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
@@ -824,6 +825,12 @@ export class UI {
           <select id="admVar"><option value="">Normal</option>${VARIANTS.map(v => `<option value="${v.id}">${v.name}</option>`).join('')}</select>
           ${btn('Give fish', 'giveFish', 'gold')}${btn('Spawn a random test fish', 'testFish')}${btn('Clear inventory', 'clearInv', 'red')}</div></section>
         <section><h3>${ic('coin')}Money</h3><div class="row"><input id="admMoney" type="number" value="10000" min="0" step="1000">${btn('Add', 'moneyAdd', 'gold')}${btn('Set', 'moneySet')}<span class="note">You have ${fmtInt(s.money)}.</span></div></section>
+        <section><h3>${ic('boat')}The ship</h3><div class="row">${HULLS.map(H => btn(H.name + (H.hold ? ' (with hold)' : ''), 'giveHull:' + H.id, s.boat.hull === H.id ? 'gold' : '')).join('')}${btn('Put me in the hold', 'hold', 'dark')}</div>
+          <div class="row">${['rail', 'wheel', 'engine', 'mount'].map(k => btn('Break the ' + k, 'breakPart:' + k, 'red')).join('')}${btn('Break everything', 'breakPart:all', 'red')}</div>
+          <div class="row">${btn('Small hole', 'hole', 'red')}${btn('Big hole', 'bigHole', 'red')}${btn('Flood +30%', 'flood:0.3', 'red')}${btn('Flood to the brim', 'flood:0.9', 'red')}${btn('Start a fire', 'fire', 'red')}${btn('Repair everything', 'repairAll', 'gold')}</div>
+          <p class="note">${(() => { const b = G.boats[0]; return b ? `${esc(b.hull.name)}: hull ${Math.round(b.hp)}/${b.stats.hp}, water ${Math.round(b.water * 100)}%, ${b.leaks.length} hole${b.leaks.length === 1 ? '' : 's'}, ${b.fires.length} fire${b.fires.length === 1 ? '' : 's'}${b.breaks.length ? ', broken: ' + b.breaks.map(x => x.kind).join(', ') : ''}. Fix breaks with the hammer, holes with the hammer or salvaged planks, water with the bucket.` : 'No boat.'; })()}</p></section>
+        <section><h3>${ic('eye')}Hidden places</h3><div class="row">${btn('Reveal them all', 'secretsAll', 'gold')}${btn('Refill every cache', 'refill')}${btn('Forget them all', 'secretsReset', 'dark')}</div>
+          <p class="note">${SECRETS.map(D => `${esc(D.name)}: ${s.secrets?.[D.id] ? 'found day ' + s.secrets[D.id] : 'not found'}${s.caches?.[D.id] !== undefined ? ', cache opened day ' + s.caches[D.id] : ''}`).join('<br>')}<br>Teleports to each are in the list below.</p></section>
         <section><h3>${ic('map')}Teleport</h3><div class="row">${G.constructor.TELEPORTS.map(T => btn(T.name, 'tp:' + T.id)).join('')}</div></section>
         <section><h3>${ic('wrench')}World</h3><div class="row">${btn('Reset boat', 'resetBoat')}${btn('Reset character', 'resetChar')}${btn('Every tool and gear', 'tools')}${btn('Earn and place all trophies', 'allTrophies')}${btn('Clear trophies', 'clearTrophies', 'dark')}</div>
           <div class="row">${[['Dawn', 0.26], ['Noon', 0.5], ['Dusk', 0.745], ['Night', 0.92]].map(([l, v]) => btn(l, 'tod:' + v, 'dark')).join('')}${['storm', 'giant', 'migration', 'meteor'].map(k => btn('Event: ' + k, 'event:' + k, 'dark')).join('')}</div></section>
@@ -891,7 +898,7 @@ export class UI {
           <h2 style="font-size:32px">${rec ? esc(sel.name) : '? ? ?'} <span class="rar" style="background:${R.css}">${R.name}</span></h2>
           <p style="font-weight:700;color:var(--ink2);font-size:15px">${rec ? esc(sel.blurb) : 'You have not caught one of these yet.'}</p>
           ${rec ? `<p><b>Caught:</b> ${rec.n}  -  <b>Best:</b> ${fmtKg(rec.bestKg)}, ${fmtCm(rec.bestCm)}  -  <b>Worth about:</b> ${fmtInt(fishValue(sel, rec.bestKg))}</p>` : ''}
-          <p><b>Where:</b> ${sel.where === 'all' ? 'Anywhere' : sel.where === 'meteor' ? 'Where a meteor has fallen' : sel.where.map(w => REGIONS[w].name).join(', ')}  -  <b>Water:</b> ${({ lake: 'Lakes', sea: 'The sea', ice: 'Ice holes', any: 'Anywhere' })[sel.water] || 'Event'}  -  <b>When:</b> ${sel.time || 'any'}</p>
+          <p><b>Where:</b> ${sel.where === 'all' ? 'Anywhere' : sel.where === 'meteor' ? 'Where a meteor has fallen' : Array.isArray(sel.where) ? sel.where.map(w => REGIONS[w]?.name).filter(Boolean).join(', ') : 'Somewhere hidden'}  -  <b>Water:</b> ${({ lake: 'Lakes', sea: 'The sea', ice: 'Ice holes', any: 'Anywhere' })[sel.water] || 'Event'}  -  <b>When:</b> ${sel.time || 'any'}</p>
           ${sel.bait ? `<p><b>Likes:</b> ${Object.entries(sel.bait).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => BAIT_BY_ID[k]?.name).filter(Boolean).join(', ') || 'anything'}</p>` : ''}
           <button class="btn" data-act="dexBack">Back to the journal</button></div></div>`;
       } else {
@@ -1039,6 +1046,13 @@ export class UI {
     c.font = '700 13px Nunito, sans-serif'; c.textAlign = 'center';
     for (const p of PLACES) { const [px, py] = toPx(p.x, p.z); c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillText(p.name, px + 1, py + 1); c.fillStyle = '#fbf4e2'; c.fillText(p.name, px, py); }
     const s = G.state.s;
+    // hidden places: on no chart until you have been there
+    for (const D of SECRETS) {
+      if (!s.secrets?.[D.id]) continue;
+      const [px, py] = toPx(D.x, D.z);
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillText(D.name, px + 1, py - 9); c.fillStyle = '#ffd86a'; c.fillText(D.name, px, py - 10);
+      c.strokeStyle = '#ffd86a'; c.lineWidth = 2; c.beginPath(); c.arc(px, py, 4, 0, 6.28); c.stroke();
+    }
     const dot = (x, z, col, r = 5) => { const [px, py] = toPx(x, z); c.fillStyle = col; c.beginPath(); c.moveTo(px, py - r); c.lineTo(px + r, py); c.lineTo(px, py + r); c.lineTo(px - r, py); c.fill(); };
     // clues and lure points
     for (const L of LEVIATHANS) {

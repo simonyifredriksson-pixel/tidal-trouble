@@ -23,10 +23,10 @@
 
    API: { group, tip, segments, crank, length, bend(amount, side), crank(angle) } */
 
-import * as THREE from '../../lib/three.module.js?v=1790356418';
-import { MeshBuilder, shadeHex } from './Geo.js?v=1790356418';
-import { MAT } from './Materials.js?v=1790356418';
-import { rng, TAU } from '../core/Util.js?v=1790356418';
+import * as THREE from '../../lib/three.module.js?v=1790358905';
+import { MeshBuilder, shadeHex } from './Geo.js?v=1790358905';
+import { MAT } from './Materials.js?v=1790358905';
+import { rng, TAU } from '../core/Util.js?v=1790358905';
 
 /* ---------------- shared bits ---------------- */
 function guide(sb, y, t, size = 1, col = 0xc8c8c8) {
