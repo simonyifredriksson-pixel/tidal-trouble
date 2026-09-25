@@ -11,16 +11,16 @@
      auger    drills a hole in the ice for ice fishing
      holders  extra lines on the boat; a bell rings when one bites */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { MeshBuilder } from '../art/Geo.js?v=1790354328';
-import { MAT } from '../art/Materials.js?v=1790354328';
-import { buildRod, buildBobber } from '../art/RodArt.js?v=1790354328';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790354328';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790354328';
-import { zoneAt } from '../world/MapData.js?v=1790354328';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790354328';
-import { clamp, damp, uid } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { MeshBuilder } from '../art/Geo.js?v=1790356418';
+import { MAT } from '../art/Materials.js?v=1790356418';
+import { buildRod, buildBobber } from '../art/RodArt.js?v=1790356418';
+import { ROD_BY_ID } from '../data/GearData.js?v=1790356418';
+import { pickSpecies, rollCatch } from './Fishing.js?v=1790356418';
+import { zoneAt } from '../world/MapData.js?v=1790356418';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790356418';
+import { clamp, damp, uid } from '../core/Util.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
@@ -291,15 +291,39 @@ export class Tools {
     if (leak !== null) G.act({ t: 'fix', leak, dt });
     else if (b.hp < b.stats.hp) G.act({ t: 'patch', dt });
   }
+  /* The bucket is a real bucket. Empty: click to scoop - from the flooded
+     bilge if you are looking down into it, otherwise over the side from the
+     sea. Full: click to throw. Thrown over the rail, the water leaves the
+     boat; thrown on the deck, it just sloshes back in (unless there is a
+     fire there, which is the point). Carry it, turn, throw, repeat. */
   _bucket() {
     const G = this.game, P = G.player, b = P.boat;
-    this.cool = 0.75;
-    G.vm.play('throw');
+    this.cool = 0.55;
     const f = P.forward(_v).clone();
+    if (!this.bucketFull) {
+      const bilge = b && b.water > 0.03 && P.pitch < -0.2;
+      const sea = b || G.world.waterAt(P.pos.x, P.pos.z) > P.pos.y - 1.2 || G.world.waterAt(P.pos.x + f.x * 1.5, P.pos.z + f.z * 1.5) > -Infinity;
+      if (!bilge && !sea) { G.ui.toast('Nothing to scoop here.', 'info'); return; }
+      this.bucketFull = bilge ? 'bilge' : 'sea';
+      G.vm.play('swing');
+      G.audio.slosh();
+      if (bilge) G.act({ t: 'scoop' });
+      const hp = G.vm.handWorld(G.camera, new THREE.Vector3());
+      G.fx.splash(hp.x, hp.y - 0.4, hp.z, 0.4);
+      G.ui.toast(bilge ? 'Bucket full of bilge water - throw it over the side!' : 'Bucket full of sea water.', 'info');
+      G.vm.bucketFull = true;
+      return;
+    }
+    G.vm.play('throw');
     const hp = G.vm.handWorld(G.camera, new THREE.Vector3());
     G.fx.water(hp.x, hp.y, hp.z, f.x, f.y + 0.3, f.z);
     G.audio.slosh();
-    G.act({ t: 'bucket', x: P.pos.x + f.x * 2, z: P.pos.z + f.z * 2 });
+    const tx = P.pos.x + f.x * 2.2, tz = P.pos.z + f.z * 2.2;
+    let over = true;
+    if (b) { const L = b.toLocal(_w.set(tx, b.deck, tz)); over = !b.over(L.x, L.z, -0.1); }
+    G.act({ t: 'bucket', x: tx, z: tz, over, from: this.bucketFull });
+    this.bucketFull = null;
+    G.vm.bucketFull = false;
   }
 
   /* ---------------- camera ---------------- */

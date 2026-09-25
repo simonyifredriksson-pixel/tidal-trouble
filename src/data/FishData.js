@@ -204,6 +204,38 @@ export const FISH = [
     fight: { power: 0.2, stamina: 0.1, erratic: 0.3, jump: 0 }, art: A({}), blurb: 'Squeaks. Has seen things.' },
   { id: 'bottle', name: 'Message in a Bottle', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 0.6, mystery: 0.9, worm: 0.06 }, kg: [0.6, 0.6], cm: [30, 30], value: 5, beh: 'bottle', junk: 'bottle',
     fight: { power: 0.2, stamina: 0.1, erratic: 0, jump: 0 }, art: A({}), blurb: 'There is a note inside. Somebody wanted it found.' },
+  /* ---------------- things from the bottom: some useless, some the start of something ---------------- */
+  { id: 'oldmap', name: 'Waterlogged Chart', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 0.5, mystery: 0.6, worm: 0.03, pieces: 0.03 }, kg: [0.2, 0.2], cm: [30, 30], value: 10, beh: 'map', junk: 'map',
+    fight: { power: 0.2, stamina: 0.1, erratic: 0, jump: 0 }, art: A({}), blurb: 'An old sea chart rolled in oilcloth. Someone drew an X on it, far out on the open water.' },
+  { id: 'oldkey', name: 'Barnacled Key', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 1.2, mystery: 0.4, worm: 0.02 }, kg: [0.1, 0.1], cm: [12, 12], value: 40, beh: 'curio', junk: 'key',
+    fight: { power: 0.2, stamina: 0.1, erratic: 0, jump: 0 }, art: A({}), blurb: 'A heavy brass key. The lock it opened is probably at the bottom of the sea.' },
+  { id: 'coinpouch', name: 'Rotten Coin Purse', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 1, mystery: 0.5, worm: 0.04, pieces: 0.03 }, kg: [0.4, 0.8], cm: [15, 15], value: 5, beh: 'coins', junk: 'pouch',
+    fight: { power: 0.2, stamina: 0.1, erratic: 0, jump: 0 }, art: A({}), blurb: 'It splits open when you pick it up. Old coins, still good.' },
+  { id: 'artifact', name: 'Strange Idol', rarity: 'rare', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 0.6, mystery: 0.8, worm: 0.01 }, kg: [2, 3], cm: [25, 25], value: 900, beh: 'curio', junk: 'idol',
+    fight: { power: 0.6, stamina: 0.4, erratic: 0, jump: 0 }, art: A({}), blurb: 'A green stone figure with too many eyes. It is warm. Collectors pay well for these.' },
+  { id: 'shippart', name: 'Salvaged Planks', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { magnetic: 0.7, worm: 0.04, pieces: 0.04 }, kg: [4, 8], cm: [120, 120], value: 8, beh: 'salvage', junk: 'planks',
+    fight: { power: 0.4, stamina: 0.2, erratic: 0, jump: 0 }, art: A({}), blurb: 'Good oak from some wreck. Carry it onto your boat and it patches the hull.' },
+  { id: 'journalpage', name: 'Drowned Journal Page', rarity: 'junk', where: 'all', water: 'sea', time: 'any', bait: { mystery: 0.5, magnetic: 0.3, worm: 0.01 }, kg: [0.05, 0.05], cm: [20, 20], value: 1, beh: 'page', junk: 'page',
+    fight: { power: 0.1, stamina: 0.1, erratic: 0, jump: 0 }, art: A({}), blurb: 'A page from someone\'s journal, somehow still legible. It describes something enormous.' },
+  { id: 'strongbox', name: 'Sunken Strongbox', rarity: 'rare', where: 'mystery', water: 'sea', time: 'any', bait: { magnetic: 2, worm: 1, pieces: 1, glow: 1, mystery: 1, explosive: 1 }, kg: [18, 26], cm: [70, 70], value: 0, beh: 'strongbox', junk: 'strongbox',
+    fight: { power: 1.4, stamina: 1.2, erratic: 0.1, jump: 0 }, art: A({}), blurb: 'Iron-banded and chained shut, right where the chart said. Whatever is in it, someone wanted it kept.' },
+
+  /* ---------------- weather and hotspot fish ---------------- */
+  { id: 'thundertuna', name: 'Thunderhead Tuna', rarity: 'epic', where: ['open', 'tropic', 'black'], water: 'sea', time: 'any', weather: 'storm', bait: { pieces: 1.4, glow: 1 }, kg: [40, 200], cm: [150, 280], value: 1500,
+    fight: { power: 2.6, stamina: 2.4, erratic: 0.7, jump: 0.6 }, art: A({ h: 0.28, w: 0.2, back: 0x2a3a6a, belly: 0xd8e4f0, fin: 0x9af0ff, pat: 'lights', patCol: 0xd8fcff, tail: 'lunate', extras: ['finlets', 'glow'] }),
+    blurb: 'Only rises when lightning hits the sea. Its fins crackle.' },
+  { id: 'squallray', name: 'Squall Ray', rarity: 'rare', where: ['home', 'tropic', 'frost', 'open'], water: 'sea', time: 'any', weather: 'storm', bait: { pieces: 1.2, worm: 0.8 }, kg: [5, 40], cm: [80, 180], value: 520,
+    fight: { power: 1.9, stamina: 1.8, erratic: 0.8, jump: 0.3 }, art: A({ h: 0.6, w: 0.04, back: 0x4a5a6a, belly: 0xe8ecf0, fin: 0x3a4a5a, pat: 'waves', patCol: 0x8aa0b8, flat: true, tail: 'eel' }),
+    blurb: 'Rides the storm swell just under the surface. You will not see one on a calm day.' },
+  { id: 'birdbait', name: 'Silver Sprat', rarity: 'common', where: 'all', hotspot: 'birds', water: 'sea', time: 'any', bait: { worm: 1, pieces: 1, glow: 1 }, kg: [0.1, 0.4], cm: [10, 18], value: 35,
+    fight: { power: 0.5, stamina: 0.5, erratic: 1.2, jump: 0.4 }, art: A({ h: 0.2, w: 0.08, back: 0x8aa8c0, belly: 0xf4f8fa, pat: 'none', tail: 'fork' }),
+    blurb: 'The little fish the birds are diving for. Where there are sprats, there is something bigger hunting them.' },
+  { id: 'glowjelly', name: 'Lantern Jelly', rarity: 'epic', where: 'all', hotspot: 'glow', water: 'sea', time: 'night', bait: { glow: 1.6, mystery: 1 }, kg: [1, 6], cm: [30, 70], value: 1800,
+    fight: { power: 1.2, stamina: 1.4, erratic: 1.1, jump: 0 }, art: A({ h: 0.5, w: 0.45, back: 0x7af0e0, belly: 0xd8fff8, fin: 0x9affd8, pat: 'lights', patCol: 0xffffff, tail: 'none', extras: ['glow', 'ghost'] }),
+    blurb: 'It makes the water glow. Only found in the glowing patches that drift across the sea at night.' },
+  { id: 'deepbubbler', name: 'Bubble-eye Grouper', rarity: 'rare', where: 'all', hotspot: 'bubbles', water: 'sea', time: 'any', bait: { pieces: 1.3, mystery: 1 }, kg: [8, 50], cm: [60, 140], value: 640,
+    fight: { power: 2.0, stamina: 2.0, erratic: 0.4, jump: 0 }, art: A({ h: 0.34, w: 0.2, back: 0x6a5a4a, belly: 0xd8c8b0, fin: 0x5a4a3a, pat: 'spots', patCol: 0x3a2a1a, mouth: 1.8, head: 1.4, tail: 'round' }),
+    blurb: 'Lives far below and breathes out the bubbles you see rising. Fish right where they break.' },
   { id: 'chest', name: 'Treasure Chest', rarity: 'rare', where: ['tropic', 'open', 'black', 'home'], water: 'sea', time: 'any', bait: { magnetic: 1.6, mystery: 0.7 }, kg: [10, 25], cm: [60, 90], value: 0, beh: 'chest', junk: 'chest',
     fight: { power: 1.3, stamina: 1.2, erratic: 0.1, jump: 0 }, art: A({}), blurb: 'Heavy, locked and dripping. Probably a real one. Probably.' },
 ];
@@ -250,6 +282,7 @@ export const ZMIN = {
   angler: 4, viper: 4, gulper: 4, coelacanth: 4,
   fogfin: 4, hushray: 4, watcher: 4, vigillight: 4,
   inkfin: 2, suckerfish: 2, hatchling: 2,
+  thundertuna: 2, squallray: 1, deepbubbler: 1, glowjelly: 1, artifact: 1, oldmap: 1,
 };
 export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
 

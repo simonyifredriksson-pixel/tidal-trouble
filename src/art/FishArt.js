@@ -9,10 +9,10 @@
    Returns { solid, glow } geometries - `glow` is drawn unlit (lights,
    lures, fuses) and may be null. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790354328';
-import { rng, TAU, clamp } from '../core/Util.js?v=1790354328';
-import { MAT } from './Materials.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { MeshBuilder, mixHex, shadeHex, hexToLinear } from './Geo.js?v=1790356418';
+import { rng, TAU, clamp } from '../core/Util.js?v=1790356418';
+import { MAT } from './Materials.js?v=1790356418';
 
 const ST = [0, 0.07, 0.18, 0.32, 0.47, 0.62, 0.76, 0.88, 0.96, 1];
 const PR = [0.2, 0.3, 0.55, 0.82, 0.98, 1.0, 0.9, 0.7, 0.42, 0.12];
@@ -253,6 +253,32 @@ export function buildJunk(kind) {
     b.color(0x3a3a3a);
     for (const x of [-0.3, 0.3]) { b.box(0.06, 0.52, 0.66, x, -0.1, 0); b.box(0.06, 0.3, 0.68, x, 0.3, 0); }
     b.color(0xd8b048).box(0.12, 0.14, 0.04, 0, 0.12, 0.34);
+  } else if (kind === 'map') {
+    b.color(0xd8c8a0).cyl(0.16, 0.16, -0.5, 0.5, 8, true); b.color(0x8a6a44); for (const y of [-0.3, 0.3]) b.cyl(0.17, 0.17, y - 0.03, y + 0.03, 8, false);
+    b.color(0xa8302a).box(0.02, 0.2, 0.34, 0, 0.35, 0);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'key') {
+    b.color(0xb08a3a).cyl(0.06, 0.06, -0.5, 0.25, 6, true); for (let i = 0; i < 8; i++) { const a0 = i / 8 * Math.PI * 2, a1 = (i + 1) / 8 * Math.PI * 2; b.beam([0, 0.45 + Math.cos(a0) * 0.2, Math.sin(a0) * 0.2], [0, 0.45 + Math.cos(a1) * 0.2, Math.sin(a1) * 0.2], 0.07, 0.07); }
+    b.box(0.08, 0.14, 0.2, 0, -0.42, 0.12); b.color(0xe8e4d8); for (let k = 0; k < 5; k++) b.lump(0.04, 0, -0.2 + k * 0.1, 0.06, 0.4);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'pouch') {
+    b.color(0x6a4a2a).blob(0.45, 0.35, 0.4, 0, -0.1, 0, 7, 4, 0.15); b.color(0x4a3220).cyl(0.14, 0.2, 0.2, 0.42, 6, true); b.color(0xe8c050); for (let k = 0; k < 4; k++) b.cyl(0.12, 0.12, -0.45 + k * 0.03, -0.43 + k * 0.03, 7, true, 0.3 + k * 0.05, 0.2);
+  } else if (kind === 'idol') {
+    b.color(0x3a6a4a).box(0.5, 0.9, 0.4, 0, 0, 0); b.color(0x2a5a3a).blob(0.35, 0.3, 0.3, 0, 0.55, 0, 7, 4);
+    g.color(0x9affb0); for (let k = 0; k < 5; k++) g.box(0.07, 0.07, 0.02, -0.2 + k * 0.1, 0.6 + (k % 2) * 0.08, 0.3);
+    rotateBuilderZ(b, -Math.PI / 2); rotateBuilderZ(g, -Math.PI / 2);
+  } else if (kind === 'planks') {
+    for (let k = 0; k < 4; k++) b.color(k % 2 ? 0x7a5836 : 0x6a4a2e).box(1, 0.08, 0.22, (k % 2) * 0.1 - 0.05, k * 0.09 - 0.14, (k - 1.5) * 0.24);
+    b.color(0x5a5a5a); for (let k = 0; k < 6; k++) b.box(0.02, 0.12, 0.02, -0.4 + k * 0.16, 0.2, (k % 3 - 1) * 0.2);
+  } else if (kind === 'page') {
+    b.color(0xe8dcb8).box(0.9, 0.02, 0.65, 0, 0, 0); b.color(0x6a5a44); for (let k = 0; k < 6; k++) b.box(0.6, 0.025, 0.02, -0.05, 0, -0.22 + k * 0.08);
+    b.color(0x3a2a1a).box(0.2, 0.026, 0.16, 0.25, 0, 0.2);
+  } else if (kind === 'strongbox') {
+    b.color(0x3a3a3e).box(1, 0.6, 0.66, 0, 0, 0); b.color(0x5a5a60).box(1.02, 0.1, 0.68, 0, 0.3, 0);
+    b.color(0x8a6a3a); for (const x of [-0.35, 0, 0.35]) b.box(0.07, 0.62, 0.7, x, 0, 0);
+    b.color(0x6a6a6a); for (let k = 0; k < 7; k++) b.beam([-0.5 + k * 0.16, 0.34, 0.35], [-0.42 + k * 0.16, 0.34, -0.35], 0.04, 0.04);
+    b.color(0xb08a3a).box(0.16, 0.18, 0.05, 0, 0.05, 0.36);
+    b.color(0x6a8a5a); for (let k = 0; k < 8; k++) b.lump(0.06, (Math.random() - 0.5) * 0.9, -0.25 + Math.random() * 0.5, 0.34, 0.4, 0.4);
   }
   return { solid: b.build(), glow: g.tris ? g.build() : null };
 }
@@ -296,7 +322,7 @@ export function fishMesh(species, lengthM, opts = {}) {
   m.castShadow = !ghost; m.receiveShadow = true;
   grp.add(m);
   if (geos.glow) { const gm = new THREE.Mesh(geos.glow, MAT.glow); grp.add(gm); }
-  const junkScale = species.junk ? (species.junk === 'chest' ? 0.75 : species.junk === 'duck' ? 0.12 : 0.3) : 1;
+  const junkScale = species.junk ? ({ chest: 0.75, strongbox: 0.7, duck: 0.12, planks: 1.2, page: 0.35, key: 0.22, idol: 0.35 }[species.junk] ?? 0.3) : 1;
   const s = species.junk ? junkScale / 1 : lengthM;
   grp.scale.setScalar(opts.forceScale || s);
   grp.userData.species = species.id;

@@ -19,14 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790354328';
-import { zoneAt } from '../world/MapData.js?v=1790354328';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790354328';
-import { buildBobber } from '../art/RodArt.js?v=1790354328';
-import { fishMesh } from '../art/FishArt.js?v=1790354328';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790356418';
+import { zoneAt } from '../world/MapData.js?v=1790356418';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790356418';
+import { buildBobber } from '../art/RodArt.js?v=1790356418';
+import { fishMesh } from '../art/FishArt.js?v=1790356418';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -36,8 +36,11 @@ export function pickSpecies(ctx, r = Math.random) {
   const list = [];
   for (const f of FISH) {
     if (f.where === 'meteor') { if (!ctx.meteor) continue; }
+    else if (f.where === 'mystery') { if (!ctx.mystery) continue; }
     else if (f.where !== 'all' && !f.where.includes(ctx.region)) continue;
     if (f.zoneOnly !== undefined && (ctx.zone || 0) !== f.zoneOnly) continue;
+    if (f.hotspot && ctx.hotspot !== f.hotspot) continue;
+    if (f.weather === 'storm' && !ctx.storm) continue;
     if (f.water === 'lake' && ctx.water !== 'lake') continue;
     if (f.water === 'sea' && ctx.water !== 'sea') continue;
     if (f.water === 'ice' && ctx.water !== 'ice') continue;
@@ -56,6 +59,13 @@ export function pickSpecies(ctx, r = Math.random) {
     if (ctx.whirl && f.rarity !== 'common') w *= 1.8;
     if (ctx.meteor && f.id === 'starfish') w *= 30;
     if (f.id === 'bombfish' && ctx.bait === 'explosive') w *= 4;
+    // the sea tells you where to fish: hotspots, storms, a marked X
+    if (ctx.mystery && f.id === 'strongbox') w *= 400;
+    if (f.hotspot && ctx.hotspot === f.hotspot) w *= 30;
+    if (ctx.hotspot && !f.hotspot && ['rare', 'epic', 'legendary'].includes(f.rarity)) w *= 2.2;
+    if (ctx.hotspot === 'debris' && f.junk && f.junk !== 'chest') w *= 6;
+    if (ctx.storm && f.weather === 'storm') w *= 8;
+    if (ctx.storm && !f.weather && (f.rarity === 'rare' || f.rarity === 'epic')) w *= 1.4;
     // the farther out, the crazier it gets
     const z = ctx.zone || 0, zm = ZMIN[f.id] ?? 0;
     if (z < zm) w *= 0.03;
@@ -130,6 +140,9 @@ export class Fishing {
       lucky: G.state.has('lucky'), deep: G.world.height(p.x, p.z) < -20,
       migration: ev.near('migration', p, 90), whirl: ev.near('whirlpool', p, 80), meteor: ev.near('meteor', p, 30),
       zone: this.zoneHere(),
+      storm: ev.storm > 0.45 || (G.beasts?.stormy?.() ?? false),
+      hotspot: G.ocean?.hotspotAt(p)?.kind || null,
+      mystery: !!G.ocean?.mysteryAt(p),
     };
   }
 
@@ -144,6 +157,7 @@ export class Fishing {
     if (ev.near('whirlpool', this.bpos, 80)) t /= 2;
     if (ev.near('meteor', this.bpos, 30)) t /= 2;
     if (G.state.s.bait === 'glow' && (G.tod < 0.22 || G.tod > 0.8)) t /= 1.3;
+    if (G.ocean?.hotspotAt(this.bpos)) t /= 2.2;
     return t;
   }
 
@@ -300,12 +314,12 @@ export class Fishing {
     const G = this.game;
     // giants and leviathans get first refusal of a line near them
     // then the monsters at the top of the food chain, who mostly say no
-    const mon = G.great?.claim(this.bpos);
+    const mon = G.great?.claim(this.bpos) || G.beasts?.claim(this.bpos);
     if (mon && mon.refused) {
       G.state.useBait(G.state.s.bait);
       this.msg(mon.text, 'warn');
-      G.fx.eruption(this.bpos.x, G.world.sea(this.bpos.x, this.bpos.z), this.bpos.z, 3);
-      G.audio.roar(0.4);
+      if (!mon.quiet) { G.fx.eruption(this.bpos.x, G.world.sea(this.bpos.x, this.bpos.z), this.bpos.z, 3); G.audio.roar(0.4); }
+      else G.fx.ripple(this.bpos.x, G.world.sea(this.bpos.x, this.bpos.z), this.bpos.z, 6, 2);
       this._startWait();
       return;
     }

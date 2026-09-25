@@ -7,40 +7,43 @@
    arrive in the next snapshot. So solo play and co-op are the same code,
    and there is no way for two clients to both sell the same Bombfish. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { Player } from './Player.js?v=1790354328';
-import { Boat } from './Boat.js?v=1790354328';
-import { Loot } from './Loot.js?v=1790354328';
-import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790354328';
-import { Tools } from './Tools.js?v=1790354328';
-import { ViewModel } from './ViewModel.js?v=1790354328';
-import { Effects } from './Effects.js?v=1790354328';
-import { Creatures } from './Creatures.js?v=1790354328';
-import { Events } from './Events.js?v=1790354328';
-import { NPCs } from './NPCs.js?v=1790354328';
-import { Cabin } from './Cabin.js?v=1790354328';
-import { Remote } from './Remote.js?v=1790354328';
-import { State } from './State.js?v=1790354328';
-import { PLAYER_LOOKS } from '../art/Character.js?v=1790354328';
-import { fishMesh } from '../art/FishArt.js?v=1790354328';
-import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790354328';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790354328';
-import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790354328';
-import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790354328';
-import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790354328';
-import { nearLake } from '../world/Terrain.js?v=1790354328';
-import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
-import { ic } from '../ui/Icons.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { Player } from './Player.js?v=1790356418';
+import { Boat } from './Boat.js?v=1790356418';
+import { Loot } from './Loot.js?v=1790356418';
+import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790356418';
+import { Tools } from './Tools.js?v=1790356418';
+import { ViewModel } from './ViewModel.js?v=1790356418';
+import { Effects } from './Effects.js?v=1790356418';
+import { Creatures } from './Creatures.js?v=1790356418';
+import { Events } from './Events.js?v=1790356418';
+import { NPCs } from './NPCs.js?v=1790356418';
+import { Cabin } from './Cabin.js?v=1790356418';
+import { Remote } from './Remote.js?v=1790356418';
+import { State } from './State.js?v=1790356418';
+import { PLAYER_LOOKS } from '../art/Character.js?v=1790356418';
+import { fishMesh } from '../art/FishArt.js?v=1790356418';
+import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790356418';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790356418';
+import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790356418';
+import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790356418';
+import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790356418';
+import { nearLake } from '../world/Terrain.js?v=1790356418';
+import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
+import { ic } from '../ui/Icons.js?v=1790356418';
 
-import { Chat } from '../ui/Chat.js?v=1790354328';
-import { Voice } from '../net/Voice.js?v=1790354328';
-import { Great } from './Great.js?v=1790354328';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790354328';
-import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790354328';
-import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790354328';
-import { SHOPS } from '../data/GearData.js?v=1790354328';
-import { mistAt, VIGIL } from '../world/MapData.js?v=1790354328';
+import { Chat } from '../ui/Chat.js?v=1790356418';
+import { Voice } from '../net/Voice.js?v=1790356418';
+import { Great } from './Great.js?v=1790356418';
+import { Beasts } from './Beasts.js?v=1790356418';
+import { Ocean } from './Ocean.js?v=1790356418';
+import { BEAST_BY_ID } from '../data/BeastData.js?v=1790356418';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790356418';
+import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790356418';
+import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790356418';
+import { SHOPS } from '../data/GearData.js?v=1790356418';
+import { mistAt, VIGIL } from '../world/MapData.js?v=1790356418';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const fill = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] !== undefined ? o[k] : m));
@@ -94,6 +97,8 @@ export class Game {
     this.npcs = new NPCs(this);
     this.cabin = new Cabin(this);
     this.great = new Great(this);
+    this.beasts = new Beasts(this);
+    this.ocean = new Ocean(this);
     this.admin = this.admin || { autoCatch: false, autoCast: false };
     this.vm.setRod(ROD_BY_ID[S.s.rod]);
     this.vm.setTool(this.player.tool);
@@ -259,6 +264,7 @@ export class Game {
         break;
       }
       case 'patch': if (boat) boat.hp = Math.min(boat.stats.hp, boat.hp + c.dt * 5); break;
+      case 'scoop': if (boat && boat.water > 0) boat.water = Math.max(0, boat.water - 0.045); break;
       case 'bucket': {
         if (!boat) break;
         let doused = false;
@@ -267,8 +273,9 @@ export class Game {
           const w = boat.toWorld(_v.set(F.x, boat.deck, F.z));
           if (Math.hypot(w.x - c.x, w.z - c.z) < 3.4) { F.i -= 0.9; doused = true; if (F.i <= 0) boat.fires.splice(i, 1); }
         }
-        if (!doused && boat.water > 0) { boat.water = Math.max(0, boat.water - 0.08); this.tell(from, 'Bailing out!', 'info'); }
         if (doused) this.tell(from, boat.fires.length ? 'Keep going!' : 'Fire is out!', boat.fires.length ? 'warn' : 'good');
+        else if (c.over) { if (c.from === 'bilge') this.tell(from, boat.water > 0.02 ? 'Over the side! Again!' : 'The bilge is dry.', 'good'); }
+        else { boat.water = Math.min(1, boat.water + 0.02); this.tell(from, 'You threw it on your own deck. It is running back into the bilge.', 'warn'); }
         break;
       }
       case 'photo': S.addPhoto(c.data); this._changed(); break;
@@ -295,6 +302,7 @@ export class Game {
       case 'levRise': if (!this.creatures.lev) this.creatures.startLev(c.id, c.x, c.z); break;
       case 'creatureLost': {
         if (c.id === 'great' || c.id === 'kraken') { this.great.released(c.id); break; }
+        if (c.id === 'beast') { this.beasts.released(); break; }
         if (c.id === 'lev') { const L = this.creatures.lev; if (L) { L.phase = 'rampage'; L.armor = L.armorMax * 0.4; L.hooked = null; } }
         else { const g = this.creatures.giants.get(c.id); if (g) { g.hooked = null; g.life = Math.min(g.life, 30); } }
         break;
@@ -322,6 +330,8 @@ export class Game {
       case 'rack': if (s.rods.includes(c.id)) { s.rod = c.id; this._rodChanged(); this.tell(from, 'You take the ' + ROD_BY_ID[c.id].name + ' off the rack.', 'good'); } break;
       case 'chop': this.great.chop(c.arm, from); break;
       case 'greatHook': if (this.great.lev) this.great.lev.hooked = c.by; break;
+      case 'beastHook': if (this.beasts.b) this.beasts.b.hooked = c.by; break;
+      case 'beastSeen': (s.beastSeen = s.beastSeen || {})[c.id] = s.beastSeen[c.id] || s.day; this._saveDirty = true; break;
       case 'krakenHook': if (this.great.kraken) this.great.kraken.hooked = c.by; break;
       case 'heard': s.heard[c.id] = true; if (VIGIL_FISHERMEN.every(k => s.heard[k])) this.award('legend', from); break;
       case 'admin': this._adminDo(c.cmd, c, P); break;
@@ -434,6 +444,7 @@ export class Game {
 
   _creatureLanded(c, from) {
     if (c.id === 'great' || c.id === 'kraken') { this.great.landed(c.id, from); return; }
+    if (c.id === 'beast') { this.beasts.landed(from); return; }
     if (c.id === 'lev') {
       const L = this.creatures.lev;
       if (!L) return;
@@ -475,6 +486,30 @@ export class Game {
       this._everyone({ t: 'bottle', text: text || 'The bottle is empty. Just a very old smell.' });
       this._changed();
     }
+    // things from the bottom of the sea
+    if (sp.beh === 'map') {
+      this.loot.remove(it); P.held = null;
+      const m = this.ocean.newMystery();
+      if (m) this._everyone({ t: 'mystery', x: m.x, z: m.z });
+      this._changed();
+    }
+    if (sp.beh === 'coins') { const n = 20 + Math.floor(Math.random() * 110); this.state.earn(n, 'coins'); this.loot.remove(it); P.held = null; this.tell(P.id, `The purse splits open: ${n} old coins.`, 'good'); this.fx.coins(P.pos.x, P.pos.y + 1.2, P.pos.z, 14); }
+    if (sp.beh === 'curio' && sp.junk === 'key') { this.state.addShelf('key'); this.tell(P.id, 'An old key. It is going on the shelf in your hut.', 'info'); }
+    if (sp.beh === 'salvage' && P.boat) {
+      const b = P.boat;
+      this.loot.remove(it); P.held = null;
+      b.hp = Math.min(b.stats.hp, b.hp + 40);
+      const L = b.leaks.sort((a, c) => c.size - a.size)[0];
+      if (L) { b.leaks.splice(b.leaks.indexOf(L), 1); this.tell(P.id, 'You nail the salvaged planks over the worst hole.', 'good'); }
+      else this.tell(P.id, 'You patch the hull with the salvaged planks.', 'good');
+      this.audio.hammer();
+    }
+    if (sp.beh === 'page') {
+      this.loot.remove(it); P.held = null;
+      const D = this.ocean.readPage();
+      this._everyone({ t: 'page', id: D.id });
+      this._changed();
+    }
     if (sp.junk === 'duck') this.state.addShelf('duck');
     if (sp.junk === 'boot') this.state.addShelf('boot');
     if (sp.beh === 'eel' && !this.state.has('gloves')) { this.shock(P, it); }
@@ -492,6 +527,20 @@ export class Game {
       this.hurtPlayer(P, 15, 'mimic');
       this._everyone({ t: 'banner', title: 'IT BIT YOU!', sub: 'That was not a treasure chest. That was a Mimicfish.', icon: 'chest' });
       this._cardTo(from, { sp: 'mimic', kg: it.kg, cm: it.cm, value: fishValue(sp, it.kg), isNew: !this.state.s.dex.mimic || this.state.s.dex.mimic.n === 1 });
+    } else if (sp.beh === 'strongbox') {
+      // the end of the chart: coin, and a page about something enormous
+      const coins = 400 + Math.floor(Math.random() * 1100);
+      this.state.earn(coins, 'strongbox');
+      const m = (this.state.s.mysteries || []).find(q => q.stage === 0 && Math.hypot(q.x - it.pos.x, q.z - it.pos.z) < 60);
+      if (m) m.stage = 1;
+      this.fx.coins(it.pos.x, it.pos.y + 0.5, it.pos.z, 40); this.fx.confetti(it.pos.x, it.pos.y + 0.5, it.pos.z, 50);
+      const at = it.pos.clone().add(new THREE.Vector3(0, 0.6, 0));
+      this.loot.remove(it);
+      this.loot.spawn({ sp: 'journalpage', kg: 0.05, cm: 20, pos: at, vel: new THREE.Vector3(0, 2, 0), flop: 0 });
+      if (Math.random() < 0.5) this.loot.spawn({ sp: 'artifact', kg: 2.5, cm: 25, pos: at.clone().add(new THREE.Vector3(0.4, 0, 0)), vel: new THREE.Vector3(0.5, 2, 0), flop: 0 });
+      this.tell(from, `The lock gives. ${coins} coins - and a page, still dry, wrapped in oilcloth.`, 'good');
+      this.award('strongbox', from);
+      this._changed();
     } else if (sp.beh === 'chest') {
       const coins = 60 + Math.floor(Math.random() * 340);
       this.state.earn(coins, 'chest');
@@ -689,7 +738,7 @@ export class Game {
     const out = [];
     for (const it of this.loot.items.values()) {
       const sp = FISH_BY_ID[it.sp];
-      if (!sp || sp.beh === 'chest' || (sp.beh === 'mimic' && !it.opened)) continue;
+      if (!sp || sp.beh === 'chest' || sp.beh === 'strongbox' || (sp.beh === 'mimic' && !it.opened)) continue;
       if (it.fav && !withFavs) continue;
       if (this._canSell(it, at)) out.push(it);
     }
@@ -842,6 +891,8 @@ export class Game {
     this.loot.update(dt, host);
     this.creatures.update(dt, host);
     this.great.update(dt, host);
+    this.beasts.update(dt, host);
+    this.ocean.update(dt, host);
     this.events.update(dt, host);
     this.npcs.update(dt);
     for (const r of this.remotes.values()) r.update(dt);
@@ -895,7 +946,7 @@ export class Game {
     const edge = clamp((Math.max(Math.abs(P.pos.x), Math.abs(P.pos.z)) - 1150) / 150, 0, 1);
     const mist = mistAt(P.pos.x, P.pos.z);
     this.mist = mist;
-    const env = { tod: this.tod, storm: this.world.storm, dark: reg.black * 0.95, frost: reg.frost, underwater: P.underwater, lights, edge, mist };
+    const env = { tod: this.tod, storm: this.world.storm, dark: Math.max(reg.black * 0.95, this.beasts.dark), frost: reg.frost, underwater: P.underwater, lights, edge, mist };
     // the first time anyone reaches Vigil's End
     if (mist > 0.93 && !this.state.s.flags.vigil && this.isHost) {
       this.state.s.flags.vigil = this.state.s.day;
@@ -1070,7 +1121,7 @@ export class Game {
         if (yard && it.kg > 20) opt.push({ label: 'Put it on display in the trophy yard', run: () => this.act({ t: 'yardPut', id: it.id }) });
       }
       // loot to open
-      const lo = this.loot.nearest(look, 1.6, x => FISH_BY_ID[x.sp].beh === 'chest' || (FISH_BY_ID[x.sp].beh === 'mimic' && !x.opened));
+      const lo = this.loot.nearest(look, 1.6, x => FISH_BY_ID[x.sp].beh === 'chest' || FISH_BY_ID[x.sp].beh === 'strongbox' || (FISH_BY_ID[x.sp].beh === 'mimic' && !x.opened));
       if (lo) opt.push({ label: 'Open the chest', run: () => this.act({ t: 'open', id: lo.id }) });
       // rod holders
       const H = this.tools.nearestHolder(P.eye);
@@ -1281,6 +1332,10 @@ export class Game {
   _adminDo(cmd, c, P) {
     const s = this.state.s, b = this.boats[0];
     switch (cmd) {
+      case 'spawnBeast': { this.beasts.b = null; const at = (P.boat || this.boats[0])?.pos || P.pos; this.beasts.spawn(c.id, at); break; }
+      case 'clearBeast': if (this.beasts.b) { this.beasts.b.phase = 'leave'; this.beasts.b.pt = 0; } break;
+      case 'mystery': { const m = this.ocean.newMystery(); if (m) this._everyone({ t: 'mystery', x: m.x, z: m.z }); break; }
+      case 'hotspots': for (const k of ['birds', 'boil', 'bubbles', 'glow', 'debris']) { const a = Math.random() * 6.28; this.ocean.addHotspot(k, P.pos.x + Math.cos(a) * 45, P.pos.z + Math.sin(a) * 45, 300); } break;
       case 'spawnGreat': if (this.great.lev) this.great.lev = null; this.great.spawnLev(c.id); s.flags.vigil = s.flags.vigil || s.day; break;
       case 'spawnKraken': {
         if (this.great.kraken) this.great.kraken = null;
@@ -1378,7 +1433,7 @@ export class Game {
   worldSnapshot() {
     return {
       tod: +this.tod.toFixed(4), day: this.state.s.day, wt: +this.world.time.toFixed(2),
-      boats: this.boats.map(b => b.snapshot()), loot: this.loot.snapshot(), cr: this.creatures.snapshot(), ev: this.events.snapshot(), gr: this.great.snapshot(),
+      boats: this.boats.map(b => b.snapshot()), loot: this.loot.snapshot(), cr: this.creatures.snapshot(), ev: this.events.snapshot(), gr: this.great.snapshot(), bs: this.beasts.snapshot(), oc: this.ocean.snapshot(),
       traps: [...this.tools.traps.values()].map(({ mesh, ...o }) => o), holes: [...this.tools.holes.values()].map(({ mesh, ...o }) => o),
       holders: this.boats.map(b => (b.holders || []).map(h => +(h.bite > 0))),
     };
@@ -1392,6 +1447,8 @@ export class Game {
     this.creatures.applySnapshot(w.cr, dt);
     this.events.applySnapshot(w.ev);
     this.great.applySnapshot(w.gr);
+    this.beasts.applySnapshot(w.bs);
+    this.ocean.applySnapshot(w.oc);
     const tIds = new Set(w.traps.map(t => t.id));
     for (const t of w.traps) this.tools.addTrap(t);
     for (const id of [...this.tools.traps.keys()]) if (!tIds.has(id)) this.tools.removeTrap(id);
@@ -1457,7 +1514,21 @@ export class Game {
         if (e.k === 'dive') this.fx.eruption(e.x, this.world.sea(e.x, e.z), e.z, 12);
         break;
       }
+      case 'mystery': this.ui.banner('A WATERLOGGED CHART', 'Someone marked an X far out at sea. It is on your map now (M).', 'map', 5); this.chat.system('A chart was found. The X is on the map.'); break;
+      case 'page': { const D = BEAST_BY_ID[e.id]; if (D) { this.ui.banner('A DROWNED JOURNAL PAGE', 'About something called ' + D.name + '.', 'journal', 4); this.ui.subtitle('"' + D.page + '"', 14); } break; }
+      case 'beastPhase': { const B = this.beasts.b; if (B && e.ph === 'dive' && B.id === 'skymaw') this.audio.beastCall('skymaw', 1); if (e.ph === 'risen' || e.ph === 'surfaced' || e.ph === 'reaching') { const d = Math.hypot(this.player.pos.x - e.x, this.player.pos.z - e.z); if (d < 700) { this.fx.eruption(e.x, this.world.sea(e.x, e.z), e.z, 14); this.audio.beastCall(e.id || B?.id, Math.max(0.2, 1 - d / 700)); } } break; }
+      case 'beastFx': {
+        const d = Math.hypot(this.player.pos.x - e.x, this.player.pos.z - e.z), sea = this.world.sea(e.x, e.z);
+        if (e.k === 'bigwave') { this.fx.eruption(e.x, sea, e.z, 30); if (d < 500) this.addShake(Math.max(0.3, 1 - d / 500)); this.audio.crash(); this.audio.beastCall('cthulhu', Math.max(0.2, 1 - d / 700)); }
+        if (e.k === 'splash') { this.fx.eruption(e.x, sea, e.z, e.s || 10); this.audio.splash(2); }
+        if (e.k === 'bolt') { this.world.sky.strikeAt(e.x, e.z, 1); setTimeout(() => this.audio.thunder(d), 300); this.fx.sparks(e.x, sea + 2, e.z, 60, 0xb8e8ff); }
+        if (e.k === 'spout') { for (let k = 0; k < 4; k++) setTimeout(() => this.fx.water(e.x, sea + 3, e.z, 0, 1.8, 0), k * 110); this.audio.blow(d); }
+        if (e.k === 'thud') { if (d < 400) this.addShake(Math.max(0.2, 0.9 - d / 400)); this.audio.beastCall('trenchwalker', Math.max(0.2, 1 - d / 500)); for (let k = 0; k < 5; k++) this.fx.ripple(e.x + (Math.random() - 0.5) * 40, sea, e.z + (Math.random() - 0.5) * 40, 12, 2.5); }
+        if (e.k === 'shock') { if (d < 350) this.addShake(Math.max(0.2, 0.7 - d / 350)); this.audio.beastCall('colossus', Math.max(0.2, 1 - d / 500)); for (let k = 0; k < 4; k++) this.fx.ripple(e.x, sea, e.z, 20 + k * 15, 3 + k); }
+        break;
+      }
       case 'greatCaught': {
+        if (e.beast) { const D = BEAST_BY_ID[e.id]; this.ui.worldEvent(D.name.toUpperCase() + ' HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  ' + fmtInt(e.reward) + ' coins', D.title, true); this.audio.fanfare(3); break; }
         this.ui.worldEvent(e.id === 'kraken' ? 'THE KRAKEN HAS BEEN CAUGHT' : 'A LEVIATHAN HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  ' + fmtInt(e.reward) + ' coins', (GREAT_BY_ID[e.id] || KRAKEN).name, true);
         this.audio.fanfare(3);
         for (let k = 0; k < 5; k++) this.fx.confetti(this.player.pos.x + (Math.random() - 0.5) * 6, this.player.pos.y + 2, this.player.pos.z + (Math.random() - 0.5) * 6, 80);
@@ -1543,6 +1614,7 @@ export class Game {
         if (cmd === 'toggle') { this.admin[a] = !this.admin[a]; this.ui.toast(a + ': ' + (this.admin[a] ? 'ON' : 'off'), 'info'); }
         else if (cmd === 'tp') this.teleport(a);
         else if (cmd === 'spawnGreat') send({ id: a || null });
+        else if (cmd === 'spawnBeast') send({ id: a });
         else if (cmd === 'giveRod') send({ id: a });
         else if (cmd === 'giveFish') send({ sp: document.getElementById('admFish')?.value, v: document.getElementById('admVar')?.value || null, zone: this.zone || 0 });
         else if (cmd === 'testFish') { const pool = [...FISH].filter(f => !f.junk && ['rare', 'epic', 'legendary'].includes(f.rarity)); this.act({ t: 'admin', cmd: 'giveFish', sp: pool[Math.floor(Math.random() * pool.length)].id, zone: this.zone || 0 }); }

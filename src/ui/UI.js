@@ -9,19 +9,21 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790354328';
-import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790354328';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790354328';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790354328';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790354328';
-import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790354328';
-import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790354328';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790354328';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790354328';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790354328';
-import { heightAt } from '../world/Terrain.js?v=1790354328';
-import { worldMapCanvas } from './MapArt.js?v=1790354328';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790354328';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790356418';
+import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790356418';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790356418';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790356418';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790356418';
+import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790356418';
+import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790356418';
+import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js?v=1790356418';
+import { buildBeast } from '../art/BeastArt.js?v=1790356418';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790356418';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790356418';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790356418';
+import { heightAt } from '../world/Terrain.js?v=1790356418';
+import { worldMapCanvas } from './MapArt.js?v=1790356418';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790356418';
 
 const $ = (s, r = document) => r.querySelector(s);
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
@@ -199,6 +201,7 @@ export class UI {
     else if (P.mode === 'drive') ht = `<span class="key">W</span><span class="key">S</span> throttle  <span class="key">A</span><span class="key">D</span> steer  <span class="key">X</span> stop  <span class="key">E</span> leave the helm`;
     else if (P.mode === 'mount') ht = `<span class="key">LMB</span> fire harpoon  <span class="key">E</span> leave the gun`;
     else if (P.mode === 'swim') ht = P.exhausted ? 'Exhausted - drift to the shore or a boat and press E' : `<span class="key">SPACE</span> up  <span class="key">Q</span> dive  <span class="key">E</span> climb out`;
+    else if (P.tool === 'bucket' && P.boat) ht = G.tools.bucketFull ? `<span class="key">LMB</span> throw it - over the rail, or at the fire` : P.boat.water > 0.03 ? `Look down into the flooding and <span class="key">LMB</span> scoop` : `<span class="key">LMB</span> scoop sea water (for fires)`;
     else if (P.held) { const it = G.loot.get(P.held); ht = it ? `<span class="key">LMB</span> throw  <span class="key">F</span> drop  <span class="key">E</span> ${it.kg > 40 ? 'drag it somewhere' : 'store / mount'}` : ''; }
     hint.innerHTML = ht;
     hint.classList.toggle('hide', !ht);
@@ -811,6 +814,9 @@ export class UI {
           <p class="note">${G.great.lev ? 'Up right now: ' + esc(G.great.lev.def.name) + ' (' + G.great.lev.phase + ')' : 'None up.'}  Hook chance near one: 15%.</p></section>
         <section><h3>${ic('tentacle')}The Kraken</h3><div class="row">${btn('Start the kraken attack on my boat', 'spawnKraken', 'red')}</div>
           <p class="note">${G.great.kraken ? 'Encounter: ' + G.great.kraken.phase : 'No encounter.'}  Normally only in the Offshore zone. Hook chance after it dives: 10%.</p></section>
+        <section><h3>${ic('leviathan')}Ocean beasts</h3><div class="row">${BEASTS.map(D => btn(D.name, 'spawnBeast:' + D.id)).join('')}${btn('Send it away', 'clearBeast', 'dark')}</div>
+          <p class="note">${G.beasts.b ? 'Out now: ' + esc(G.beasts.b.def.name) + ' (' + G.beasts.b.phase + ') - to hook: ' + esc(G.beasts.b.def.tell) : 'None out. Spawns next to your boat, whatever the conditions.'}</p>
+          <div class="row">${btn('Chart with an X', 'mystery')}${btn('Hotspots around me', 'hotspots')}</div></section>
         <section><h3>${ic('hook')}Fishing</h3><div class="row">${tog('Catch every fish (auto-win fights)', 'autoCatch')}${tog('Auto-cast (AFK fishing)', 'autoCast')}</div></section>
         <section><h3>${ic('rod')}Give rod</h3><div class="row">${RODS.map(R => btn(R.name, 'giveRod:' + R.id, s.rod === R.id ? 'gold' : '')).join('')}${btn('All rods', 'allRods', 'dark')}</div></section>
         <section><h3>${ic('fish')}Give fish</h3><div class="row">
@@ -955,11 +961,13 @@ export class UI {
     if (e.type === 'fish') { const f = FISH_BY_ID[e.id], R = RARITY[f.rarity]; return { name: f.name, css: R.css, tag: R.name + ' - ' + sizeClass(f) }; }
     if (e.type === 'lev') { const L = LEV_BY_ID[e.id]; return { name: L.name, css: '#f2b33a', tag: 'Leviathan - ' + L.title }; }
     if (e.type === 'great') { const D = GREAT_BY_ID[e.id]; return { name: D.name, css: '#c8d8e8', tag: 'Great Leviathan - ' + D.title }; }
+    if (e.type === 'beast') { const D = BEAST_BY_ID[e.id]; return { name: D.name, css: '#9ad0c8', tag: 'Ocean Beast - ' + D.title }; }
     return { name: KRAKEN.name, css: '#c84a5a', tag: 'The Kraken - ' + KRAKEN.title };
   }
   _entryThumb(e, got) {
     if (e.type === 'fish') return fishThumb(e.id, got);
     if (e.type === 'lev') return levThumb(e.id, got);
+    if (e.type === 'beast') return objThumb('jb:' + e.id + got, () => { const m = buildBeast(BEAST_BY_ID[e.id], true); m.animate(1.3, { spread: 1, reach: 1, vis: 1 }); return m.group; }, [0.9, 0.35, 0.6], 1.1, !got);
     if (e.type === 'great') return objThumb('jg:' + e.id + got, () => { const m = buildGreat(GREAT_BY_ID[e.id], true); m.pose(1.1); return m.group; }, [0.9, 0.35, 0.6], 1.1, !got);
     return objThumb('jk:' + got, () => buildKrakenStatue(), [0.4, 0.3, 1], 1.1, !got);
   }
@@ -968,6 +976,17 @@ export class UI {
     const s = this.game.state.s, got = discovered(s, e), info = this._entryInfo(e);
     const back = `<button class="btn" data-act="dexBack">${ic('arrow')} Back to ${esc(sec.name)}</button>`;
     const row = (k, v) => `<div class="jrow"><span>${k}</span><b>${v}</b></div>`;
+    if (e.type === 'beast') {
+      // a beast's page fills in as you learn: a journal page tells you its habits, a sighting its shape
+      const D = BEAST_BY_ID[e.id], clue = s.beastClues?.[D.id], caught = s.beasts?.[D.id];
+      const r = (k, v) => `<div class="jrow"><span>${k}</span><b>${v}</b></div>`;
+      const rows = (got ? r('Habitat', esc(D.habitat)) + r('Size', 'About ' + D.size + ' m') + r('Temper', D.peaceful ? 'Peaceful - it does not want anything from you' : 'Dangerous - not to you, to everything near it') : '')
+        + (clue || got ? r('To hook it', esc(D.tell)) : '') + r('Landed', caught ? caught.n + ' time' + (caught.n > 1 ? 's' : '') : 'Never');
+      return `<div class="jpage legend ${got ? '' : 'unknown'}"><div class="jpic"><img src="${this._entryThumb(e, got)}" alt=""></div><div>
+        <h2>${got ? esc(D.name) : '? ? ?'}</h2><p class="jtag" style="color:#9ad0c8">${got ? esc('Ocean Beast - ' + D.title) : 'Something enormous is out there'}</p>${rows}
+        <p class="jlore">${esc(clue ? D.page : got ? D.blurb : 'You have not seen it and nobody has told you about it. Drowned journal pages turn up in strongboxes and among wreckage.')}</p>
+        <button class="btn" data-act="dexBack">${ic('arrow')} Back to ${esc(sec.name)}</button></div></div>`;
+    }
     if (!got) {
       const hint = e.type === 'fish' ? 'You have not caught one of these yet. It lives somewhere in ' + sec.name + '.' : e.type === 'kraken' ? 'Nobody tells stories about this one. It hunts in the Offshore water.' : e.type === 'great' ? 'The old men on the cliffs of Vigil\'s End say it is out there. Nobody has seen it in years.' : 'Its clues are on the guild map. Find them and it will come.';
       return `<div class="jpage unknown"><div class="jpic"><img src="${this._entryThumb(e, false)}" alt=""></div><div><h2>${e.type === 'fish' ? '???' : '? ? ?'}</h2><p class="jlore">${esc(hint)}</p>${back}</div></div>`;
@@ -1027,6 +1046,13 @@ export class UI {
       if (G.state.levReady(L)) { const [px, py] = toPx(L.lure.x, L.lure.z); c.strokeStyle = '#ff5a4a'; c.lineWidth = 3; c.beginPath(); c.arc(px, py, 12 + Math.sin(this.t * 4) * 2, 0, 6.28); c.stroke(); dot(L.lure.x, L.lure.z, '#ff5a4a', 6); }
     }
     for (const t of G.tools.traps.values()) dot(t.x, t.z, '#f2c14a', 4);
+    // the X from a waterlogged chart
+    for (const m of s.mysteries || []) {
+      if (m.stage) continue;
+      const [mx, my] = toPx(m.x, m.z);
+      c.strokeStyle = '#8a1a0a'; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(mx - 8, my - 8); c.lineTo(mx + 8, my + 8); c.moveTo(mx + 8, my - 8); c.lineTo(mx - 8, my + 8); c.stroke();
+    }
     for (const e of G.events.list) if (e.r) dot(e.x, e.z, '#9ab8ff', 7);
     for (const b of G.boats) dot(b.pos.x, b.pos.z, '#f08a2a', 6);
     for (const p of G.remotes.values()) dot(p.pos.x, p.pos.z, '#8af0ff', 5);

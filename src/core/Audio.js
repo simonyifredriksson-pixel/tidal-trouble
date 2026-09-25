@@ -170,6 +170,34 @@ export class Audio {
     }
     this.noise(4.5, 0.08, 'lowpass', 260, 0.8, 1, 0);
   }
+  /** Each ocean beast has its own voice. */
+  beastCall(id, v = 1) {
+    if (!ctx || v < 0.03) return;
+    switch (id) {
+      case 'cthulhu':   // a chord that should not exist, under a wet roar
+        for (const f of [36.7, 43.6, 51.9]) this.tone(f, 4, 'sawtooth', 0.14 * v, 0.8, 0.94);
+        this.noise(3.5, 0.35 * v, 'lowpass', 220, 0.6, 0.6); break;
+      case 'skymaw':    // a long, falling whistle like wind in a chimney
+        this.tone(1400, 1.8, 'sine', 0.1 * v, 0.2, 0.35); this.noise(1.8, 0.12 * v, 'bandpass', 1800, 4, 0.4); break;
+      case 'drownedking': // chains, and the creak of old hulls
+        for (let k = 0; k < 6; k++) this.tone(900 + Math.random() * 900, 0.08, 'square', 0.05 * v, 0.002, 0.8, k * 0.09);
+        this.tone(110, 1.4, 'sawtooth', 0.1 * v, 0.3, 0.8, 0.3); break;
+      case 'serpent':   // a hiss that goes on too long
+        this.noise(2.6, 0.2 * v, 'highpass', 3500, 0.8, 0.7); this.tone(62, 2.5, 'sine', 0.14 * v, 0.6, 0.9); break;
+      case 'glassback': // soft bell tones, like glass
+        [880, 1318, 1760].forEach((f, i) => this.tone(f, 2.2, 'sine', 0.06 * v, 0.02, 1, i * 0.35)); break;
+      case 'stormeater': // thunder that comes from under the water
+        this.noise(2.4, 0.4 * v, 'lowpass', 180, 0.7, 0.4); this.tone(41, 2.4, 'sine', 0.25 * v, 0.1, 0.7); break;
+      case 'whalefall': // an old whale song, three notes
+        [196, 174.6, 220].forEach((f, i) => this.tone(f, 1.5, 'triangle', 0.1 * v, 0.4, i === 2 ? 1.2 : 0.85, i * 1.1)); break;
+      case 'mirrorfish': // a shimmer
+        for (let k = 0; k < 8; k++) this.tone(2400 + k * 180, 0.12, 'sine', 0.03 * v, 0.01, 1, k * 0.05); break;
+      case 'trenchwalker': // a door slamming at the bottom of the world
+        this.tone(32, 1.2, 'sine', 0.4 * v, 0.005, 0.5); this.noise(0.8, 0.35 * v, 'lowpass', 120, 1, 0.5); break;
+      case 'colossus':  // grinding stone
+        this.noise(2.2, 0.3 * v, 'bandpass', 300, 1.2, 0.6); this.tone(48, 2.2, 'sawtooth', 0.12 * v, 0.4, 0.9); break;
+    }
+  }
   /** The Graveback surfacing: a breath like a storm through a keyhole. */
   blow(dist = 50) {
     const a = 1 / (1 + dist / 120);

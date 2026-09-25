@@ -9,9 +9,10 @@
          spaces on the bottom shelf or on top of the bookcase
    tier  how grand its stand is: 0 wood, 1 brass, 2 silver, 3 gold, 4 relic */
 
-import { FISH, FISH_BY_ID } from './FishData.js?v=1790354328';
-import { LEVIATHANS } from './LeviathanData.js?v=1790354328';
-import { GREAT } from './GreatData.js?v=1790354328';
+import { FISH, FISH_BY_ID } from './FishData.js?v=1790356418';
+import { LEVIATHANS } from './LeviathanData.js?v=1790356418';
+import { GREAT } from './GreatData.js?v=1790356418';
+import { BEASTS } from './BeastData.js?v=1790356418';
 
 const T = [];
 // the milestones, each with its own object
@@ -36,6 +37,8 @@ for (const f of FISH) {
 // the eleven shard-bearers as skulls; the Tidemother as a statue
 for (const L of LEVIATHANS) T.push({ id: 'lev:' + L.id, name: L.name, size: L.final ? 'L' : 'S', tier: 4, model: L.final ? 'levstatue' : 'skull', lev: L.id, text: L.story });
 // the creatures at the top of the food chain
+T.push({ id: 'strongbox', name: 'The X on the Chart', size: 'S', tier: 2, model: 'strongbox', text: 'You followed an old chart out to sea and pulled up what someone buried there.' });
+for (const b of BEASTS) T.push({ id: 'beast:' + b.id, name: b.name, size: 'L', tier: 4, model: 'beast', beast: b.id, text: b.blurb });
 T.push({ id: 'kraken', name: 'The Kraken', size: 'L', tier: 4, model: 'kraken', text: 'You fought it off your boat with an axe, and then you caught it.' });
 for (const g of GREAT) T.push({ id: 'great:' + g.id, name: g.name, size: 'L', tier: 4, model: 'great', great: g.id, text: g.blurb });
 

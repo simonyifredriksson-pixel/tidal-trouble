@@ -12,13 +12,13 @@
    Chaos without complication: one director, one list, and each event is a
    start, an update and an end. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { Character } from '../art/Character.js?v=1790354328';
-import { THIEF, RADIO } from '../data/NPCData.js?v=1790354328';
-import { MeshBuilder } from '../art/Geo.js?v=1790354328';
-import { MAT } from '../art/Materials.js?v=1790354328';
-import { clamp, damp, smoothstep, uid, wrapAngle } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { Character } from '../art/Character.js?v=1790356418';
+import { THIEF, RADIO } from '../data/NPCData.js?v=1790356418';
+import { MeshBuilder } from '../art/Geo.js?v=1790356418';
+import { MAT } from '../art/Materials.js?v=1790356418';
+import { clamp, damp, smoothstep, uid, wrapAngle } from '../core/Util.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 const _v = new THREE.Vector3();
 
@@ -60,8 +60,13 @@ export class Events {
         if (e.t >= e.dur) { this._end(e); this.list.splice(i, 1); }
       }
       const st = this.active('storm');
-      const target = st ? smoothstep(0, 20, st.t) * (1 - smoothstep(st.dur - 25, st.dur, st.t)) : 0;
+      const target = Math.max(st ? smoothstep(0, 20, st.t) * (1 - smoothstep(st.dur - 25, st.dur, st.t)) : 0, G.beasts?.stormForce || 0);
       this.storm = damp(this.storm, target, 1.5, dt);
+      // a storm has a wind, and the wind pushes boats - off course, sometimes somewhere new
+      if (this.storm > 0.2) {
+        this.windA = (this.windA ?? Math.random() * 6.28) + dt * 0.01;
+        for (const b of G.boats) if (!b.docked) { b.tow.x += Math.cos(this.windA) * this.storm * 0.9; b.tow.y += Math.sin(this.windA) * this.storm * 0.9; }
+      } else this.windA = undefined;
     }
     G.world.storm = this.storm;
     const wp = this.active('whirlpool');
@@ -113,7 +118,7 @@ export class Events {
       b.stolen = true; b.docked = false; b.autopilot = { x: q.x, z: q.z };
       this._spawnPete(b);
     } else if (k === 'whirlpool') {
-      const q = this._waterNear(p, 55, 120, 10); if (!q) return null;
+      const q = this._waterNear(p, 55, 120, 10) || this._waterNear(p, 100, 260, 10); if (!q) return null;
       e.x = q.x; e.z = q.z; e.r = 42; e.dur = 110; e.s = 0;
     } else if (k === 'meteor') {
       const q = this._waterNear(p, 90, 230, 4); if (!q) return null;

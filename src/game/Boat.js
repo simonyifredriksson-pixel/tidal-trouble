@@ -15,15 +15,33 @@
    three chase their targets through a spring, so a boat rides a swell
    instead of snapping to it. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { buildBoat } from '../art/BoatArt.js?v=1790354328';
-import { boatStats, HULL_BY_ID } from '../data/BoatData.js?v=1790354328';
-import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790354328';
-import { waveAmp } from '../world/MapData.js?v=1790354328';
-import { clamp, damp, wrapAngle, lerp } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { buildBoat } from '../art/BoatArt.js?v=1790356418';
+import { boatStats, HULL_BY_ID } from '../data/BoatData.js?v=1790356418';
+import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790356418';
+import { waveAmp } from '../world/MapData.js?v=1790356418';
+import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js?v=1790356418';
+import { MeshBuilder } from '../art/Geo.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 const _v = new THREE.Vector3();
+const MAT_HOLE = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+let _holeGeo = null;
+/** A ragged hole punched through planks: a dark gap ringed with splinters. */
+function holeGeo() {
+  if (_holeGeo) return _holeGeo;
+  const b = new MeshBuilder(rng(9));
+  const n = 11, r = rng(4);
+  const pts = []; for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, rr = 0.2 + r() * 0.12; pts.push([Math.cos(a) * rr, Math.sin(a) * rr * 0.75]); }
+  b.color(0x0a0806);
+  for (let i = 0; i < n; i++) b.tri([0, 0, 0.012], [pts[i][0], pts[i][1], 0.012], [pts[(i + 1) % n][0], pts[(i + 1) % n][1], 0.012]);
+  for (let i = 0; i < n; i++) {
+    const [x, y] = pts[i], l = Math.hypot(x, y);
+    b.color(i % 2 ? 0xc8a070 : 0xa87a4a).card([x, y, 0.014], [x + x / l * 0.1 + (r() - 0.5) * 0.04, y + y / l * 0.1, 0.05 + r() * 0.06], [pts[(i + 1) % n][0], pts[(i + 1) % n][1], 0.014]);
+  }
+  _holeGeo = b.build();
+  return _holeGeo;
+}
 
 export class Boat {
   constructor(game, cfg, id = 'boat') {
@@ -58,6 +76,7 @@ export class Boat {
       this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     }
     this.cfg = JSON.parse(JSON.stringify(cfg));
+    this.holes = [];
     const art = buildBoat(this.cfg);
     this.art = art;
     this.group = art.group;
@@ -153,7 +172,8 @@ export class Boat {
     vr *= Math.exp(-2.8 * dt);
     const steer = this.driver || this.autopilot ? this.steer : 0;
     const turnF = clamp(Math.abs(vf) / 3.5, 0.2, 1) * (vf < -0.2 ? -1 : 1);
-    this.yawRate = damp(this.yawRate, steer * st.turn * turnF * (1 - over * 0.3), 3.5, dt);
+    // a flooded boat is heavy and slow to answer the helm
+    this.yawRate = damp(this.yawRate, steer * st.turn * turnF * (1 - over * 0.3) * (1 - this.water * 0.6), 3.5 * (1 - this.water * 0.5), dt);
     this.heading = wrapAngle(this.heading + this.yawRate * dt);
     this.vel.set(vf * sh + vr * ch, vf * ch - vr * sh);
     // external pulls: towing fish, whirlpools, thieves
@@ -297,7 +317,8 @@ export class Boat {
       }
     }
     // leaks
-    for (const L of this.leaks) this.water += L.size * 0.009 * dt;
+    // holes below the waterline: small ones seep, big ones pour
+    for (const L of this.leaks) this.water += (L.size * L.size * 0.012 + 0.002) * (1 - L.fix * 0.6) * dt;
     // fires
     for (let i = this.fires.length - 1; i >= 0; i--) {
       const F = this.fires[i];
@@ -377,13 +398,23 @@ export class Boat {
       const w = this.toWorld(_v.set(F.x, this.deck + 0.05, F.z));
       fx.fire(w.x, w.y, w.z, F.i);
     }
-    // leaks: bubbling water
-    for (const L of this.leaks) {
-      if (Math.random() < 0.4) {
-        const w = this.toWorld(_v.set(L.x * 0.9, this.deck + 0.05 + this.water * this.deck * 0.9, L.z));
-        fx.bubbles(w.x, w.y, w.z, 1);
+    // leaks: a real hole in the side - splintered planks, a dark gap, and
+    // sea water spraying in; the bigger the hole, the harder it comes
+    this.holes = this.holes || [];
+    while (this.holes.length < this.leaks.length) { const m = new THREE.Mesh(holeGeo(), MAT_HOLE); this.group.add(m); this.holes.push(m); }
+    this.holes.forEach((m, i) => {
+      const L = this.leaks[i];
+      m.visible = !!L;
+      if (!L) return;
+      const side = Math.sign(L.x) || 1;
+      m.position.set(side * (this.halfWidth(L.z) / 0.9 - 0.02), this.deck - 0.05, L.z);
+      m.rotation.set(0, side * Math.PI / 2, 0);
+      m.scale.setScalar((0.55 + L.size * 0.7) * (1 - L.fix * 0.7));
+      if (Math.random() < 0.5 + L.size * 0.4) {
+        const w = this.toWorld(_v.set(L.x * 0.92, this.deck + 0.05 + this.water * this.deck * 0.9, L.z));
+        fx.water(w.x, w.y, w.z, -Math.cos(this.heading) * side * 0.35, 0.25, Math.sin(this.heading) * side * 0.35);
       }
-    }
+    });
     // flooding sheet
     const fl = this.parts.flood;
     fl.visible = this.water > 0.02;

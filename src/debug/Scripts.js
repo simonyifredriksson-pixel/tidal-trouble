@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790354328';
-import { heightAt } from '../world/Terrain.js?v=1790354328';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790356418';
+import { heightAt } from '../world/Terrain.js?v=1790356418';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -62,6 +62,8 @@ export async function runScripts(names, game) {
 
   for (const name of names) {
     log('--- ' + name);
+    G.ui.close(); G.ui.closeTalk();     // a screen left open by the last suite would block input
+    P.tool = 'rod'; G.vm.setTool('rod'); G.tools.bucketFull = null; P.pitch = 0;
     try {
       if (name === 'fish') {
         const A = G.world.settlement.anchors;
@@ -317,7 +319,7 @@ export async function runScripts(names, game) {
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790354328');
+        const { State } = await import('../game/State.js?v=1790356418');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();
@@ -326,7 +328,99 @@ export async function runScripts(names, game) {
         ok(!!S2.s.dex.pike && S2.s.cabin.slots[0]?.sp === 'pike', 'journal and cabin mounts survive');
         ok(S2.s.boatCargo.length >= 1, 'fish left on the deck survive (' + S2.s.boatCargo.length + ')');
         ok(!!S2.s.player, 'player position saved');
-      }      if (name === 'shore') {
+      }      if (name === 'beasts') {
+        const { BEASTS } = await import('../data/BeastData.js?v=1790356418');
+        G.state.s.boat.hull = 'expedition'; G._boatChanged();
+        const deep = [[-700, 700], [-950, 250], [60, 760], [860, 850]];
+        for (const D of BEASTS) {
+          const [x, z] = D.id === 'trenchwalker' || D.id === 'cthulhu' ? deep[0] : D.id === 'mirrorfish' ? [880, 60] : D.id === 'whalefall' ? [-1100, 0] : deep[1];
+          b.pos.set(x, 0, z); b.vel.set(0, 0); b.docked = false; b.hp = b.stats.hp; b.leaks = []; b.water = 0; b._updateMatrix();
+          P.attach(b, V(0, b.deck, 0)); G.world.prebuild(x, z);
+          G.tod = D.where.toString().includes('c.night') && !D.where.toString().includes('!c.night') ? 0.95 : 0.45;
+          G.great.lev = null; G.great.kraken = null;
+          G.beasts.b = null; const B = G.beasts.spawn(D.id, b.pos);
+          const start = b.pos.clone(); const phases = new Set(); let refused = null, fishable = false, far = 0;
+          for (let i = 0; i < 150 && G.beasts.b; i++) {
+            step(1); phases.add(G.beasts.b.phase); far = Math.max(far, b.pos.distanceTo(start));
+            const r = G.beasts.claim(V(G.beasts.b.x, 0, G.beasts.b.z));
+            if (r && r.refused && !refused) refused = r.text;
+            if (G.beasts._fishable(G.beasts.b, V(G.beasts.b.x, 0, G.beasts.b.z))) fishable = true;
+            if (G.beasts.b) G.beasts.b.hooked = null;
+          }
+          const inScene = !!G.scene.getObjectByName('beast:' + D.id);
+          ok(B && inScene && phases.size >= (D.id === 'mirrorfish' ? 1 : 2), `${D.name}: appears and runs its cycle (${[...phases].join(', ')})`);
+          ok(!!refused, `  ... before the right moment it refuses: "${(refused || '').slice(0, 70)}"`);
+          const moved = far;
+          if (D.id === 'serpent' || D.id === 'colossus') ok(moved > 12, `  ... its current pushed the boat ${moved.toFixed(0)} m`);
+          if (D.id === 'cthulhu') ok(G.world.storm > 0.6 && (b.leaks.length > 0 || b.hp < b.stats.hp), `  ... it brings a storm (${G.world.storm.toFixed(2)}) and the waves hole the ship (${b.leaks.length} holes, hp ${Math.round(b.hp)})`);
+          // and it can be caught (playtest catch-all, so the test is quick)
+          if (!G.beasts.b) G.beasts.spawn(D.id, b.pos);
+          G.admin.autoCatch = true;
+          const Bx = G.beasts.b; Bx.fxT = 99; P.attach(b, V(0, b.deck, 0)); const c = G.beasts.claim(V(Bx.x, 0, Bx.z));
+          const F = G.fishing; F.cancel(true); P.tool = 'rod'; G.vm.setTool('rod'); P.mode = 'walk';
+          F.bpos.set(Bx.x, 0, Bx.z); F.water = 'sea'; F.pending = c; F._hook(); step(5);
+          G.admin.autoCatch = false;
+          ok(G.state.s.beasts[D.id] && G.state.s.trophies.got['beast:' + D.id], `  ... and landed: trophy earned, journal entry filled in`);
+          void fishable;
+        }
+        const J = await import('../data/JournalData.js?v=1790356418');
+        ok(J.progress(G.state.s).per.beasts.got === 10, 'all ten are in the journal\'s Ocean Beasts section');
+      }
+      if (name === 'flood') {
+        G.state.s.boat.hull = 'motor'; G._boatChanged();
+        b.pos.set(60, 0, 300); b.docked = false; b.hp = b.stats.hp; b.leaks = []; b.water = 0; b._updateMatrix();
+        P.attach(b, V(0, b.deck, 0)); step(0.3);
+        b.damage(28, 'test'); b.leaks.push({ x: b.halfWidth(0.5) * 0.95, y: b.deck, z: 0.5, size: 1.1, fix: 0 });
+        step(1);
+        ok(b.holes.some(m => m.visible), 'a hole is visible in the side of the hull (' + b.holes.filter(m => m.visible).length + ')');
+        const w0 = b.water; step(20);
+        ok(b.water > w0 + 0.05 && b.parts.flood.visible, 'water rises inside the boat: ' + w0.toFixed(2) + ' -> ' + b.water.toFixed(2));
+        b.leaks = [];
+        P.tool = 'bucket'; G.vm.setTool('bucket'); P.pitch = -0.6; G.tools.bucketFull = null;
+        const w1 = b.water;
+        I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
+        ok(G.tools.bucketFull === 'bilge' && b.water < w1, 'looking down and clicking scoops bilge water: ' + w1.toFixed(3) + ' -> ' + b.water.toFixed(3));
+        // throw it on the deck: it comes back
+        P.pitch = -0.2; P.yaw = b.heading + Math.PI; P.local.set(0, b.deck, -2.4);
+        const w2 = b.water; I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
+        ok(b.water > w2, 'thrown on your own deck, it runs back into the bilge');
+        // scoop again, walk to the rail, throw it over
+        P.pitch = -0.6; I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
+        P.local.set(b.halfWidth(0) - 0.4, b.deck, 0); P.yaw = b.heading - Math.PI / 2 + Math.PI; P.pitch = 0;
+        const w3 = b.water; I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
+        ok(b.water <= w3 + 0.001 && !G.tools.bucketFull, 'thrown over the rail, it is gone (' + w3.toFixed(3) + ' -> ' + b.water.toFixed(3) + ')');
+        b.water = 0;
+      }
+      if (name === 'ocean') {
+        const O = G.ocean;
+        b.pos.set(60, 0, 400); b._updateMatrix(); P.attach(b, V(0, b.deck, 0));
+        O.hot = []; O.spawnT = 0; step(1);
+        ok(O.hot.length > 0, 'the sea makes its own fishing spots: ' + O.hot.map(h => h.kind).join(', '));
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790356418');
+        const hits = k => { let n = 0; for (let i = 0; i < 2000; i++) if (FISH_BY_ID[pickSpecies({ region: 'home', water: 'sea', bait: k === 'glow' ? 'glow' : 'pieces', night: k === 'glow', zone: 1, hotspot: k }).id].hotspot === k) n++; return n; };
+        ok(hits('birds') > 50 && hits('glow') > 20 && hits('bubbles') > 20, 'each hotspot has its own fish (sprats ' + hits('birds') + ', jellies ' + hits('glow') + ', groupers ' + hits('bubbles') + ' in 2000 bites)');
+        let storms = 0; for (let i = 0; i < 3000; i++) if (FISH_BY_ID[pickSpecies({ region: 'open', water: 'sea', bait: 'pieces', zone: 2, storm: true }).id].weather) storms++;
+        let calm = 0; for (let i = 0; i < 3000; i++) if (FISH_BY_ID[pickSpecies({ region: 'open', water: 'sea', bait: 'pieces', zone: 2, storm: false }).id].weather) calm++;
+        ok(storms > 50 && calm === 0, 'storm fish only bite in storms (' + storms + ' in a storm, ' + calm + ' calm)');
+        // the chart: pick it up, an X appears; fish on the X, a strongbox; open it, a page about a beast
+        const s = G.state.s; s.mysteries = []; s.beastClues = {};
+        const map = G.loot.spawn({ sp: 'oldmap', kg: 0.2, cm: 30, pos: P.pos.clone().add(V(0, 0.5, 0)) }); step(0.2);
+        G._do({ t: 'pickup', id: map.id }, P.id); step(0.2);
+        const m = s.mysteries[0];
+        ok(m && m.stage === 0, 'a waterlogged chart puts an X on the map at ' + (m ? m.x + ', ' + m.z : '-'));
+        let box = null;
+        for (let i = 0; i < 20 && !box; i++) { const sp = pickSpecies({ region: G.world.region(m.x, m.z), water: 'sea', bait: 'worm', zone: 2, mystery: !!O.mysteryAt(V(m.x, 0, m.z)) }); if (sp.id === 'strongbox') box = sp; }
+        ok(!!box, 'fishing right on the X pulls up the Sunken Strongbox');
+        const sb = G.loot.spawn({ sp: 'strongbox', kg: 20, cm: 70, pos: P.pos.clone().add(V(0, 0.5, 0)), flop: 0 }); sb.pos.set(m.x, 0.5, m.z); step(0.2);
+        const n0 = G.loot.items.size; G._do({ t: 'open', id: sb.id }, P.id); step(0.3);
+        const page = [...G.loot.items.values()].find(x => x.sp === 'journalpage');
+        ok(m.stage === 1 && !!page, 'opening it pays out and leaves a Drowned Journal Page');
+        G._do({ t: 'pickup', id: page.id }, P.id); step(0.2);
+        const known = Object.keys(s.beastClues);
+        ok(known.length === 1, 'the page tells you about ' + known[0] + ' - and makes it more likely to turn up');
+        void n0;
+      }
+      if (name === 'shore') {
         // wade in to knee depth on a beach, face the sea, and land fish
         const spots = [];
         for (let x = -300; x < 300 && spots.length < 3; x += 3) for (let z = -200; z < 400 && spots.length < 3; z += 3) {
@@ -358,9 +452,9 @@ export async function runScripts(names, game) {
         ok(good === spots.length + 1, 'every fish landed from shore or pier stays on dry land (' + good + '/' + (spots.length + 1) + ')');
       }
       if (name === 'journal') {
-        const J = await import('../data/JournalData.js?v=1790354328');
-        const { pickSpecies } = await import('../game/Fishing.js?v=1790354328');
-        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790354328');
+        const J = await import('../data/JournalData.js?v=1790356418');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790356418');
+        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790356418');
         const pr = J.progress(G.state.s);
         ok(J.SECTIONS.length >= 8 && pr.of > 60, 'the field guide has ' + J.SECTIONS.length + ' places and ' + pr.of + ' entries: ' + J.SECTIONS.map(S => S.name + ' ' + pr.per[S.id].of).join(', '));
         // every fish listed under a place can really be caught there
@@ -373,7 +467,7 @@ export async function runScripts(names, game) {
             if (f.rarity === 'giant') continue;       // giants come with their world event
             const bait = Object.entries(f.bait).sort((a, b) => b[1] - a[1])[0][0];
             const region = S.id === 'kraken' ? f.where[0] : S.id;
-            const ctx = { region, water: f.water === 'any' ? 'sea' : f.water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false };
+            const ctx = { region, water: f.water === 'any' ? 'sea' : f.water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false, hotspot: f.hotspot || null, storm: f.weather === 'storm' };
             let hit = false; for (let i = 0; i < 4000 && !hit; i++) if (pickSpecies(ctx).id === f.id) hit = true;
             if (!hit) bad.push(S.id + ':' + f.id);
           }
@@ -488,7 +582,7 @@ export async function runScripts(names, game) {
         ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:marlin', 'looking at a trophy tells you what it is');
       }
       if (name === 'great') {
-        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790354328');
+        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790356418');
         const c = {}; for (let i = 0; i < 20000; i++) { const g = rollGreat(); c[g.id] = (c[g.id] || 0) + 1; }
         const pc = k => (c[k] || 0) / 200;
         ok(Math.abs(pc('graveback') - 60) < 2 && Math.abs(pc('ninefold') - 30) < 2 && Math.abs(pc('hushwing') - 10) < 1.5, `spawn odds over 20000 rolls: Graveback ${pc('graveback').toFixed(1)}%, Ninefold ${pc('ninefold').toFixed(1)}%, Hushwing ${pc('hushwing').toFixed(1)}%`);
@@ -536,7 +630,7 @@ export async function runScripts(names, game) {
       }
       if (name === 'kraken') {
         G.teleport('offshore'); step(0.5);
-        const { zoneAt } = await import('../world/MapData.js?v=1790354328');
+        const { zoneAt } = await import('../world/MapData.js?v=1790356418');
         ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
         const K = G.great.startKraken(b);
         ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
@@ -608,7 +702,7 @@ export async function runScripts(names, game) {
         for (const n of fisher) { G._talk(n); step(0.05); }
         G.ui.closeTalk();
         ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
-        const { waveAmp } = await import('../world/MapData.js?v=1790354328');
+        const { waveAmp } = await import('../world/MapData.js?v=1790356418');
         ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
       }
       if (name === 'chat') {
@@ -636,7 +730,7 @@ export async function runScripts(names, game) {
         ok(!C.logEl.querySelector('img,b'), 'names and text from the network are never HTML');
         G.ui.open('pause'); tap(); ok(!C.open, 'the chat will not open over a menu'); G.ui.close();
         // voice maths: near is loud, far is silent, the walkie ignores distance
-        const { Voice } = await import('../net/Voice.js?v=1790354328');
+        const { Voice } = await import('../net/Voice.js?v=1790356418');
         ok(Voice.proximity(2) === 1 && Voice.proximity(17.5) > 0.2 && Voice.proximity(17.5) < 0.3 && Voice.proximity(40) === 0, 'proximity voice: 2 m full, 17 m ' + Voice.proximity(17.5).toFixed(2) + ', 40 m silent');
         const fakeR = { pos: P.pos.clone().add(V(200, 0, 0)), walkie: false, name: 'Far', color: '#fff' };
         G.remotes.set('fake', fakeR);

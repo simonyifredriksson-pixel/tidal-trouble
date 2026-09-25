@@ -15,9 +15,9 @@
    turning is added to your yaw, so standing on a turning boat turns you
    with it instead of making the world spin round you. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { clamp, damp, lerp, wrapAngle } from '../core/Util.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();

@@ -13,14 +13,14 @@
      cabin         the mount slots of your cabin museum
      clues         world objects for leviathan clues (by clue id) */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790354328';
-import { MAT } from '../art/Materials.js?v=1790354328';
-import * as BA from '../art/BuildingArt.js?v=1790354328';
-import { heightAt, groundAt, ICE_Y } from './Terrain.js?v=1790354328';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790354328';
-import { ZONES, HOME_CENTRE } from './MapData.js?v=1790354328';
-import { rng, TAU } from '../core/Util.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790356418';
+import { MAT } from '../art/Materials.js?v=1790356418';
+import * as BA from '../art/BuildingArt.js?v=1790356418';
+import { heightAt, groundAt, ICE_Y } from './Terrain.js?v=1790356418';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790356418';
+import { ZONES, HOME_CENTRE } from './MapData.js?v=1790356418';
+import { rng, TAU } from '../core/Util.js?v=1790356418';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -40,6 +40,7 @@ export class Settlement {
     this.cabin = { slots: [], photos: [], shelf: [], yard: [], rack: null };
     this.moorings = [];
     this.animated = [];
+    this.wrecks = [];
     this._build();
   }
 
@@ -790,6 +791,7 @@ export class Settlement {
   }
 
   wreckAt(x, z, depthOffset, len, bitten, clueId = null, name = null) {
+    this.wrecks.push({ x, z });
     const geo = BA.buildWreck(len * 7 + (bitten ? 1 : 0), len, bitten);
     const h = heightAt(x, z);
     const y = Math.max(h, -3.2) - depthOffset * 0.3;

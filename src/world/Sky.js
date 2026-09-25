@@ -7,9 +7,9 @@
    trees do not go solid black. The Blackwater is the one place the game is
    allowed to be properly dark, and there it is the fog that closes in. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790354328';
-import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790356418';
+import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790356418';
 
 const KEYS = [
   // t,    top,      horizon,  fog,      sun,      sunI, hemiSky,  hemiGnd,  hemiI
@@ -288,10 +288,16 @@ export class Sky {
     return S;
   }
 
-  _strike(cam) {
+  /** Lightning at a chosen point (the Storm Eater, far-off storms). */
+  strikeAt(x, z, flash = 1) {
+    this._strike(null, x, z);
+    this.flash = flash;
+    this.boltHit = { x, z, t: performance.now() };
+  }
+  _strike(cam, atX = null, atZ = null) {
     this.flash = 1;
     const a = Math.random() * Math.PI * 2, d = 150 + Math.random() * 350;
-    const x = cam.x + Math.cos(a) * d, z = cam.z + Math.sin(a) * d;
+    const x = atX ?? cam.x + Math.cos(a) * d, z = atZ ?? cam.z + Math.sin(a) * d;
     const pts = [];
     let px = x, py = 220, pz = z;
     const b = new MeshBuilder();

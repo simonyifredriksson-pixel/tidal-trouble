@@ -9,11 +9,11 @@
    throws can never make the UI say "caught!" about a fish that was never
    stored. */
 
-import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790354328';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790354328';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790354328';
-import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790354328';
-import { Bus } from '../core/Bus.js?v=1790354328';
+import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790356418';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790356418';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790356418';
+import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790356418';
+import { Bus } from '../core/Bus.js?v=1790356418';
 
 export const SAVE_KEY = 'tidaltrouble.save.v1';
 export const SETTINGS_KEY = 'tidaltrouble.settings.v1';
@@ -33,6 +33,7 @@ export function freshSave() {
     tut: 0, flags: {},
     trophies: { got: {}, placed: {} },     // earned (id -> day) and on the bookshelf (id -> slot)
     great: {}, kraken: { met: 0, caught: 0 }, heard: {},
+    beasts: {}, beastSeen: {}, beastClues: {}, mysteries: [],
     player: null, boatPos: null, boatCargo: [], traps: [], holes: [],
     name: 'Fisher',
   };
@@ -70,6 +71,7 @@ export class State {
     if (!s.rods.includes('basic')) s.rods.unshift('basic');
     s.tools.axe = true;
     s.trophies = Object.assign(f.trophies, s.trophies || {});
+    s.beasts = s.beasts || {}; s.beastSeen = s.beastSeen || {}; s.beastClues = s.beastClues || {}; s.mysteries = s.mysteries || [];
     s.great = s.great || {}; s.kraken = Object.assign(f.kraken, s.kraken || {}); s.heard = s.heard || {};
   }
 

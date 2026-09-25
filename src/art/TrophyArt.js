@@ -8,16 +8,18 @@
    buildTrophy() returns a Group already scaled to sit in a cubby of the
    given width and height, feet on y = 0, facing +Z (out of the shelf). */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { MeshBuilder, shadeHex } from './Geo.js?v=1790354328';
-import { MAT } from './Materials.js?v=1790354328';
-import { fishMesh } from './FishArt.js?v=1790354328';
-import { buildLeviathan } from './CreatureArt.js?v=1790354328';
-import { buildGreat, buildKrakenStatue } from './GreatArt.js?v=1790354328';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790354328';
-import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790354328';
-import { GREAT_BY_ID } from '../data/GreatData.js?v=1790354328';
-import { rng, TAU } from '../core/Util.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { MeshBuilder, shadeHex } from './Geo.js?v=1790356418';
+import { MAT } from './Materials.js?v=1790356418';
+import { fishMesh } from './FishArt.js?v=1790356418';
+import { buildLeviathan } from './CreatureArt.js?v=1790356418';
+import { buildGreat, buildKrakenStatue } from './GreatArt.js?v=1790356418';
+import { FISH_BY_ID } from '../data/FishData.js?v=1790356418';
+import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790356418';
+import { GREAT_BY_ID } from '../data/GreatData.js?v=1790356418';
+import { BEAST_BY_ID } from '../data/BeastData.js?v=1790356418';
+import { buildBeast } from './BeastArt.js?v=1790356418';
+import { rng, TAU } from '../core/Util.js?v=1790356418';
 
 const PLINTH = [
   { top: 0x8a6a44, side: 0x6a4a30, trim: 0x5a3e28 },
@@ -194,6 +196,19 @@ const MODELS = {
     const k = buildKrakenStatue();
     k.position.set(0, y + 0.15, 0);
     extra.push(k);
+  },
+  strongbox(b, g, T, extra) {
+    const y = plinth(b, g, T.tier, 1, 0.7);
+    const m = fishMesh(FISH_BY_ID.strongbox, 1); m.scale.setScalar(0.6); m.position.y = y + 0.2; extra.push(m);
+    b.color(0xd8c8a0).box(0.5, 0.01, 0.35, 0.2, y + 0.005, 0.1);
+  },
+  beast(b, g, T, extra) {
+    const D = BEAST_BY_ID[T.beast];
+    const y = plinth(b, g, T.tier, 2.4, 1.0);
+    b.color(0x2a3a44); for (let i = 0; i < 6; i++) b.lump(0.2, -1 + i * 0.4, y + 0.06, (i % 2) * 0.1 - 0.05, 0.3, 0.5);
+    const m = buildBeast(D, true); m.animate(1.3, { spread: 1, reach: 1, vis: 1 });
+    m.group.scale.setScalar(2); m.group.position.set(0, y + 0.2, 0);
+    extra.push(m.group);
   },
   great(b, g, T, extra) {
     const D = GREAT_BY_ID[T.great];

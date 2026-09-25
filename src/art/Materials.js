@@ -2,7 +2,7 @@
    Every model carries its colour per vertex, so there are only a few
    materials in the entire scene and almost everything batches. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
 
 /** Uniforms shared by every animated shader (wind, time). */
 export const U = {

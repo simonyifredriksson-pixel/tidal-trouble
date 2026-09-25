@@ -9,11 +9,11 @@
    Poses are spring-blended targets per tool and action, so a cast is a
    wind-up and a whip, reeling turns the crank, and a hammer swings. */
 
-import * as THREE from '../../lib/three.module.js?v=1790354328';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790354328';
-import { MAT } from '../art/Materials.js?v=1790354328';
-import { buildRod } from '../art/RodArt.js?v=1790354328';
-import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790354328';
+import * as THREE from '../../lib/three.module.js?v=1790356418';
+import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790356418';
+import { MAT } from '../art/Materials.js?v=1790356418';
+import { buildRod } from '../art/RodArt.js?v=1790356418';
+import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790356418';
 
 function handMesh(skin, sleeve, side) {
   const b = new MeshBuilder(rng(side > 0 ? 3 : 4));
@@ -200,7 +200,9 @@ export class ViewModel {
       R = { x: 0.3, y: -0.3, z: -0.5, rx: -0.4, ry: 0, rz: 0 };
       if (this.action === 'hit' || s.busy) { const k = (this.t * 5) % 1; R.rx = -0.4 - Math.sin(k * Math.PI) * 1.1; }
     } else if (tool === 'bucket') {
-      R = { x: 0.22, y: -0.46, z: -0.5, rx: 0, ry: 0, rz: 0 };
+      R = { x: 0.22, y: -0.46 - (this.bucketFull ? 0.04 : 0), z: -0.5, rx: 0, ry: 0, rz: Math.sin(this.t * 3) * (this.bucketFull ? 0.04 : 0) };
+      if (this.tools.bucket?.children[1]) this.tools.bucket.children[1].visible = !!this.bucketFull;
+      if (this.action === 'swing') { const k = clamp(this.actT / 0.45, 0, 1); R.y -= Math.sin(k * Math.PI) * 0.25; R.rx = Math.sin(k * Math.PI) * 0.9; }
       if (this.action === 'throw') { const k = clamp(this.actT / 0.45, 0, 1); R.rx = -Math.sin(k * Math.PI) * 1.6; R.y += Math.sin(k * Math.PI) * 0.25; }
     } else if (tool === 'camera') {
       R = { x: 0.04, y: -0.14, z: -0.34, rx: 0, ry: 0, rz: 0 };
