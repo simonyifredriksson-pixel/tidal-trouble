@@ -10,10 +10,10 @@
    A common fish that lives in several places appears in each of them - the
    journal is a collection map, and each section counts on its own. */
 
-import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js?v=1790193571';
-import { LEVIATHANS } from './LeviathanData.js?v=1790193571';
-import { GREAT, KRAKEN } from './GreatData.js?v=1790193571';
-import { REGIONS, ZONES } from '../world/MapData.js?v=1790193571';
+import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js?v=1790354328';
+import { LEVIATHANS } from './LeviathanData.js?v=1790354328';
+import { GREAT, KRAKEN } from './GreatData.js?v=1790354328';
+import { REGIONS, ZONES } from '../world/MapData.js?v=1790354328';
 
 const listed = f => f.rarity !== 'junk' || f.id === 'chest';
 const inRegion = r => f => Array.isArray(f.where) && f.where.includes(r) && f.zoneOnly === undefined && listed(f);

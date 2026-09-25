@@ -3,11 +3,11 @@
    game.update() (no rendering) and prints PASS/FAIL lines to the debug
    overlay, so a single headless screenshot is the test report. */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790193571';
-import { heightAt } from '../world/Terrain.js?v=1790193571';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790193571';
-import { Bus } from '../core/Bus.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { FISH_BY_ID, FISH } from '../data/FishData.js?v=1790354328';
+import { heightAt } from '../world/Terrain.js?v=1790354328';
+import { LEVIATHANS } from '../data/LeviathanData.js?v=1790354328';
+import { Bus } from '../core/Bus.js?v=1790354328';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -317,7 +317,7 @@ export async function runScripts(names, game) {
         const info = G.renderer.info.render;
         log('INFO draw calls last frame: ' + info.calls + ', triangles ' + info.triangles);
       }      if (name === 'save') {
-        const { State } = await import('../game/State.js?v=1790193571');
+        const { State } = await import('../game/State.js?v=1790354328');
         G.state.s.money = 4321; G.state.record('pike', 5, 80); G.state.s.cabin.slots[0] = { sp: 'pike', kg: 5, cm: 80 };
         G.loot.spawn({ sp: 'bass', kg: 2, cm: 40, pos: b.toWorld(V(0, b.deck + 0.5, 0)) }); step(2);
         G.save();
@@ -326,10 +326,41 @@ export async function runScripts(names, game) {
         ok(!!S2.s.dex.pike && S2.s.cabin.slots[0]?.sp === 'pike', 'journal and cabin mounts survive');
         ok(S2.s.boatCargo.length >= 1, 'fish left on the deck survive (' + S2.s.boatCargo.length + ')');
         ok(!!S2.s.player, 'player position saved');
-      }      if (name === 'journal') {
-        const J = await import('../data/JournalData.js?v=1790193571');
-        const { pickSpecies } = await import('../game/Fishing.js?v=1790193571');
-        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790193571');
+      }      if (name === 'shore') {
+        // wade in to knee depth on a beach, face the sea, and land fish
+        const spots = [];
+        for (let x = -300; x < 300 && spots.length < 3; x += 3) for (let z = -200; z < 400 && spots.length < 3; z += 3) {
+          const h = heightAt(x, z);
+          if (h < -0.6 && h > -1.0 && heightAt(x, z - 12) > 0.6 && heightAt(x, z + 14) < -3) spots.push(V(x, 0, z));
+        }
+        ok(spots.length > 0, 'found ' + spots.length + ' waterline spots');
+        G.state.s.baits.worm = 50;
+        let good = 0;
+        for (const sp of [...spots, G.world.settlement.anchors.pierEnd.clone()]) {
+          P.place(sp.clone().setY(Math.max(0, heightAt(sp.x, sp.z)) + (sp.y ? 0 : 0)), Math.PI);   // yaw PI faces +z: out to sea
+          if (sp.y) P.place(sp.clone(), Math.PI);
+          step(0.5);
+          const F = G.fishing; F.cancel(true); P.tool = 'rod'; G.vm.setTool('rod');
+          F.bpos.copy(P.pos).add(V(0, 0, 12)); F.bpos.y = 0; F.water = 'sea';
+          F.pending = { sp: 'cod', kg: 3, cm: 50, size: 0.5 }; F._hook();
+          const n0 = G.loot.items.size;
+          F.bar.catch = 1; step(0.1);
+          const it = [...G.loot.items.values()].pop();
+          step(6);
+          const alive = it && G.loot.items.has(it.id);
+          const wet = alive && G.world.waterAt(it.pos.x, it.pos.z) > it.pos.y;
+          const reach = alive ? Math.hypot(it.pos.x - P.pos.x, it.pos.z - P.pos.z) : 99;
+          if (alive && !wet && reach < 16) good++;
+          log('INFO ' + (sp.y ? 'pier' : 'beach') + ': fish ' + (alive ? (wet ? 'in the water' : 'on dry land') : 'GONE') + ', ' + reach.toFixed(1) + ' m from you');
+          if (alive) { G._do({ t: 'pickup', id: it.id }, P.id); ok(it.held === P.id, 'and you can pick it up'); G.loot.remove(it); P.held = null; }
+          void n0;
+        }
+        ok(good === spots.length + 1, 'every fish landed from shore or pier stays on dry land (' + good + '/' + (spots.length + 1) + ')');
+      }
+      if (name === 'journal') {
+        const J = await import('../data/JournalData.js?v=1790354328');
+        const { pickSpecies } = await import('../game/Fishing.js?v=1790354328');
+        const { ZMIN, RARITY } = await import('../data/FishData.js?v=1790354328');
         const pr = J.progress(G.state.s);
         ok(J.SECTIONS.length >= 8 && pr.of > 60, 'the field guide has ' + J.SECTIONS.length + ' places and ' + pr.of + ' entries: ' + J.SECTIONS.map(S => S.name + ' ' + pr.per[S.id].of).join(', '));
         // every fish listed under a place can really be caught there
@@ -457,7 +488,7 @@ export async function runScripts(names, game) {
         ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:marlin', 'looking at a trophy tells you what it is');
       }
       if (name === 'great') {
-        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790193571');
+        const { rollGreat, GREAT } = await import('../data/GreatData.js?v=1790354328');
         const c = {}; for (let i = 0; i < 20000; i++) { const g = rollGreat(); c[g.id] = (c[g.id] || 0) + 1; }
         const pc = k => (c[k] || 0) / 200;
         ok(Math.abs(pc('graveback') - 60) < 2 && Math.abs(pc('ninefold') - 30) < 2 && Math.abs(pc('hushwing') - 10) < 1.5, `spawn odds over 20000 rolls: Graveback ${pc('graveback').toFixed(1)}%, Ninefold ${pc('ninefold').toFixed(1)}%, Hushwing ${pc('hushwing').toFixed(1)}%`);
@@ -505,7 +536,7 @@ export async function runScripts(names, game) {
       }
       if (name === 'kraken') {
         G.teleport('offshore'); step(0.5);
-        const { zoneAt } = await import('../world/MapData.js?v=1790193571');
+        const { zoneAt } = await import('../world/MapData.js?v=1790354328');
         ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
         const K = G.great.startKraken(b);
         ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
@@ -577,7 +608,7 @@ export async function runScripts(names, game) {
         for (const n of fisher) { G._talk(n); step(0.05); }
         G.ui.closeTalk();
         ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
-        const { waveAmp } = await import('../world/MapData.js?v=1790193571');
+        const { waveAmp } = await import('../world/MapData.js?v=1790354328');
         ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
       }
       if (name === 'chat') {
@@ -605,7 +636,7 @@ export async function runScripts(names, game) {
         ok(!C.logEl.querySelector('img,b'), 'names and text from the network are never HTML');
         G.ui.open('pause'); tap(); ok(!C.open, 'the chat will not open over a menu'); G.ui.close();
         // voice maths: near is loud, far is silent, the walkie ignores distance
-        const { Voice } = await import('../net/Voice.js?v=1790193571');
+        const { Voice } = await import('../net/Voice.js?v=1790354328');
         ok(Voice.proximity(2) === 1 && Voice.proximity(17.5) > 0.2 && Voice.proximity(17.5) < 0.3 && Voice.proximity(40) === 0, 'proximity voice: 2 m full, 17 m ' + Voice.proximity(17.5).toFixed(2) + ', 40 m silent');
         const fakeR = { pos: P.pos.clone().add(V(200, 0, 0)), walkie: false, name: 'Far', color: '#fff' };
         G.remotes.set('fake', fakeR);

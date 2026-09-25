@@ -10,17 +10,17 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790193571';
-import { Input } from './core/Input.js?v=1790193571';
-import { Audio } from './core/Audio.js?v=1790193571';
-import { World } from './world/World.js?v=1790193571';
-import { Game } from './game/Game.js?v=1790193571';
-import { UI } from './ui/UI.js?v=1790193571';
-import { State } from './game/State.js?v=1790193571';
-import { Net } from './net/Net.js?v=1790193571';
-import { Remote } from './game/Remote.js?v=1790193571';
-import { heightAt } from './world/Terrain.js?v=1790193571';
-import { U } from './art/Materials.js?v=1790193571';
+import * as THREE from '../lib/three.module.js?v=1790354328';
+import { Input } from './core/Input.js?v=1790354328';
+import { Audio } from './core/Audio.js?v=1790354328';
+import { World } from './world/World.js?v=1790354328';
+import { Game } from './game/Game.js?v=1790354328';
+import { UI } from './ui/UI.js?v=1790354328';
+import { State } from './game/State.js?v=1790354328';
+import { Net } from './net/Net.js?v=1790354328';
+import { Remote } from './game/Remote.js?v=1790354328';
+import { heightAt } from './world/Terrain.js?v=1790354328';
+import { U } from './art/Materials.js?v=1790354328';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -139,7 +139,7 @@ function startGame(mode, lock = true) {
   if (Q.has('stage')) stage(Q.get('stage'));
   if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790193571').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790354328').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -295,7 +295,7 @@ function stage(name) {
   const look = (from, to, pitch = 0) => { P.place(from.clone(), Math.atan2(-(to.x - from.x), -(to.z - from.z))); P.pitch = pitch; };
   const C = A.cabinInside;
   if (name === 'hut' || name === 'hut2' || name === 'hutbare') {
-    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790193571').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
+    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790354328').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
     G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'oath'; G._rodChanged();
     G.tod = 0.5;
     if (name === 'hut2') look(C.clone().add(new THREE.Vector3(1.9, 0, -1.2)), C.clone().add(new THREE.Vector3(-3.4, 0.9, 1.6)), -0.12);

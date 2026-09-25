@@ -7,40 +7,40 @@
    arrive in the next snapshot. So solo play and co-op are the same code,
    and there is no way for two clients to both sell the same Bombfish. */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { Player } from './Player.js?v=1790193571';
-import { Boat } from './Boat.js?v=1790193571';
-import { Loot } from './Loot.js?v=1790193571';
-import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790193571';
-import { Tools } from './Tools.js?v=1790193571';
-import { ViewModel } from './ViewModel.js?v=1790193571';
-import { Effects } from './Effects.js?v=1790193571';
-import { Creatures } from './Creatures.js?v=1790193571';
-import { Events } from './Events.js?v=1790193571';
-import { NPCs } from './NPCs.js?v=1790193571';
-import { Cabin } from './Cabin.js?v=1790193571';
-import { Remote } from './Remote.js?v=1790193571';
-import { State } from './State.js?v=1790193571';
-import { PLAYER_LOOKS } from '../art/Character.js?v=1790193571';
-import { fishMesh } from '../art/FishArt.js?v=1790193571';
-import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790193571';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790193571';
-import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790193571';
-import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790193571';
-import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790193571';
-import { nearLake } from '../world/Terrain.js?v=1790193571';
-import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790193571';
-import { Bus } from '../core/Bus.js?v=1790193571';
-import { ic } from '../ui/Icons.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { Player } from './Player.js?v=1790354328';
+import { Boat } from './Boat.js?v=1790354328';
+import { Loot } from './Loot.js?v=1790354328';
+import { Fishing, pickSpecies, rollCatch } from './Fishing.js?v=1790354328';
+import { Tools } from './Tools.js?v=1790354328';
+import { ViewModel } from './ViewModel.js?v=1790354328';
+import { Effects } from './Effects.js?v=1790354328';
+import { Creatures } from './Creatures.js?v=1790354328';
+import { Events } from './Events.js?v=1790354328';
+import { NPCs } from './NPCs.js?v=1790354328';
+import { Cabin } from './Cabin.js?v=1790354328';
+import { Remote } from './Remote.js?v=1790354328';
+import { State } from './State.js?v=1790354328';
+import { PLAYER_LOOKS } from '../art/Character.js?v=1790354328';
+import { fishMesh } from '../art/FishArt.js?v=1790354328';
+import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js?v=1790354328';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790354328';
+import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js?v=1790354328';
+import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js?v=1790354328';
+import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js?v=1790354328';
+import { nearLake } from '../world/Terrain.js?v=1790354328';
+import { clamp, damp, uid, fmtInt, fmtKg, rng } from '../core/Util.js?v=1790354328';
+import { Bus } from '../core/Bus.js?v=1790354328';
+import { ic } from '../ui/Icons.js?v=1790354328';
 
-import { Chat } from '../ui/Chat.js?v=1790193571';
-import { Voice } from '../net/Voice.js?v=1790193571';
-import { Great } from './Great.js?v=1790193571';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790193571';
-import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790193571';
-import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790193571';
-import { SHOPS } from '../data/GearData.js?v=1790193571';
-import { mistAt, VIGIL } from '../world/MapData.js?v=1790193571';
+import { Chat } from '../ui/Chat.js?v=1790354328';
+import { Voice } from '../net/Voice.js?v=1790354328';
+import { Great } from './Great.js?v=1790354328';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790354328';
+import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js?v=1790354328';
+import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js?v=1790354328';
+import { SHOPS } from '../data/GearData.js?v=1790354328';
+import { mistAt, VIGIL } from '../world/MapData.js?v=1790354328';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const fill = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] !== undefined ? o[k] : m));
@@ -388,9 +388,10 @@ export class Game {
 
   /* ================= catching ================= */
   landCatch(o) {
-    if (!this.isHost) { this.net.sendAction({ t: 'catch', sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos.toArray(), vel: o.vel.toArray(), slap: o.slap, size: o.size }); return; }
+    if (!this.isHost) { this.net.sendAction({ t: 'catch', sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos.toArray(), vel: o.vel.toArray(), slap: o.slap, size: o.size, v: o.v, zone: o.zone, mult: o.mult, ashore: o.ashore }); return; }
     const sp = FISH_BY_ID[o.sp];
     const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by, v: o.v || null, zone: o.zone || 0, mult: o.mult || 1 });
+    if (it && o.ashore) { it.ashore = new THREE.Vector3(...o.ashore); it.ashoreT = 12; }
     if (!it) return;
     // record first, announce second
     const junk = sp.rarity === 'junk' || sp.beh === 'mimic';

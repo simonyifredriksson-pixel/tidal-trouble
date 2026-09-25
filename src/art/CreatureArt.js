@@ -6,11 +6,11 @@
    The kraken and the turtle have their own builders because nothing about
    them is fish-shaped. */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790193571';
-import { buildFish } from './FishArt.js?v=1790193571';
-import { rng, TAU } from '../core/Util.js?v=1790193571';
-import { U } from './Materials.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790354328';
+import { buildFish } from './FishArt.js?v=1790354328';
+import { rng, TAU } from '../core/Util.js?v=1790354328';
+import { U } from './Materials.js?v=1790354328';
 
 /** A Lambert material whose mesh swims: bends in local Z along local X. */
 export function swimMaterial(opts = {}) {

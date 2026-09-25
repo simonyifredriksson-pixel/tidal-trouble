@@ -19,14 +19,14 @@
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790193571';
-import { zoneAt } from '../world/MapData.js?v=1790193571';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790193571';
-import { buildBobber } from '../art/RodArt.js?v=1790193571';
-import { fishMesh } from '../art/FishArt.js?v=1790193571';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790193571';
-import { Bus } from '../core/Bus.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790354328';
+import { zoneAt } from '../world/MapData.js?v=1790354328';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790354328';
+import { buildBobber } from '../art/RodArt.js?v=1790354328';
+import { fishMesh } from '../art/FishArt.js?v=1790354328';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790354328';
+import { Bus } from '../core/Bus.js?v=1790354328';
 
 export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -568,7 +568,7 @@ export class Fishing {
       const B = P.boat, L = P.local.clone();
       L.x *= 0.35; L.z = clamp(L.z * 0.7, -B.hull.hl * 0.6, B.hull.hl * 0.6); L.y = B.deck + 0.35;
       target = B.toWorld(L);
-    } else target = P.pos.clone().addScaledVector(P.flatForward(new THREE.Vector3()), -0.7).add(new THREE.Vector3(0, 0.3, 0));
+    } else target = this._beachSpot();
     let slap = sp.beh === 'slap';
     if (slap) target.copy(P.eye);
     const from = this.bpos.clone();
@@ -579,7 +579,7 @@ export class Fishing {
     if (F.lev || F.creature) {
       G.creatures.landed(F.creature, F);
     } else {
-      G.landCatch({ sp: F.sp, kg: F.kg, cm: F.cm, pos: from, vel, by: P.id, slap, size: F.size, v: F.v, zone: F.zone, mult: zoneValue(F.zone) * (F.v ? VARIANT_BY_ID[F.v].mult : 1) });
+      G.landCatch({ sp: F.sp, kg: F.kg, cm: F.cm, pos: from, vel, by: P.id, slap, size: F.size, v: F.v, zone: F.zone, mult: zoneValue(F.zone) * (F.v ? VARIANT_BY_ID[F.v].mult : 1), ashore: P.boat ? null : target.toArray() });
     }
     G.fx.splash(from.x, from.y, from.z, clamp(F.kg / 15, 0.6, 3));
     G.audio.splash(1);
@@ -587,6 +587,35 @@ export class Fishing {
     this.fish = null;
     this.bobber.visible = false; this.line.visible = false;
     this.tension = 0;
+  }
+
+  /** Fishing from land: somewhere dry near you to drag the catch onto.
+      Prefers the ground (or pier boards) right behind you; if that is water,
+      walks away from the line until it finds dry land. */
+  _beachSpot() {
+    const G = this.game, P = this.player, W = G.world;
+    const dry = (x, z, y) => {
+      const fl = W.colliders.floorAt(x, z, y, 1.2);
+      const g = Math.max(W.ground(x, z), fl);
+      return W.waterAt(x, z) === -Infinity || fl > W.waterAt(x, z) + 0.1 ? g : null;
+    };
+    const back = P.flatForward(new THREE.Vector3()).multiplyScalar(-1);
+    // away from the bobber, then sideways, then any direction
+    const away = new THREE.Vector3(P.pos.x - this.bpos.x, 0, P.pos.z - this.bpos.z);
+    if (away.lengthSq() > 0.01) away.normalize(); else away.copy(back);
+    for (const dir of [back, away]) {
+      for (let d = 0.8; d <= 14; d += 0.6) {
+        const x = P.pos.x + dir.x * d, z = P.pos.z + dir.z * d;
+        const g = dry(x, z, P.pos.y);
+        if (g !== null) return new THREE.Vector3(x, g + 0.3, z);
+      }
+    }
+    for (let r = 2; r <= 20; r += 2) for (let a = 0; a < 12; a++) {
+      const x = P.pos.x + Math.cos(a / 12 * Math.PI * 2) * r, z = P.pos.z + Math.sin(a / 12 * Math.PI * 2) * r;
+      const g = dry(x, z, P.pos.y);
+      if (g !== null) return new THREE.Vector3(x, g + 0.3, z);
+    }
+    return P.pos.clone().addScaledVector(back, 0.7).add(new THREE.Vector3(0, 0.3, 0));
   }
 
   _draw(dt) {

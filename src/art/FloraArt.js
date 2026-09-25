@@ -8,8 +8,8 @@
    carries a slight top-to-bottom ramp inside every tier so a flat-shaded
    tree still reads as having volume. */
 
-import { MeshBuilder, mixHex, shadeHex } from './Geo.js?v=1790193571';
-import { rng, TAU } from '../core/Util.js?v=1790193571';
+import { MeshBuilder, mixHex, shadeHex } from './Geo.js?v=1790354328';
+import { rng, TAU } from '../core/Util.js?v=1790354328';
 
 /* ---------------- pines ---------------- */
 export function buildPine(seed, snow = false) {

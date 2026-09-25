@@ -19,13 +19,13 @@
      bottle  a message; reading it adds a page to the story
      slap    handled at landing: it goes for your face */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790193571';
-import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790193571';
-import { MAT } from '../art/Materials.js?v=1790193571';
-import { MeshBuilder } from '../art/Geo.js?v=1790193571';
-import { clamp, uid } from '../core/Util.js?v=1790193571';
-import { Bus } from '../core/Bus.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790354328';
+import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790354328';
+import { MAT } from '../art/Materials.js?v=1790354328';
+import { MeshBuilder } from '../art/Geo.js?v=1790354328';
+import { clamp, uid } from '../core/Util.js?v=1790354328';
+import { Bus } from '../core/Bus.js?v=1790354328';
 
 const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -236,6 +236,20 @@ export class Loot {
     const sp = FISH_BY_ID[it.sp];
     const sea = world.waterAt(P.x, P.z);
     const inWater = P.y < sea;
+    // a catch landed from the shore: if it ends up in the shallows it is
+    // dragged up onto the beach instead of swimming away
+    if (it.ashoreT > 0) {
+      it.ashoreT -= dt;
+      if (inWater || (sea > -Infinity && P.y < sea + 0.4)) {
+        const T = it.ashore, dx = T.x - P.x, dz = T.z - P.z, d = Math.hypot(dx, dz);
+        if (d > 0.3) { V.x = dx / d * Math.min(4, d * 3); V.z = dz / d * Math.min(4, d * 3); }
+        V.y = Math.max(V.y, (sea + 0.25 - P.y) * 6);
+        it.inWater = 0;
+        P.addScaledVector(V, dt);
+        if (Math.random() < dt * 6) this.game.fx.splash(P.x, sea, P.z, 0.3);
+        return;
+      }
+    }
     if (inWater) {
       it.inWater += dt;
       const floaty = sp.junk || it.stunned || sp.beh === 'puffer' || sp.beh === 'bomb';

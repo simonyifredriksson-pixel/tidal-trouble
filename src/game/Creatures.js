@@ -10,15 +10,15 @@
              fight, harpoons still help) -> LANDED. Lose it and it goes
              back to rampaging; run far enough and it sinks away. */
 
-import * as THREE from '../../lib/three.module.js?v=1790193571';
-import { fishShadowGeo, shadowMat, buildLeviathan, swimMaterial } from '../art/CreatureArt.js?v=1790193571';
-import { buildFish, fishMesh } from '../art/FishArt.js?v=1790193571';
-import { GIANTS, FISH_BY_ID } from '../data/FishData.js?v=1790193571';
-import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790193571';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790193571';
-import { zoneAt } from '../world/MapData.js?v=1790193571';
-import { clamp, damp, wrapAngle, lerp, uid } from '../core/Util.js?v=1790193571';
-import { Bus } from '../core/Bus.js?v=1790193571';
+import * as THREE from '../../lib/three.module.js?v=1790354328';
+import { fishShadowGeo, shadowMat, buildLeviathan, swimMaterial } from '../art/CreatureArt.js?v=1790354328';
+import { buildFish, fishMesh } from '../art/FishArt.js?v=1790354328';
+import { GIANTS, FISH_BY_ID } from '../data/FishData.js?v=1790354328';
+import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790354328';
+import { pickSpecies, rollCatch } from './Fishing.js?v=1790354328';
+import { zoneAt } from '../world/MapData.js?v=1790354328';
+import { clamp, damp, wrapAngle, lerp, uid } from '../core/Util.js?v=1790354328';
+import { Bus } from '../core/Bus.js?v=1790354328';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
