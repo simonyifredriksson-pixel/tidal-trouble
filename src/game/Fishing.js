@@ -4,31 +4,31 @@
         -> nibble ... -> bite (strike window) -> fight -> land
    Reeling with nothing on it is `reelin`.
 
-   THE FIGHT, and why it always ends:
-     tension  rises with how hard the fish pulls and whether you reel, and
-              falls when you pull the rod AGAINST its run (A/D)
-     stamina  drains ONLY while tension is in the working zone (0.25-0.95).
-              Idling banks nothing; slack lets it spit the hook; too much
-              tension for too long snaps the line.
-     line     the fish takes line when it runs; run out and it snaps
-   and a hard cap: after FIGHT_MAX seconds the line parts regardless. An
-   earlier game hung forever on a fish whose drain matched the player's
-   fill; the tiring clock only ticking in the zone is the fix.
+   THE FIGHT (the catch bar), and why it always ends:
+     zone     your catch zone: holding the button lifts it, letting go sinks it
+     fish     darts up and down the bar on its own schedule (_moveFish)
+     meter    fills while the fish is inside the zone, drains while it is not.
+              A fish whose fight is above the rod's rating drains it however
+              well you track it - the upgrade loop as a rule.
+     tired    the fish only tires while you are ON it, so idling banks nothing
+   and a hard cap: after `cap` seconds (75 for a normal fish, longer for
+   leviathans and monsters) the line parts regardless. An earlier game hung
+   forever on a fish whose drain matched the player's fill; the cap and the
+   tiring-only-when-on rule are the fix.
 
    Big fish TOW the boat you are standing in, and on the shore they drag
    you toward the water. A giant on a rod too weak for it can pull the rod
    clean out of your hands. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js?v=1790358905';
-import { zoneAt } from '../world/MapData.js?v=1790358905';
-import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js?v=1790358905';
-import { buildBobber } from '../art/RodArt.js?v=1790358905';
-import { fishMesh } from '../art/FishArt.js?v=1790358905';
-import { clamp, damp, lerp, rng, weighted } from '../core/Util.js?v=1790358905';
-import { Bus } from '../core/Bus.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js';
+import { zoneAt } from '../world/MapData.js';
+import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js';
+import { buildBobber } from '../art/RodArt.js';
+import { fishMesh } from '../art/FishArt.js';
+import { clamp, damp, lerp, rng, weighted } from '../core/Util.js';
+import { Bus } from '../core/Bus.js';
 
-export const FIGHT_MAX = 90;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 /* ---------------- species selection (shared with holders and traps) ---------------- */
@@ -43,6 +43,7 @@ export function pickSpecies(ctx, r = Math.random) {
     if (f.hotspot && ctx.hotspot !== f.hotspot) continue;
     if (f.weather === 'storm' && !ctx.storm) continue;
     if (f.water === 'lake' && ctx.water !== 'lake') continue;
+    if (f.water === 'fresh' && ctx.water !== 'lake' && ctx.water !== 'ice') continue;
     if (f.water === 'sea' && ctx.water !== 'sea') continue;
     if (f.water === 'ice' && ctx.water !== 'ice') continue;
     let aff = f.bait[ctx.bait];

@@ -7,9 +7,9 @@
    trees do not go solid black. The Blackwater is the one place the game is
    allowed to be properly dark, and there it is the fog that closes in. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js?v=1790358905';
-import { MeshBuilder, hexToLinear } from '../art/Geo.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { clamp, lerp, smoothstep, hash3, rng } from '../core/Util.js';
+import { MeshBuilder, hexToLinear } from '../art/Geo.js';
 
 const KEYS = [
   // t,    top,      horizon,  fog,      sun,      sunI, hemiSky,  hemiGnd,  hemiI
@@ -176,6 +176,7 @@ export class Sky {
     const hg = lerpHex(A[7], B[7], f, new THREE.Color());
     let hemiI = lerp(A[8], B[8], f);
 
+    this._cam = cam;
     const storm = env.storm || 0, dark = env.dark || 0;
     // storms: grey everything down
     const grey = new THREE.Color(0x5a6470);
@@ -296,8 +297,11 @@ export class Sky {
   }
   _strike(cam, atX = null, atZ = null) {
     this.flash = 1;
-    const a = Math.random() * Math.PI * 2, d = 150 + Math.random() * 350;
+    cam = cam || this._cam || { x: 0, z: 0 };
+    const a = Math.random() * Math.PI * 2;
+    let d = 150 + Math.random() * 350;
     const x = atX ?? cam.x + Math.cos(a) * d, z = atZ ?? cam.z + Math.sin(a) * d;
+    if (atX !== null) d = Math.hypot(x - cam.x, z - cam.z);
     const pts = [];
     let px = x, py = 220, pz = z;
     const b = new MeshBuilder();

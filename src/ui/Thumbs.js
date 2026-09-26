@@ -5,14 +5,14 @@
    caches the PNG as a data URL. Undiscovered species render as a dark
    silhouette so the journal shows you the SHAPE of what you are missing. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { fishMesh } from '../art/FishArt.js?v=1790358905';
-import { buildRod } from '../art/RodArt.js?v=1790358905';
-import { buildBoat } from '../art/BoatArt.js?v=1790358905';
-import { buildLeviathan } from '../art/CreatureArt.js?v=1790358905';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790358905';
-import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { fishMesh } from '../art/FishArt.js';
+import { buildRod } from '../art/RodArt.js';
+import { buildBoat } from '../art/BoatArt.js';
+import { buildLeviathan } from '../art/CreatureArt.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { ROD_BY_ID } from '../data/GearData.js';
+import { LEV_BY_ID } from '../data/LeviathanData.js';
 
 let R = null, scene, cam, sun, hemi;
 const cache = new Map();
@@ -69,7 +69,9 @@ export function fishThumb(id, known = true) {
   const m = fishMesh(sp, len);
   m.rotation.set(0, 0, 0);
   m.rotation.y = -0.2;
-  frame(m, 0.82, [0.1, 0.12, 1]);
+  // flat things (stars, rays, crabs) read best from above, not edge-on
+  const top = ['star', 'ray', 'crab', 'octopus', 'urchin', 'turtle'].includes(sp.art?.kind);
+  frame(m, top ? 0.95 : 0.82, top ? [0.2, 0.85, 0.6] : [0.1, 0.12, 1]);
   const url = shoot(m, !known);
   cache.set(key, url);
   return url;

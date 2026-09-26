@@ -9,11 +9,11 @@
 
    Frame: +Z bow, y = 0 waterline, deck at hull.deck. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, shadeHex, mixHex } from './Geo.js?v=1790358905';
-import { MAT } from './Materials.js?v=1790358905';
-import { rng, TAU } from '../core/Util.js?v=1790358905';
-import { HULL_BY_ID, PAINT_BY_ID, boatStats } from '../data/BoatData.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, shadeHex, mixHex } from './Geo.js';
+import { MAT } from './Materials.js';
+import { rng, TAU } from '../core/Util.js';
+import { HULL_BY_ID, PAINT_BY_ID, boatStats } from '../data/BoatData.js';
 
 const RAIL = { dinghy: 0.42, motor: 0.55, trawler: 0.85, expedition: 0.95, wayfarer: 1.0 };
 const BOW = { dinghy: 0.25, motor: 0.55, trawler: 0.9, expedition: 1.2, wayfarer: 1.6 };

@@ -19,13 +19,13 @@
      bottle  a message; reading it adds a page to the story
      slap    handled at landing: it goes for your face */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { FISH_BY_ID, fishValue } from '../data/FishData.js?v=1790358905';
-import { fishMesh, buildJunk } from '../art/FishArt.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import { MeshBuilder } from '../art/Geo.js?v=1790358905';
-import { clamp, uid } from '../core/Util.js?v=1790358905';
-import { Bus } from '../core/Bus.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { FISH_BY_ID, fishValue } from '../data/FishData.js';
+import { fishMesh, buildJunk, isUpright } from '../art/FishArt.js';
+import { MAT } from '../art/Materials.js';
+import { MeshBuilder } from '../art/Geo.js';
+import { clamp, uid } from '../core/Util.js';
+import { Bus } from '../core/Bus.js';
 
 const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -338,7 +338,7 @@ export class Loot {
         if (it.t > 25) { G2.fx.sparks(it.pos.x, it.pos.y, it.pos.z, 12, 0xf0ecd0); Bus.emit('loot:floataway', { it }); this.remove(it); return; }
       }
     }
-    if (sp.beh === 'eel') {
+    if (sp.beh === 'eel' || sp.beh === 'sting') {
       for (const p of G2.allPlayers()) {
         if (it.shockT > 0) break;
         if (p.pos.distanceTo(it.pos) < 0.9 + it.r * 0.4) { it.shockT = 3; G2.shock(p, it); }
@@ -356,7 +356,7 @@ export class Loot {
     m.rotateX(0);
     m.rotateZ(0);
     // lie on the side: rotate about the fish's own long axis (local X)
-    if (!sp.junk && !(it.mimic && !it.opened)) m.rotateX(it.roll);
+    if (!sp.junk && !(it.mimic && !it.opened) && !isUpright(sp)) m.rotateX(it.roll);
     const s = it.baseScale * (sp.beh === 'puffer' ? 1 + it.puff * 0.9 : 1);
     m.scale.setScalar(s);
   }

@@ -7,19 +7,19 @@
    Everything is rebuilt from State whenever it changes, so co-op peers
    see the same museum. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import { fishMesh } from '../art/FishArt.js?v=1790358905';
-import { buildRod } from '../art/RodArt.js?v=1790358905';
-import { buildLeviathan } from '../art/CreatureArt.js?v=1790358905';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
-import { RODS } from '../data/GearData.js?v=1790358905';
-import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js?v=1790358905';
-import { rng } from '../core/Util.js?v=1790358905';
-import { worldMapCanvas, toMap } from '../ui/MapArt.js?v=1790358905';
-import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790358905';
-import { buildTrophy } from '../art/TrophyArt.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, shadeHex } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
+import { fishMesh } from '../art/FishArt.js';
+import { buildRod } from '../art/RodArt.js';
+import { buildLeviathan } from '../art/CreatureArt.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { RODS } from '../data/GearData.js';
+import { LEVIATHANS, LEV_BY_ID } from '../data/LeviathanData.js';
+import { rng } from '../core/Util.js';
+import { worldMapCanvas, toMap } from '../ui/MapArt.js';
+import { TROPHY_BY_ID } from '../data/TrophyData.js';
+import { buildTrophy } from '../art/TrophyArt.js';
 
 function plaque() {
   const b = new MeshBuilder(rng(9));
@@ -266,18 +266,29 @@ export class Cabin {
     }
   }
 
-  /** Put every trophy you have earned but not placed onto the bookcase. Returns how many. */
+  /** How many small and large spaces the bookcase has. */
+  caps() { const TS = this.game.world.settlement.cabin.trophies; return { S: TS.S.length, L: TS.L.length }; }
+  /** Trophies earned that belong on the shelf and are not up yet. */
+  pending() { return this.game.state.pendingTrophies(this.caps()); }
+
+  /** Put your best trophies on the bookcase. When it is full, a grander
+      trophy takes the place of a lesser one (which goes into storage - the
+      journal still lists it). Returns how many went up. */
   placeAll() {
-    const G = this.game, s = G.state.s, TS = G.world.settlement.cabin.trophies;
+    const G = this.game, s = G.state.s, P = s.trophies.placed;
+    const plan = G.state.shelfPlan(this.caps());
+    const keep = new Set([...plan.S, ...plan.L]);
+    for (const id of Object.keys(P)) if (!keep.has(id)) delete P[id];
     const used = { S: new Set(), L: new Set() };
-    for (const id in s.trophies.placed) { const T = TROPHY_BY_ID[id]; if (T) used[T.size].add(s.trophies.placed[id]); }
+    for (const id in P) used[TROPHY_BY_ID[id].size].add(P[id]);
+    const cap = this.caps();
     let n = 0;
-    for (const id of G.state.pendingTrophies()) {
-      const T = TROPHY_BY_ID[id];
-      const list = T.size === 'L' ? TS.L : TS.S;
-      let k = 0; while (k < list.length && used[T.size].has(k)) k++;
-      if (k >= list.length) continue;
-      used[T.size].add(k); s.trophies.placed[id] = k; n++;
+    for (const id of keep) {
+      if (P[id] !== undefined) continue;
+      const z = TROPHY_BY_ID[id].size;
+      let k = 0; while (k < cap[z] && used[z].has(k)) k++;
+      if (k >= cap[z]) continue;
+      used[z].add(k); P[id] = k; n++;
     }
     return n;
   }

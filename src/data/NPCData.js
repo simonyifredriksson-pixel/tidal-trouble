@@ -45,7 +45,7 @@ export const NPCS = [
       'Every leviathan carries a shard. Bring them home and the table starts to hum.',
       'The great ones - the ones at the edge of the world - are not on my map. Nobody has charted them. Nobody has seen one in years.',
     ] },
-  { id: 'pim', name: 'pim', full: 'Pim the Fishmonger', pr: 'they', role: 'seller', shop: 'home', at: 'market', pose: 'stand',
+  { id: 'pim', name: 'pim', full: 'Pim the Fishmonger', pr: 'she', role: 'seller', shop: 'home', at: 'market', pose: 'stand',
     look: { skin: 0xe0ac86, shirt: 0xf2f2ee, pants: 0x3a4a5e, boots: 0x2e5a3a, hat: 'cap', hatCol: 0x2e7ab0, hair: 'short', hairCol: 0xa84a2a, beard: 'moustache', beardCol: 0xa84a2a, nose: 1.2, belly: 0.6 },
     lines: ['Morning, neighbour! Right next door, as always.'],
     say: {
@@ -166,7 +166,7 @@ export const NPCS = [
       'The log says the Graveback comes up more often than the others. More often means once every ten years, mind.',
       'One more thing he wrote: it breathes. From the cliffs you can hear it, like a storm through a keyhole.',
     ] },
-  { id: 'pell', name: 'pell', full: 'Young Pell', pr: 'they', role: 'vigil', at: 'vigil4', pose: 'fish',
+  { id: 'pell', name: 'pell', full: 'Young Pell', pr: 'he', role: 'vigil', at: 'vigil4', pose: 'fish',
     look: { skin: 0xf1c9a5, shirt: 0xc8a040, pants: 0x3a4a5e, boots: 0x5a3a24, hat: 'cap', hatCol: 0x3a6a4a, hair: 'short', hairCol: 0xc86a2a, nose: 0.95, height: 0.96 },
     lines: [
       'You came all the way out here too? Brilliant! I have only been here two winters. The others say I talk too much.',

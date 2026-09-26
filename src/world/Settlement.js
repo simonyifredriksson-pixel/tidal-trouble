@@ -13,14 +13,14 @@
      cabin         the mount slots of your cabin museum
      clues         world objects for leviathan clues (by clue id) */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import * as BA from '../art/BuildingArt.js?v=1790358905';
-import { heightAt, groundAt, ICE_Y } from './Terrain.js?v=1790358905';
-import { LEVIATHANS } from '../data/LeviathanData.js?v=1790358905';
-import { ZONES, HOME_CENTRE } from './MapData.js?v=1790358905';
-import { rng, TAU } from '../core/Util.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, shadeHex } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
+import * as BA from '../art/BuildingArt.js';
+import { heightAt, groundAt, ICE_Y } from './Terrain.js';
+import { LEVIATHANS } from '../data/LeviathanData.js';
+import { ZONES, HOME_CENTRE } from './MapData.js';
+import { rng, TAU } from '../core/Util.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 

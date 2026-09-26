@@ -5,15 +5,15 @@
    the settlement DECLARES light sources and a pool of eight real lights is
    handed to the nearest, brightest ones each frame. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { Terrain, buildIce, heightAt, groundAt, iceAt, ICE_Y, isOpenWater } from './Terrain.js?v=1790358905';
-import { Water } from './Water.js?v=1790358905';
-import { Sky } from './Sky.js?v=1790358905';
-import { Scatter, Grass } from './Scatter.js?v=1790358905';
-import { Settlement } from './Settlement.js?v=1790358905';
-import { Secrets } from './Secrets.js?v=1790358905';
-import { Colliders } from './Colliders.js?v=1790358905';
-import { waveHeight, regionAt, regionWeights, WORLD } from './MapData.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { Terrain, buildIce, heightAt, groundAt, iceAt, ICE_Y, isOpenWater } from './Terrain.js';
+import { Water } from './Water.js';
+import { Sky } from './Sky.js';
+import { Scatter, Grass } from './Scatter.js';
+import { Settlement } from './Settlement.js';
+import { Secrets } from './Secrets.js';
+import { Colliders } from './Colliders.js';
+import { waveHeight, regionAt, regionWeights, WORLD } from './MapData.js';
 
 export class World {
   constructor(scene) {

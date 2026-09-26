@@ -12,9 +12,9 @@
      cols     colliders in LOCAL space: boxes {x,z,hw,hd,y0,y1,floor?}
      anchors  named local points (door, counter, stool, mount slots...) */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, mixHex, shadeHex } from './Geo.js?v=1790358905';
-import { rng, TAU } from '../core/Util.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, mixHex, shadeHex } from './Geo.js';
+import { rng, TAU } from '../core/Util.js';
 
 const WALL_T = 0.14;
 

@@ -10,11 +10,11 @@
    A common fish that lives in several places appears in each of them - the
    journal is a collection map, and each section counts on its own. */
 
-import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js?v=1790358905';
-import { LEVIATHANS } from './LeviathanData.js?v=1790358905';
-import { GREAT, KRAKEN } from './GreatData.js?v=1790358905';
-import { BEASTS } from './BeastData.js?v=1790358905';
-import { REGIONS, ZONES } from '../world/MapData.js?v=1790358905';
+import { FISH, GIANTS, FISH_BY_ID, ZMIN } from './FishData.js';
+import { LEVIATHANS } from './LeviathanData.js';
+import { GREAT, KRAKEN } from './GreatData.js';
+import { BEASTS } from './BeastData.js';
+import { REGIONS, ZONES } from '../world/MapData.js';
 
 const listed = f => f.rarity !== 'junk' || f.id === 'chest';
 const inRegion = r => f => Array.isArray(f.where) && f.where.includes(r) && f.zoneOnly === undefined && listed(f);
@@ -68,7 +68,7 @@ export function progress(s) {
 }
 
 /* ---------------- the words on a discovered page ---------------- */
-const WATER = { lake: 'lakes', sea: 'the sea', ice: 'ice holes', any: 'lakes and sea' };
+const WATER = { lake: 'lakes', sea: 'the sea', ice: 'ice holes', any: 'lakes and sea', fresh: 'lakes and ice holes' };
 export function habitat(f) {
   if (f.zoneOnly === 2) return 'Offshore water - the kraken\'s zone, and nowhere else';
   if (f.where === 'meteor') return 'Only where a meteor has fallen into the sea';
@@ -79,7 +79,7 @@ export function habitat(f) {
   if (f.weather === 'storm') return (f.where || []).map(r => REGIONS[r]?.name).filter(Boolean).join(', ') + ' - only in a storm';
   const regions = (f.where || []).map(r => REGIONS[r]?.name).filter(Boolean);
   const z = ZMIN[f.id] || 0;
-  const depth = f.water === 'lake' || f.water === 'ice' ? '' : z > 0 ? ' - ' + ZONES[z].name + ' and farther out' : ' - close to shore';
+  const depth = f.water === 'lake' || f.water === 'ice' || f.water === 'fresh' ? '' : z > 0 ? ' - ' + ZONES[z].name + ' and farther out' : ' - close to shore';
   return regions.join(', ') + '  (' + (WATER[f.water] || 'water') + ')' + depth;
 }
 export function sizeClass(f) {
@@ -92,6 +92,7 @@ export const BEHAVIOUR = {
   mimic: 'Looks exactly like a treasure chest. Opening it is a mistake.',
   chest: 'A real treasure chest: coins and bait inside.',
   eel: 'Electrocutes whoever touches it. Rubber gloves help.',
+  sting: 'Venomous spines: it stings whoever grabs it. Rubber gloves help.',
   slap: 'Launches itself straight into your face when it leaves the water.',
   thief: 'Often steals the bait and swims off with it. Net it to find its hoard.',
   shark: 'Tiny when it bites. Ten times bigger once it is hooked.',

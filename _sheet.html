@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>sheet</title>
+<style>body{margin:0;background:#cfc6ae;font:11px sans-serif}#g{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}div.c{background:#e8e0cc;text-align:center}img{width:100%;height:84px;object-fit:contain}#err{color:red;white-space:pre}</style></head>
+<body><div id="err"></div><div id="g"></div>
+<script type="module">
+window.onerror = (m, s, l) => { document.getElementById('err').textContent += m + ' @' + s + ':' + l + '\n'; };
+import { fishThumb, rodThumb, boatThumb, levThumb } from '/src/ui/Thumbs.js';
+import { FISH, GIANTS } from '/src/data/FishData.js';
+import { RODS } from '/src/data/GearData.js';
+import { HULLS } from '/src/data/BoatData.js';
+import { LEVIATHANS } from '/src/data/LeviathanData.js';
+import { ic, ICON_NAMES } from '/src/ui/Icons.js';
+import * as THREE_ from '/lib/three.module.js'; window.THREE_ = THREE_;
+const q = new URLSearchParams(location.search);
+const g = document.getElementById('g');
+const add = (url, label) => { const d = document.createElement('div'); d.className = 'c'; d.innerHTML = (url.startsWith('<') ? `<div style="font-size:64px;height:84px">${url}</div>` : `<img src="${url}">`) + label; g.appendChild(d); };
+const what = q.get('w') || 'fish';
+if (what === 'ids') for (const id of q.get('ids').split(',')) add(fishThumb(id), id);
+if (what === 'fish') { const from = +(q.get('from') || 0), n = +(q.get('n') || 1000); for (const f of [...FISH, ...GIANTS].slice(from, from + n)) add(fishThumb(f.id), f.id); }
+if (what === 'gear') {
+  for (const r of RODS) add(rodThumb(r.id), r.id);
+  for (const h of HULLS) add(boatThumb({ hull: h.id, parts: { lights: 3, mount: 2, holders: 3 }, paint: 'lobster', decor: ['flag', 'gnome', 'flamingo', 'lanterns', 'figurehead'] }), h.id);
+  for (const h of HULLS) add(boatThumb({ hull: h.id, parts: {}, paint: 'natural', decor: [] }), h.id + ' plain');
+  for (const L of LEVIATHANS) add(levThumb(L.id, true), L.id);
+}
+if (what === 'beasts') {
+  const { objThumb } = await import('/src/ui/Thumbs.js');
+  const { buildBeast } = await import('/src/art/BeastArt.js');
+  const { BEASTS } = await import('/src/data/BeastData.js');
+  g.style.gridTemplateColumns = 'repeat(5,1fr)';
+  for (const D of BEASTS) for (const dir of [[0.9, 0.35, 0.6], [0.2, 0.9, 0.3]]) { add(objThumb('b' + D.id + dir[1], () => { const m = buildBeast(D, true); m.animate(1.3, { spread: 1, reach: 1 }); return m.group; }, dir, 1.1), D.id); g.lastChild.querySelector('img').style.height = '150px'; }
+}
+if (what === 'rods') {
+  g.style.gridTemplateColumns = 'repeat(3,1fr)';
+  for (const r of RODS) { add(rodThumb(r.id), r.name); g.lastChild.querySelector('img').style.height = '210px'; }
+}
+if (what === 'handles') {
+  const { objThumb } = await import('/src/ui/Thumbs.js');
+  const { buildRod } = await import('/src/art/RodArt.js');
+  g.style.gridTemplateColumns = 'repeat(3,1fr)';
+  for (const r of RODS) {
+    add(objThumb('h' + r.id, () => { const rod = buildRod(r); const G = new window.THREE_.Group(); const keep = [...rod.group.children].filter(c => c !== rod.segments[0]); keep.forEach(c => G.add(c)); const s0 = rod.segments[0]; G.add(s0); while (s0.children.length > 1) s0.remove(s0.children[s0.children.length - 1]); G.rotation.set(0.2, 0.7, -1.1); return G; }, [0.3, 0.2, 1], 0.9), r.name);
+    g.lastChild.querySelector('img').style.height = '210px';
+  }
+}
+if (what === 'icons') for (const n of ICON_NAMES) add(ic(n), n);
+if (what === 'great' || what === 'trophy') {
+  const { objThumb } = await import('/src/ui/Thumbs.js');
+  const GA = await import('/src/art/GreatArt.js');
+  const { GREAT } = await import('/src/data/GreatData.js');
+  if (what === 'great') {
+    document.getElementById('g').style.gridTemplateColumns = 'repeat(3,1fr)';
+    document.querySelectorAll('img').forEach(i => i.style.height = '220px');
+    const big = (url, l) => { add(url, l); g.lastChild.querySelector('img').style.height = '220px'; };
+    for (const D of GREAT) {
+      big(objThumb('g1' + D.id, () => { const m = GA.buildGreat(D, true); m.pose(1.1); return m.group; }, [0.9, 0.35, 0.6]), D.id + ' side');
+      big(objThumb('g2' + D.id, () => { const m = GA.buildGreat(D, true); m.pose(1.1); return m.group; }, [0.25, 0.9, 0.25]), D.id + ' top');
+      big(objThumb('g3' + D.id, () => { const m = GA.buildGreat(D, true); m.pose(1.1); return m.group; }, [0.2, 0.15, 1]), D.id + ' front');
+    }
+    big(objThumb('kh', () => GA.buildKrakenHead(1), [0.3, 0.2, 1]), 'kraken head');
+    big(objThumb('kt', () => { const t = GA.buildTentacle(10, 1); t.segs.forEach((s, i) => s.rotation.z = -0.22); return t.group; }, [0.1, 0.1, 1]), 'kraken arm');
+    big(objThumb('ks', () => GA.buildKrakenStatue(), [0.4, 0.4, 1]), 'kraken statue');
+  } else {
+    const { TROPHIES } = await import('/src/data/TrophyData.js');
+    const { buildTrophy } = await import('/src/art/TrophyArt.js');
+    for (const T of TROPHIES) add(objThumb('t' + T.id, () => buildTrophy(T, T.size === 'L' ? 0.9 : 0.36, T.size === 'L' ? 0.7 : 0.38), [0.3, 0.25, 1]), T.id);
+  }
+}
+</script></body></html>

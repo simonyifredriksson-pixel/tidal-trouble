@@ -12,7 +12,12 @@
    value    coins at the MIDDLE of the size range
    fight    power (pull), stamina, erratic (direction changes), jump
    beh      special behaviour, see Fishing.js / Loot.js
-   art      body genome for FishArt.js */
+   art      body genome for FishArt.js
+
+   water 'fresh' means lakes AND ice holes: the only lake up north is frozen.
+   Most of the population lives in FishMore.js, one block per water. */
+
+import { MORE_FISH, MORE_ZMIN } from './FishMore.js';
 
 export const RARITY = {
   common:    { id: 'common',    name: 'Common',    css: '#c9c2a8', w: 60 },
@@ -31,22 +36,22 @@ export const FISH = [
   { id: 'bass', name: 'Largemouth Bass', rarity: 'common', where: ['home'], water: 'lake', time: 'any', bait: { worm: 1, pieces: 0.6 }, kg: [0.4, 4.5], cm: [25, 60], value: 22,
     fight: { power: 1.0, stamina: 1.0, erratic: 0.5, jump: 0.3 }, art: A({ h: 0.32, w: 0.15, back: 0x4f6e32, belly: 0xe0dcae, pat: 'bars', patCol: 0x2f4a22, mouth: 1.4 }),
     blurb: 'The bread and butter of Driftwood Bay. Bites anything, complains about everything.' },
-  { id: 'perch', name: 'Yellow Perch', rarity: 'common', where: ['home', 'frost'], water: 'lake', time: 'day', bait: { worm: 1.2 }, kg: [0.1, 1.2], cm: [15, 35], value: 15,
+  { id: 'perch', name: 'Yellow Perch', rarity: 'common', where: ['home', 'frost'], water: 'fresh', time: 'day', bait: { worm: 1.2 }, kg: [0.1, 1.2], cm: [15, 35], value: 15,
     fight: { power: 0.6, stamina: 0.6, erratic: 0.7, jump: 0.1 }, art: A({ h: 0.3, back: 0x9a9a3a, belly: 0xf2e6a0, pat: 'bars', patCol: 0x4a4a1a, fin: 0xe08a3a }),
     blurb: 'Small, stripy and certain it is much bigger than it is.' },
-  { id: 'trout', name: 'Rainbow Trout', rarity: 'common', where: ['home', 'frost'], water: 'lake', time: 'any', bait: { worm: 1, glow: 0.6 }, kg: [0.3, 3.5], cm: [25, 65], value: 24,
+  { id: 'trout', name: 'Rainbow Trout', rarity: 'common', where: ['home', 'frost'], water: 'fresh', time: 'any', bait: { worm: 1, glow: 0.6 }, kg: [0.3, 3.5], cm: [25, 65], value: 24,
     fight: { power: 0.9, stamina: 1.1, erratic: 0.6, jump: 0.6 }, art: A({ h: 0.24, back: 0x6a8a6a, belly: 0xf0e0d0, pat: 'spots', patCol: 0x2a2a2a, stripe: 0xe07a8a }),
     blurb: 'Wears a rainbow stripe. Jumps a lot to show it off.' },
   { id: 'carp', name: 'Mirror Carp', rarity: 'common', where: ['home'], water: 'lake', time: 'any', bait: { worm: 0.8, mystery: 0.8 }, kg: [1, 12], cm: [35, 85], value: 26,
     fight: { power: 1.3, stamina: 1.4, erratic: 0.2, jump: 0 }, art: A({ h: 0.34, w: 0.17, back: 0x8a7440, belly: 0xe8d090, pat: 'scales', patCol: 0xc8a860, mouth: 0.8, extras: ['whiskers'] }),
     blurb: 'A heavy, patient fish with a face like a disappointed uncle.' },
-  { id: 'pike', name: 'Northern Pike', rarity: 'uncommon', where: ['home', 'frost'], water: 'lake', time: 'any', bait: { pieces: 1.4, worm: 0.4 }, kg: [2, 16], cm: [50, 120], value: 58,
+  { id: 'pike', name: 'Northern Pike', rarity: 'uncommon', where: ['home', 'frost'], water: 'fresh', time: 'any', bait: { pieces: 1.4, worm: 0.4 }, kg: [2, 16], cm: [50, 120], value: 58,
     fight: { power: 1.6, stamina: 1.3, erratic: 0.7, jump: 0.3 }, art: A({ h: 0.17, w: 0.1, back: 0x4a6a3a, belly: 0xe0e0c0, pat: 'spots', patCol: 0xc8d890, mouth: 1.6, snout: 1.6, extras: ['teeth'] }),
     blurb: 'All teeth and bad decisions. Loves fish pieces.' },
   { id: 'catfish', name: 'Channel Catfish', rarity: 'uncommon', where: ['home'], water: 'lake', time: 'night', bait: { pieces: 1.3, worm: 0.7, mystery: 0.9 }, kg: [2, 30], cm: [45, 120], value: 62,
     fight: { power: 1.7, stamina: 1.7, erratic: 0.3, jump: 0 }, art: A({ h: 0.2, w: 0.18, back: 0x5a5a52, belly: 0xd8d4c4, fin: 0x4a4a44, mouth: 1.5, head: 1.3, extras: ['whiskers'], tail: 'round' }),
     blurb: 'Comes out at night. Has whiskers. Knows things.' },
-  { id: 'goldtrout', name: 'Golden Trout', rarity: 'rare', where: ['home', 'frost'], water: 'lake', time: 'dusk', bait: { glow: 1.4, worm: 0.5 }, kg: [0.5, 3], cm: [25, 55], value: 190,
+  { id: 'goldtrout', name: 'Golden Trout', rarity: 'rare', where: ['home', 'frost'], water: 'fresh', time: 'dusk', bait: { glow: 1.4, worm: 0.5 }, kg: [0.5, 3], cm: [25, 55], value: 190,
     fight: { power: 1.1, stamina: 1.2, erratic: 0.9, jump: 0.8 }, art: A({ h: 0.24, back: 0xe8a830, belly: 0xf8e080, pat: 'spots', patCol: 0xa05a1a, fin: 0xf07a3a, stripe: 0xe0503a }),
     blurb: 'Only bites around sunset. Glows like it knows it is worth a lot.' },
 
@@ -154,7 +159,7 @@ export const FISH = [
     fight: { power: 1.3, stamina: 1.3, erratic: 0.9, jump: 0.4 }, art: A({ h: 0.24, w: 0.1, back: 0xa8b0b4, belly: 0xe8ecee, fin: 0xc8d0d4, pat: 'waves', patCol: 0x8a9296, tail: 'veil', extras: ['sail'] }),
     blurb: 'Grey as the fog it swims under, with fins like torn sails. The old men of the Vigil call them little ghosts.' },
   { id: 'hushray', name: 'Hush Ray', rarity: 'rare', where: ['reach'], water: 'sea', time: 'any', bait: { pieces: 1.2, glow: 1.3, mystery: 1 }, kg: [8, 60], cm: [80, 220], value: 900,
-    fight: { power: 2.2, stamina: 2.2, erratic: 0.5, jump: 0.3 }, art: A({ h: 0.6, w: 0.04, back: 0x4a5058, belly: 0xe8e8ea, fin: 0x3a4048, pat: 'spots', patCol: 0xc8d0d8, flat: true, tail: 'eel' }),
+    fight: { power: 2.2, stamina: 2.2, erratic: 0.5, jump: 0.3 }, art: A({ kind: 'ray', span: 0.65, back: 0x4a5058, belly: 0xe8e8ea, fin: 0x3a4048, pat: 'spots', patCol: 0xc8d0d8 }),
     blurb: 'A grey ray that glides without a sound. They gather wherever something much larger has just passed.' },
   { id: 'watcher', name: 'Watcher Grouper', rarity: 'epic', where: ['reach'], water: 'sea', time: 'any', bait: { pieces: 1.4, mystery: 1.2 }, kg: [60, 320], cm: [150, 280], value: 2400,
     fight: { power: 2.9, stamina: 3.0, erratic: 0.35, jump: 0 }, art: A({ h: 0.36, w: 0.2, back: 0x3a4046, belly: 0x9aa0a4, fin: 0x2a3036, pat: 'spots', patCol: 0x6af0ff, mouth: 1.8, head: 1.4, tail: 'round', extras: ['glow'] }),
@@ -191,7 +196,7 @@ export const FISH = [
   { id: 'starfish', name: 'Falling Starfish', rarity: 'legendary', where: 'meteor', water: 'sea', time: 'any', bait: { glow: 1.5, mystery: 1.5, worm: 0.5, pieces: 0.5, explosive: 0.5, magnetic: 0.5 }, kg: [1, 6], cm: [30, 60], value: 2600,
     fight: { power: 1.6, stamina: 1.6, erratic: 1.4, jump: 1.0 }, art: A({ h: 0.3, w: 0.12, back: 0x5a6af0, belly: 0xf0e0ff, fin: 0xa0f0ff, pat: 'lights', patCol: 0xffffff, extras: ['glow', 'star'] }),
     blurb: 'Only found where a meteor has fallen. It is warm to the touch.' },
-  { id: 'rainbowkoi', name: 'Aurora Koi', rarity: 'legendary', where: ['home', 'frost'], water: 'lake', time: 'dusk', bait: { glow: 1.2, mystery: 1.4 }, kg: [2, 9], cm: [40, 80], value: 3200,
+  { id: 'rainbowkoi', name: 'Aurora Koi', rarity: 'legendary', where: ['home', 'frost'], water: 'fresh', time: 'dusk', bait: { glow: 1.2, mystery: 1.4 }, kg: [2, 9], cm: [40, 80], value: 3200,
     fight: { power: 1.6, stamina: 1.8, erratic: 1.2, jump: 0.6 }, art: A({ h: 0.3, w: 0.15, back: 0xf05a8a, belly: 0xf8f0ff, fin: 0x8af0f0, pat: 'patches', patCol: 0x5ae0a0, tail: 'veil', extras: ['whiskers', 'glow'] }),
     blurb: 'Driftwood legend says one lives in Mirror Lake. Driftwood legend is right.' },
 
@@ -225,7 +230,7 @@ export const FISH = [
     fight: { power: 2.6, stamina: 2.4, erratic: 0.7, jump: 0.6 }, art: A({ h: 0.28, w: 0.2, back: 0x2a3a6a, belly: 0xd8e4f0, fin: 0x9af0ff, pat: 'lights', patCol: 0xd8fcff, tail: 'lunate', extras: ['finlets', 'glow'] }),
     blurb: 'Only rises when lightning hits the sea. Its fins crackle.' },
   { id: 'squallray', name: 'Squall Ray', rarity: 'rare', where: ['home', 'tropic', 'frost', 'open'], water: 'sea', time: 'any', weather: 'storm', bait: { pieces: 1.2, worm: 0.8 }, kg: [5, 40], cm: [80, 180], value: 520,
-    fight: { power: 1.9, stamina: 1.8, erratic: 0.8, jump: 0.3 }, art: A({ h: 0.6, w: 0.04, back: 0x4a5a6a, belly: 0xe8ecf0, fin: 0x3a4a5a, pat: 'waves', patCol: 0x8aa0b8, flat: true, tail: 'eel' }),
+    fight: { power: 1.9, stamina: 1.8, erratic: 0.8, jump: 0.3 }, art: A({ kind: 'ray', span: 0.6, back: 0x4a5a6a, belly: 0xe8ecf0, fin: 0x3a4a5a, pat: 'speckle', patCol: 0x8aa0b8 }),
     blurb: 'Rides the storm swell just under the surface. You will not see one on a calm day.' },
   { id: 'birdbait', name: 'Silver Sprat', rarity: 'common', where: 'all', hotspot: 'birds', water: 'sea', time: 'any', bait: { worm: 1, pieces: 1, glow: 1 }, kg: [0.1, 0.4], cm: [10, 18], value: 35,
     fight: { power: 0.5, stamina: 0.5, erratic: 1.2, jump: 0.4 }, art: A({ h: 0.2, w: 0.08, back: 0x8aa8c0, belly: 0xf4f8fa, pat: 'none', tail: 'fork' }),
@@ -279,6 +284,8 @@ export const GIANTS = [
     blurb: 'Its lure is the size of a lantern. So is each tooth.' },
 ];
 
+FISH.push(...MORE_FISH);
+
 // the deep-water regulars follow you all the way out to Vigil's End
 for (const f of FISH) if (['cod', 'mackerel', 'tuna', 'halibut', 'marlin', 'swordfish', 'oarfish', 'angler', 'viper', 'gulper', 'coelacanth', 'sharkfish', 'mimic', 'chest'].includes(f.id) && Array.isArray(f.where)) f.where.push('reach');
 GIANTS.find(g => g.id === 'abyssangler').where.push('reach');
@@ -300,6 +307,8 @@ export const ZMIN = {
   fogfin: 4, hushray: 4, watcher: 4, vigillight: 4,
   inkfin: 2, suckerfish: 2, hatchling: 2,
   thundertuna: 2, squallray: 1, deepbubbler: 1, glowjelly: 1, artifact: 1, oldmap: 1,
+  starfish: 0, birdbait: 0, cavefin: 1, crystaleel: 1, templekoi: 2, hullgrouper: 2, sandskipper: 2,
+  ...MORE_ZMIN,
 };
 export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
 

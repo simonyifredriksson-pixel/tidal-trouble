@@ -9,11 +9,11 @@
    Poses are spring-blended targets per tool and action, so a cast is a
    wind-up and a whip, reeling turns the crank, and a hammer swings. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, shadeHex } from '../art/Geo.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import { buildRod } from '../art/RodArt.js?v=1790358905';
-import { damp, clamp, rng, TAU } from '../core/Util.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, shadeHex } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
+import { buildRod } from '../art/RodArt.js';
+import { damp, clamp, rng, TAU } from '../core/Util.js';
 
 function handMesh(skin, sleeve, side) {
   const b = new MeshBuilder(rng(side > 0 ? 3 : 4));
@@ -118,6 +118,16 @@ export class ViewModel {
     this.pose = { rx: 0, ry: 0, rz: 0, x: 0, y: 0, z: 0 };
     this.visible = true;
     this.holding = false;
+  }
+
+  /** New sleeves and skin, e.g. when you change your fisher in the settings. */
+  setLook(look) {
+    this.right.remove(this.rightHand); this.left.remove(this.leftHand);
+    this.rightHand.geometry.dispose(); this.leftHand.geometry.dispose();
+    this.rightHand = handMesh(look.skin, look.shirt, 1);
+    this.leftHand = handMesh(look.skin, look.shirt, -1);
+    this.rightHand.scale.setScalar(0.82); this.leftHand.scale.setScalar(0.82);
+    this.right.add(this.rightHand); this.left.add(this.leftHand);
   }
 
   setRod(def) {

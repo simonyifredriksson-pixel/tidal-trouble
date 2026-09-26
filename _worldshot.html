@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>worldshot</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}#err{position:fixed;left:8px;top:8px;color:#f66;font:14px monospace;white-space:pre-wrap;z-index:9}</style></head>
+<body><div id="err"></div>
+<script type="module">
+window.onerror = (m, s, l, c, e) => { document.getElementById('err').textContent += m + ' @' + s + ':' + l + '\n' + (e && e.stack || '') + '\n'; };
+window.addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += 'REJ ' + (e.reason && e.reason.stack || e.reason) + '\n'; });
+import * as THREE from '/lib/three.module.js';
+import { World } from '/src/world/World.js';
+import { heightAt } from '/src/world/Terrain.js';
+const q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 70), W / H, 0.1, 3500);
+const world = new World(scene);
+const t0 = performance.now();
+await world.build(async () => {});
+const x = +(q.get('x') || 20), z = +(q.get('z') || 200);
+const y = q.has('y') ? +q.get('y') : heightAt(x, z) + 1.7;
+cam.position.set(x, Math.max(y, heightAt(x, z) + 0.5), z);
+cam.rotation.order = 'YXZ';
+cam.rotation.y = +(q.get('yaw') || 0);
+cam.rotation.x = -(+(q.get('pitch') || 0.05));
+world.prebuild(x, z);
+const tod = +(q.get('tod') || 0.4);
+document.getElementById('err').textContent += 'build ' + Math.round(performance.now() - t0) + 'ms flora ' + world.flora.count + '\n';
+if (q.get('storm')) world.storm = +q.get('storm');
+function loop() {
+  world.update(0.016, cam.position, cam.position, { tod, storm: world.storm, dark: 0 }, 0);
+  renderer.render(scene, cam);
+  requestAnimationFrame(loop);
+}
+loop();
+</script></body></html>

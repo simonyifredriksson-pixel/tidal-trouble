@@ -8,18 +8,18 @@
    buildTrophy() returns a Group already scaled to sit in a cubby of the
    given width and height, feet on y = 0, facing +Z (out of the shelf). */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder, shadeHex } from './Geo.js?v=1790358905';
-import { MAT } from './Materials.js?v=1790358905';
-import { fishMesh } from './FishArt.js?v=1790358905';
-import { buildLeviathan } from './CreatureArt.js?v=1790358905';
-import { buildGreat, buildKrakenStatue } from './GreatArt.js?v=1790358905';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
-import { LEV_BY_ID } from '../data/LeviathanData.js?v=1790358905';
-import { GREAT_BY_ID } from '../data/GreatData.js?v=1790358905';
-import { BEAST_BY_ID } from '../data/BeastData.js?v=1790358905';
-import { buildBeast } from './BeastArt.js?v=1790358905';
-import { rng, TAU } from '../core/Util.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder, shadeHex } from './Geo.js';
+import { MAT } from './Materials.js';
+import { fishMesh } from './FishArt.js';
+import { buildLeviathan } from './CreatureArt.js';
+import { buildGreat, buildKrakenStatue } from './GreatArt.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { LEV_BY_ID } from '../data/LeviathanData.js';
+import { GREAT_BY_ID } from '../data/GreatData.js';
+import { BEAST_BY_ID } from '../data/BeastData.js';
+import { buildBeast } from './BeastArt.js';
+import { rng, TAU } from '../core/Util.js';
 
 const PLINTH = [
   { top: 0x8a6a44, side: 0x6a4a30, trim: 0x5a3e28 },

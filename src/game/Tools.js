@@ -11,16 +11,16 @@
      auger    drills a hole in the ice for ice fishing
      holders  extra lines on the boat; a bell rings when one bites */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { MeshBuilder } from '../art/Geo.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import { buildRod, buildBobber } from '../art/RodArt.js?v=1790358905';
-import { ROD_BY_ID } from '../data/GearData.js?v=1790358905';
-import { pickSpecies, rollCatch } from './Fishing.js?v=1790358905';
-import { zoneAt } from '../world/MapData.js?v=1790358905';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
-import { clamp, damp, uid } from '../core/Util.js?v=1790358905';
-import { Bus } from '../core/Bus.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { MeshBuilder } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
+import { buildRod, buildBobber } from '../art/RodArt.js';
+import { ROD_BY_ID } from '../data/GearData.js';
+import { pickSpecies, rollCatch } from './Fishing.js';
+import { zoneAt } from '../world/MapData.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { clamp, damp, uid } from '../core/Util.js';
+import { Bus } from '../core/Bus.js';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 

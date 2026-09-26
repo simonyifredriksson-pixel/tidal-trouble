@@ -26,7 +26,9 @@ const ICE = {
 };
 const PREFIX = 'tidaltrouble-v1-';
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-export const BUILD = 1;
+// bump whenever the species list or a message format changes: an older
+// client would meet fish it has never heard of
+export const BUILD = 2;
 
 function code() { let s = ''; for (let i = 0; i < 5; i++) s += LETTERS[Math.floor(Math.random() * LETTERS.length)]; return s; }
 const clean = (s, n = 16) => String(s || '').replace(/[<>]/g, '').slice(0, n);

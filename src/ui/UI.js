@@ -9,24 +9,26 @@
    While a screen is open `input.blocked` is set and pointer lock is
    released; closing it re-locks on the next click into the world. */
 
-import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js?v=1790358905';
-import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js?v=1790358905';
-import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js?v=1790358905';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js?v=1790358905';
-import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js?v=1790358905';
-import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js?v=1790358905';
-import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js?v=1790358905';
-import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js?v=1790358905';
-import { buildBeast } from '../art/BeastArt.js?v=1790358905';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js?v=1790358905';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js?v=1790358905';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js?v=1790358905';
-import { SECRETS } from '../data/SecretData.js?v=1790358905';
-import { heightAt } from '../world/Terrain.js?v=1790358905';
-import { worldMapCanvas } from './MapArt.js?v=1790358905';
-import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js?v=1790358905';
+import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js';
+import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js';
+import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js';
+import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js';
+import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js';
+import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js';
+import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js';
+import { buildBeast } from '../art/BeastArt.js';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js';
+import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js';
+import { SECRETS } from '../data/SecretData.js';
+import { TROPHIES } from '../data/TrophyData.js';
+import { heightAt } from '../world/Terrain.js';
+import { worldMapCanvas } from './MapArt.js';
+import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js';
 
 const $ = (s, r = document) => r.querySelector(s);
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
 const EVENT_SUB = { storm: 'Waves are building. Get back to shore.', migration: 'Thousands of fish. Everyone fish like crazy.', giant: 'Something massive is nearby. Run - or try to catch it.', thief: 'Someone is taking your boat!', whirlpool: 'The ocean is spinning. We should probably leave.', meteor: 'A new, very rare fishing spot just appeared.' };
 
@@ -54,14 +56,7 @@ export class UI {
     this.root.addEventListener('click', e => { if (e.target.closest('.talk')) this._click(e); });
   }
 
-  /* ================= loading & title ================= */
-  loading(frac, label) {
-    const el = $('#loading');
-    el.querySelector('.load-bar i').style.width = Math.round(frac * 100) + '%';
-    el.querySelector('.load-step').textContent = label;
-  }
-  loaded() { $('#loading').classList.add('gone'); }
-
+  /* ================= title ================= */
   title(opts) {
     const el = $('#title');
     el.classList.remove('gone');
@@ -401,7 +396,7 @@ export class UI {
     const d = document.createElement('div');
     d.className = 'talk live';
     d.innerHTML = `<div class="frame"><div class="panel">
-      <h3>${esc(npc.def.full)}<small>(${esc(npc.def.pr === 'they' ? 'they/them' : npc.def.pr === 'she' ? 'she/her' : 'he/him')})</small></h3>
+      <h3>${esc(npc.def.full)}</h3>
       <div class="line">"${esc(line)}"</div>
       <div class="opts">${opts.map(o => `<button class="btn ${o.cls || ''}" data-act="${o.act}" data-arg="${o.arg || ''}">${o.icon ? ic(o.icon) : ''} ${esc(o.label)}</button>`).join('')}
         <button class="btn ghost" data-act="closeTalk">Bye</button></div>
@@ -426,8 +421,7 @@ export class UI {
     this.closeTalk();
     const d = document.createElement('div');
     d.className = 'dlg live';
-    const pr = npc.def.pr === 'they' ? 'they/them' : npc.def.pr === 'she' ? 'she/her' : 'he/him';
-    d.innerHTML = `<div class="dlg-talk"><div class="dlg-name"><span></span><small>${esc(pr)}</small></div><div class="dlg-line"></div><div class="dlg-card"></div></div>
+    d.innerHTML = `<div class="dlg-talk"><div class="dlg-name"><span></span></div><div class="dlg-line"></div><div class="dlg-card"></div></div>
       <div class="dlg-opts"></div>`;
     d.querySelector('.dlg-name span').textContent = npc.def.full;
     d.querySelector('.dlg-line').textContent = line;
@@ -565,6 +559,7 @@ export class UI {
     const nb = sc.querySelector('.sbody');
     if (nb) nb.scrollTop = scroll;
     if (this.screen === 'map' || this.screen === 'guild') this._drawMap();
+    this._pumpThumbs();
     const jc = sc.querySelector('#joincode');
     if (jc) {
       jc.focus();
@@ -599,6 +594,7 @@ export class UI {
       this.data.code = v;
       return;
     }
+    if (el.dataset.adm) { (this._adm = this._adm || {})[el.dataset.adm] = el.value; return; }
     if (el.dataset.set) this.game.uiSetting(el.dataset.set, el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value);
   }
 
@@ -656,7 +652,7 @@ export class UI {
     const k = s => s.split(' ').map(x => `<span class="key">${x}</span>`).join('');
     const rows = [
       ['Move', k('W A S D')], ['Look', 'Mouse'], ['Jump / swim up', k('SPACE')], ['Sprint', k('SHIFT')], ['Dive', k('Q')],
-      ['Use tool / cast (hold)', k('LMB')], ['Strike when it bites', k('CLICK')], ['Reel in (hold)', k('LMB')], ['Pull against the fish', k('A D')],
+      ['Use tool / cast (hold)', k('LMB')], ['Strike when it bites', k('CLICK')], ['Fight: lift the catch zone (hold)', k('LMB')], ['Reel in an empty line (hold)', k('LMB')],
       ['Interact / drive / talk', k('E')], ['Pick up / drop', k('F')], ['Throw what you hold', k('LMB')], ['Tools', k('1 - 9') + ' or wheel'],
       ['Your catch (favourites)', k('TAB') + ' / ' + k('I')], ['Favourite the fish in your hands', k('RMB')], ['Hand axe (kraken arms)', k('0')], ['Talk: pick an answer', k('1 - 9') + ' or click'],
       ['Change bait', k('B')], ['Journal', k('J')], ['Map', k('M')], ['Text chat', k('CTRL') + ' (tap)'], ['Walkie-talkie (co-op voice)', k('C') + ' (hold)'], ['Mute microphone', k('V')], ['Pause', k('ESC')],
@@ -664,7 +660,7 @@ export class UI {
     ];
     return this._wrap(`${this._head('keyE', 'Controls', 'Fishing, boating and general chaos', false)}
       <div class="sbody"><div class="controls">${rows.map(r => `<div><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')}</div>
-      <p style="font-weight:700;color:var(--ink2);margin-top:14px">Fighting a fish: keep the tension needle inside the green zone. Reeling raises tension, letting go lowers it. When the fish runs to one side, pull the other way with A or D - it tires much faster. Big fish will tow your boat.</p></div>
+      <p style="font-weight:700;color:var(--ink2);margin-top:14px">Fighting a fish: hold the mouse button to lift the gold catch zone, let go and it sinks. Keep the fish inside the zone and the meter on the right fills; let it slip out and the meter drains. A fish stronger than your rod drains the meter however well you play it - that is the sign you need a better rod. Big fish tow your boat, and nothing stays on the line forever.</p></div>
       <div class="foot"><button class="btn gold" data-act="${this.game.running ? 'open' : 'close'}" data-arg="pause">Done</button></div>`);
   }
 
@@ -808,7 +804,16 @@ export class UI {
     const G = this.game, s = G.state.s, A = G.admin;
     const btn = (label, arg, cls = '') => `<button class="btn ${cls}" data-act="adm" data-arg="${arg}">${esc(label)}</button>`;
     const tog = (label, key) => `<button class="btn ${A[key] ? 'gold' : 'dark'}" data-act="adm" data-arg="toggle:${key}">${A[key] ? ic('check') : ic('cross')} ${esc(label)}</button>`;
-    const species = [...FISH, ...GIANTS].filter(f => !f.junk || f.id === 'chest');
+    // the fish list, grouped the way the journal groups them; choices survive a re-render
+    const sel = this._adm = this._adm || { fish: 'bass', v: '', area: SECTIONS[0].id };
+    const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
+    const RORD = { legendary: 0, giant: 1, epic: 2, rare: 3, uncommon: 4, common: 5, junk: 6 };
+    const groups = SECTIONS.filter(S => S.id !== 'beasts').map(S => {
+      const fish = sectionEntries(S).filter(e => e.type === 'fish').map(e => FISH_BY_ID[e.id]).sort((a, b) => (RORD[a.rarity] - RORD[b.rarity]) || a.name.localeCompare(b.name));
+      return `<optgroup label="${esc(S.name)} (${fish.length})">${fish.map(f => opt(f.id, `${f.name} - ${f.rarity}`, sel.fish)).join('')}</optgroup>`;
+    }).join('') + `<optgroup label="Junk and treasure">${FISH.filter(f => f.junk).map(f => opt(f.id, f.name, sel.fish)).join('')}</optgroup>`;
+    const pr = progress(s);
+    const areaRows = SECTIONS.filter(S => S.id !== 'beasts').map(S => `${esc(S.name)} ${pr.per[S.id].got}/${pr.per[S.id].of}`).join('  -  ');
     return this._wrap(`${this._head('gear', 'Playtest Panel', 'Press L + J + M + 3 again to close. Not part of the game.', true)}
       <div class="sbody admin">
         <section><h3>${ic('leviathan')}Leviathans at Vigil's End</h3><div class="row">${GREAT.map(D => btn(`${D.name} (${Math.round(D.chance * 100)}%)`, 'spawnGreat:' + D.id)).join('')}${btn('Random (60/30/10)', 'spawnGreat:', 'dark')}</div>
@@ -820,10 +825,13 @@ export class UI {
           <div class="row">${btn('Chart with an X', 'mystery')}${btn('Hotspots around me', 'hotspots')}</div></section>
         <section><h3>${ic('hook')}Fishing</h3><div class="row">${tog('Catch every fish (auto-win fights)', 'autoCatch')}${tog('Auto-cast (AFK fishing)', 'autoCast')}</div></section>
         <section><h3>${ic('rod')}Give rod</h3><div class="row">${RODS.map(R => btn(R.name, 'giveRod:' + R.id, s.rod === R.id ? 'gold' : '')).join('')}${btn('All rods', 'allRods', 'dark')}</div></section>
-        <section><h3>${ic('fish')}Give fish</h3><div class="row">
-          <select id="admFish">${species.map(f => `<option value="${f.id}">${esc(f.name)} (${f.rarity})</option>`).join('')}</select>
-          <select id="admVar"><option value="">Normal</option>${VARIANTS.map(v => `<option value="${v.id}">${v.name}</option>`).join('')}</select>
-          ${btn('Give fish', 'giveFish', 'gold')}${btn('Spawn a random test fish', 'testFish')}${btn('Clear inventory', 'clearInv', 'red')}</div></section>
+        <section><h3>${ic('fish')}Give fish (${FISH.length} species)</h3><div class="row">
+          <select id="admFish" data-adm="fish">${groups}</select>
+          <select id="admVar" data-adm="v">${opt('', 'Normal', sel.v)}${VARIANTS.map(v => opt(v.id, v.name + ' x' + v.mult, sel.v)).join('')}</select>
+          ${btn('Give fish', 'giveFish', 'gold')}${btn('Spawn a random test fish', 'testFish')}${btn('Clear inventory', 'clearInv', 'red')}</div>
+          <div class="row"><select id="admArea" data-adm="area">${SECTIONS.filter(S => S.id !== 'beasts').map(S => opt(S.id, S.name, sel.area)).join('')}</select>
+          ${btn('Give 5 random fish from this area', 'areaFish', 'gold')}${btn('Fill the journal for this area', 'dexFill:area')}${btn('Fill the whole journal', 'dexFill:all')}${btn('Clear the journal', 'dexClear', 'red')}</div>
+          <p class="note">Journal: ${pr.got} of ${pr.of} discovered.  ${areaRows}</p></section>
         <section><h3>${ic('coin')}Money</h3><div class="row"><input id="admMoney" type="number" value="10000" min="0" step="1000">${btn('Add', 'moneyAdd', 'gold')}${btn('Set', 'moneySet')}<span class="note">You have ${fmtInt(s.money)}.</span></div></section>
         <section><h3>${ic('boat')}The ship</h3><div class="row">${HULLS.map(H => btn(H.name + (H.hold ? ' (with hold)' : ''), 'giveHull:' + H.id, s.boat.hull === H.id ? 'gold' : '')).join('')}${btn('Put me in the hold', 'hold', 'dark')}</div>
           <div class="row">${['rail', 'wheel', 'engine', 'mount'].map(k => btn('Break the ' + k, 'breakPart:' + k, 'red')).join('')}${btn('Break everything', 'breakPart:all', 'red')}</div>
@@ -885,29 +893,12 @@ export class UI {
   /* ---------- journal ---------- */
   _journal(d) {
     const G = this.game, s = G.state.s;
-    const t = this._tabs([['fish', 'Field Guide', 'fish'], ['clues', 'Clues', 'eye'], ['story', 'Story', 'bottle'], ['stats', 'Records', 'trophy']], 'fish');
+    const t = this._tabs([['fish', 'Field Guide', 'fish'], ['clues', 'Clues', 'eye'], ['trophies', 'Trophies', 'trophy'], ['story', 'Story', 'bottle'], ['stats', 'Records', 'star']], 'fish');
     let body = '';
     if (t.cur === 'fish') {
       body = this._fieldGuide(d);
-    } else if (t.cur === 'oldfish') {
-      const sel = d.sel && FISH_BY_ID[d.sel];
-      if (sel) {
-        const rec = s.dex[sel.id];
-        const R = RARITY[sel.rarity];
-        body = `<div class="dexdetail"><div><img src="${fishThumb(sel.id, !!rec)}" alt=""></div><div>
-          <h2 style="font-size:32px">${rec ? esc(sel.name) : '? ? ?'} <span class="rar" style="background:${R.css}">${R.name}</span></h2>
-          <p style="font-weight:700;color:var(--ink2);font-size:15px">${rec ? esc(sel.blurb) : 'You have not caught one of these yet.'}</p>
-          ${rec ? `<p><b>Caught:</b> ${rec.n}  -  <b>Best:</b> ${fmtKg(rec.bestKg)}, ${fmtCm(rec.bestCm)}  -  <b>Worth about:</b> ${fmtInt(fishValue(sel, rec.bestKg))}</p>` : ''}
-          <p><b>Where:</b> ${sel.where === 'all' ? 'Anywhere' : sel.where === 'meteor' ? 'Where a meteor has fallen' : Array.isArray(sel.where) ? sel.where.map(w => REGIONS[w]?.name).filter(Boolean).join(', ') : 'Somewhere hidden'}  -  <b>Water:</b> ${({ lake: 'Lakes', sea: 'The sea', ice: 'Ice holes', any: 'Anywhere' })[sel.water] || 'Event'}  -  <b>When:</b> ${sel.time || 'any'}</p>
-          ${sel.bait ? `<p><b>Likes:</b> ${Object.entries(sel.bait).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => BAIT_BY_ID[k]?.name).filter(Boolean).join(', ') || 'anything'}</p>` : ''}
-          <button class="btn" data-act="dexBack">Back to the journal</button></div></div>`;
-      } else {
-        body = `<p style="font-weight:800;color:var(--ink2);margin:0 0 10px">${G.state.dexCount()} of ${JOURNAL_ORDER.filter(f => f.rarity !== 'junk').length} species caught</p>
-          <div class="dex">${JOURNAL_ORDER.map(f => {
-            const rec = s.dex[f.id]; const R = RARITY[f.rarity];
-            return `<div class="dexcell ${rec ? '' : 'unknown'}" data-act="dexSel" data-arg="${f.id}"><span class="stripe" style="background:${R.css}"></span><img src="${fishThumb(f.id, !!rec)}" alt=""><b>${rec ? esc(f.name) : '? ? ?'}</b><small>${rec ? 'x' + rec.n + '  best ' + fmtKg(rec.bestKg) : R.name}</small></div>`;
-          }).join('')}</div>`;
-      }
+    } else if (t.cur === 'trophies') {
+      body = this._trophyList();
     } else if (t.cur === 'clues') {
       body = `<div class="levgrid">${LEVIATHANS.filter(L => !L.final).map(L => {
         const any = L.clues.some(c => s.clues[c.id]);
@@ -925,6 +916,22 @@ export class UI {
           .map(([i, l, v]) => `<div class="card"><h3>${ic(i)}${esc(String(v))}</h3><p>${l}</p></div>`).join('')}</div>`;
     }
     return this._wrap(`${this._head('journal', 'Fishing Journal', 'Everything you have caught, found and survived')}${t.html}<div class="sbody">${body}</div>`);
+  }
+
+  /* ---------- every trophy you have earned, on the shelf or in storage ---------- */
+  _trophyList() {
+    const G = this.game, s = G.state.s, T = s.trophies;
+    const TIER = ['Wood', 'Brass', 'Silver', 'Gold', 'Relic'];
+    const TIER_CSS = ['#b08a58', '#d8a060', '#c8ccd0', '#f2c14a', '#6af0ff'];
+    const got = TROPHIES.filter(x => T.got[x.id] !== undefined).sort((a, b) => (b.tier - a.tier) || (T.got[a.id] - T.got[b.id]));
+    const pending = new Set(G.cabin.pending());
+    const row = x => {
+      const where = T.placed[x.id] !== undefined ? 'On the bookcase' : pending.has(x.id) ? 'Waiting - press E at the bookcase' : 'In storage (the shelf is full of grander things)';
+      return `<div class="li"><span class="rar" style="background:${TIER_CSS[x.tier]};color:#2a1a0a">${TIER[x.tier]}</span>
+        <span><b>${esc(x.name)}</b><small>${esc(x.text)}</small></span><span class="price" style="font-size:13px">${esc(where)}</span><span style="font-size:12px;color:var(--ink2)">day ${T.got[x.id]}</span></div>`;
+    };
+    return `<p style="font-weight:800;color:var(--ink2);margin:0 0 10px">${got.length} of ${TROPHIES.length} trophies earned. The bookcase in your hut shows the ${G.cabin.caps().S + G.cabin.caps().L} grandest.</p>
+      ${got.length ? `<div class="list">${got.map(row).join('')}</div>` : '<div class="empty">No trophies yet. Catch something rare, find somewhere strange, survive something enormous.</div>'}`;
   }
 
   /* ---------- the field guide: fish by where they live ----------
@@ -955,7 +962,7 @@ export class UI {
         const info = this._entryInfo(e);
         return `<div class="jcard ${got ? '' : 'unknown'} ${big ? 'legend' : ''}" data-act="dexSel" data-arg="${e.key}">
           ${got ? `<span class="stripe" style="background:${info.css}"></span>` : ''}
-          <img src="${this._entryThumb(e, got)}" alt="">
+          <img ${this._thumb(e.key + ':' + got, () => this._entryThumb(e, got))} alt="">
           <b>${got ? esc(info.name) : big ? '? ? ?' : '???'}</b>
           <small>${got ? esc(info.tag) : big ? 'Something enormous' : 'Unknown fish'}</small></div>`;
       }).join('');
@@ -963,6 +970,34 @@ export class UI {
         <div class="jgrid">${cards}</div>`;
     }
     return `<div class="guide">${side}<div class="jmain">${main}</div></div>`;
+  }
+  /** An <img> source for a thumbnail that may not be drawn yet: cached ones
+      appear at once, the rest are drawn a few per frame by _pumpThumbs, so a
+      page of fifty unknown fish opens instantly instead of freezing. */
+  _thumb(key, make) {
+    this._tc = this._tc || new Map();
+    const u = this._tc.get(key);
+    if (u) return `src="${u}"`;
+    (this._tj = this._tj || new Map()).set(key, make);
+    return `src="${BLANK}" data-thumb="${esc(key)}"`;
+  }
+  _pumpThumbs() {
+    if (this._pumping || !this._tj?.size) return;
+    this._pumping = true;
+    const step = () => {
+      const jobs = this._tj;
+      if (!jobs.size) { this._pumping = false; return; }
+      const t0 = performance.now();
+      for (const [key, make] of jobs) {
+        jobs.delete(key);
+        const url = make();
+        this._tc.set(key, url);
+        for (const img of document.querySelectorAll(`img[data-thumb="${CSS.escape(key)}"]`)) { img.src = url; img.removeAttribute('data-thumb'); }
+        if (performance.now() - t0 > 8) break;
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
   _entryInfo(e) {
     if (e.type === 'fish') { const f = FISH_BY_ID[e.id], R = RARITY[f.rarity]; return { name: f.name, css: R.css, tag: R.name + ' - ' + sizeClass(f) }; }

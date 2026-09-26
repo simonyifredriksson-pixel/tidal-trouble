@@ -9,11 +9,11 @@
    throws can never make the UI say "caught!" about a fish that was never
    stored. */
 
-import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js?v=1790358905';
-import { FISH_BY_ID } from '../data/FishData.js?v=1790358905';
-import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js?v=1790358905';
-import { TROPHY_BY_ID } from '../data/TrophyData.js?v=1790358905';
-import { Bus } from '../core/Bus.js?v=1790358905';
+import { RODS, ROD_BY_ID, BAITS, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { LEVIATHANS, LEV_BY_ID, BOTTLES } from '../data/LeviathanData.js';
+import { TROPHY_BY_ID } from '../data/TrophyData.js';
+import { Bus } from '../core/Bus.js';
 
 export const SAVE_KEY = 'tidaltrouble.save.v1';
 export const SETTINGS_KEY = 'tidaltrouble.settings.v1';
@@ -85,7 +85,18 @@ export class State {
     T.got[id] = this.s.day;
     return true;
   }
-  pendingTrophies() { const T = this.s.trophies; return Object.keys(T.got).filter(id => T.placed[id] === undefined && TROPHY_BY_ID[id]); }
+  /** Which earned trophies deserve a place on a shelf with `caps` {S, L} spaces:
+      the grandest first, then the ones already up there, then the oldest. */
+  shelfPlan(caps = null) {
+    const T = this.s.trophies;
+    const ids = Object.keys(T.got).filter(id => TROPHY_BY_ID[id]);
+    ids.sort((a, b) => (TROPHY_BY_ID[b].tier - TROPHY_BY_ID[a].tier) || ((T.placed[a] === undefined) - (T.placed[b] === undefined)) || (T.got[a] - T.got[b]));
+    const keep = { S: [], L: [] };
+    for (const id of ids) { const z = TROPHY_BY_ID[id].size; if (keep[z].length < (caps ? caps[z] : Infinity)) keep[z].push(id); }
+    return keep;
+  }
+  /** Earned trophies that would go up on the shelf but are not there yet. */
+  pendingTrophies(caps = null) { const k = this.shelfPlan(caps), P = this.s.trophies.placed; return [...k.S, ...k.L].filter(id => P[id] === undefined); }
   save() {
     if (this.remote) return false;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; }

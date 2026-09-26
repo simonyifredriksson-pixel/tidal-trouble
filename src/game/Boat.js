@@ -15,15 +15,15 @@
    three chase their targets through a spring, so a boat rides a swell
    instead of snapping to it. */
 
-import * as THREE from '../../lib/three.module.js?v=1790358905';
-import { buildBoat } from '../art/BoatArt.js?v=1790358905';
-import { boatStats, HULL_BY_ID } from '../data/BoatData.js?v=1790358905';
-import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js?v=1790358905';
-import { waveAmp } from '../world/MapData.js?v=1790358905';
-import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js?v=1790358905';
-import { MeshBuilder } from '../art/Geo.js?v=1790358905';
-import { MAT } from '../art/Materials.js?v=1790358905';
-import { Bus } from '../core/Bus.js?v=1790358905';
+import * as THREE from '../../lib/three.module.js';
+import { buildBoat } from '../art/BoatArt.js';
+import { boatStats, HULL_BY_ID } from '../data/BoatData.js';
+import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js';
+import { waveAmp } from '../world/MapData.js';
+import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js';
+import { MeshBuilder } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
+import { Bus } from '../core/Bus.js';
 
 const _v = new THREE.Vector3();
 const MAT_HOLE = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });

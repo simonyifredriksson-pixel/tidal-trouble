@@ -10,24 +10,24 @@
      ?fresh               ignore the save
      ?stage=NAME          set up a scene for a screenshot (see stage()) */
 
-import * as THREE from '../lib/three.module.js?v=1790358905';
-import { Input } from './core/Input.js?v=1790358905';
-import { Audio } from './core/Audio.js?v=1790358905';
-import { World } from './world/World.js?v=1790358905';
-import { Game } from './game/Game.js?v=1790358905';
-import { UI } from './ui/UI.js?v=1790358905';
-import { State } from './game/State.js?v=1790358905';
-import { Net } from './net/Net.js?v=1790358905';
-import { Remote } from './game/Remote.js?v=1790358905';
-import { heightAt } from './world/Terrain.js?v=1790358905';
-import { U } from './art/Materials.js?v=1790358905';
+import * as THREE from '../lib/three.module.js';
+import { Input } from './core/Input.js';
+import { Audio } from './core/Audio.js';
+import { World } from './world/World.js';
+import { Game } from './game/Game.js';
+import { UI } from './ui/UI.js';
+import { State } from './game/State.js';
+import { Net } from './net/Net.js';
+import { Remote } from './game/Remote.js';
+import { heightAt } from './world/Terrain.js';
+import { U } from './art/Materials.js';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
   const box = document.createElement('pre');
-  box.style.cssText = 'position:fixed;left:6px;top:6px;z-index:99;color:#fff;background:rgba(0,0,0,0.82);padding:4px;font:13px monospace;white-space:pre-wrap;max-width:90vw;pointer-events:none';
+  box.style.cssText = 'position:fixed;left:6px;top:6px;z-index:99;color:#fff;background:rgba(0,0,0,0.82);padding:4px;font:13px monospace;white-space:pre-wrap;max-width:90vw;max-height:calc(100vh - 12px);overflow:hidden;pointer-events:none';
   document.body.appendChild(box);
-  const log = t => { box.textContent += t + '\n'; };
+  const log = t => { box.textContent += t + '\n'; box.scrollTop = box.scrollHeight; };
   addEventListener('error', e => log('ERR ' + e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno));
   addEventListener('unhandledrejection', e => log('REJ ' + (e.reason && e.reason.stack || e.reason)));
   window.__log = log;
@@ -139,7 +139,7 @@ function startGame(mode, lock = true) {
   if (Q.has('stage')) stage(Q.get('stage'));
   if (lock && !ui.isOpen) input.lock();
   if (Q.has('nethost')) { hostRoom().then(() => { try { parent.postMessage({ room: net.room }, '*'); } catch (e) { /* */ } }); netProbe('host'); }
-  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js?v=1790358905').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
+  if (Q.has('script')) setTimeout(() => import('./debug/Scripts.js').then(m => m.runScripts(Q.get('script').split(','), game)), 500);
 }
 
 async function hostRoom() {
@@ -295,7 +295,7 @@ function stage(name) {
   const look = (from, to, pitch = 0) => { P.place(from.clone(), Math.atan2(-(to.x - from.x), -(to.z - from.z))); P.pitch = pitch; };
   const C = A.cabinInside;
   if (name === 'hut' || name === 'hut2' || name === 'hutbare') {
-    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js?v=1790358905').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
+    if (name !== 'hutbare') { for (const id in (window.__TROPHIES || {})) G.state.award(id); import('./data/TrophyData.js').then(m => { for (const T of m.TROPHIES) G.state.award(T.id); G.cabin.placeAll(); G.cabin.update(); }); }
     G.state.s.rods = ['basic', 'reinforced', 'reef', 'deepwater', 'icebreaker', 'heavy', 'storm', 'titan', 'oath']; G.state.s.rod = 'oath'; G._rodChanged();
     G.tod = 0.5;
     if (name === 'hut2') look(C.clone().add(new THREE.Vector3(1.9, 0, -1.2)), C.clone().add(new THREE.Vector3(-3.4, 0.9, 1.6)), -0.12);
@@ -381,6 +381,15 @@ function stage(name) {
     setTimeout(() => { const items = [...G.loot.items.values()]; items[1].fav = true; items[3].fav = true; G.ui.open('catch'); }, 600);
   }
   if (name === 'admin') setTimeout(() => G.ui.open('admin'), 400);
+  if (name === 'zoo') {
+    // a row of catches laid out on your dock, for looking at the models in the world
+    const ids = (Q.get('ids') || 'browncrab,arcticskate,bayoctopus,tidestar,nautilus,lionfish,hammerhead,boxfish,snowjelly,crayfish').split(',');
+    const d = A.homeDock;
+    G.tod = 0.45;
+    ids.forEach((id, i) => G.loot.spawn({ sp: id, kg: 2, cm: 60, pos: new THREE.Vector3(d.x + (i % 2 ? 0.7 : -0.7), 1.6, d.z - 2 - i * 1.4), flop: 0 }));
+    advance(2);
+    look(new THREE.Vector3(d.x + 2.2, 1.25, d.z - 1), new THREE.Vector3(d.x, 1.2, d.z - 8), -0.35);
+  }
   if (name.startsWith('journal')) {
     for (const [sp, w] of [['bass', 'Mirror Lake'], ['pike', 'Mirror Lake'], ['cod', 'Driftwood Bay - Driftwood Shallows'], ['goldtrout', 'Reed Pond'], ['mackerel', 'Driftwood Bay - Coastal Waters'], ['flounder', 'Driftwood Bay - Driftwood Shallows'], ['catfish', 'Mirror Lake']]) G.state.record(sp, 3, 50, null, w);
     const [, sec, sel] = name.split(':');
@@ -513,6 +522,6 @@ input.canLock = () => !!(game && game.running && !ui.isOpen && !ui.talkEl && !ga
 
 boot().catch(e => {
   console.error(e);
-  const s = document.querySelector('#loading .load-step');
-  if (s) s.textContent = 'Something went wrong: ' + e.message;
+  const s = document.querySelector('#intro .load-step');
+  if (s) { s.textContent = 'Something went wrong: ' + e.message + ' - try refreshing the page.'; s.style.color = '#ffb08a'; }
 });

@@ -5,14 +5,16 @@
    appears on the shelf as a physical object with its own model (TrophyArt).
    Nothing here is a list in a menu - the shelf is the list.
 
-   size  'S' sits in one of the forty small cubbies; 'L' takes one of the big
-         spaces on the bottom shelf or on top of the bookcase
+   size  'S' sits in one of the small cubbies; 'L' takes one of the big
+         spaces on the bottom shelf or on top of the bookcase. There are
+         more trophies than spaces: the shelf shows your best ones (highest
+         tier first), and the journal's Trophies page lists every one.
    tier  how grand its stand is: 0 wood, 1 brass, 2 silver, 3 gold, 4 relic */
 
-import { FISH, FISH_BY_ID } from './FishData.js?v=1790358905';
-import { LEVIATHANS } from './LeviathanData.js?v=1790358905';
-import { GREAT } from './GreatData.js?v=1790358905';
-import { BEASTS } from './BeastData.js?v=1790358905';
+import { FISH, FISH_BY_ID } from './FishData.js';
+import { LEVIATHANS } from './LeviathanData.js';
+import { GREAT } from './GreatData.js';
+import { BEASTS } from './BeastData.js';
 
 const T = [];
 // the milestones, each with its own object
@@ -31,10 +33,10 @@ T.push(
   { id: 'explorer', name: 'Off the Charts', size: 'S', tier: 3, model: 'logbook', text: 'Your own logbook of the places that are on no map: the grotto, the temple, the wreck and the key.' },
   { id: 'hoard', name: 'The Hoard', size: 'L', tier: 4, model: 'hoard', text: 'One hundred thousand coins earned. A chest that will not close.' },
 );
-// every rare, epic and legendary species, mounted
+// every epic and legendary species, mounted (the journal is the collection for the rest)
 for (const f of FISH) {
-  if (!['rare', 'epic', 'legendary'].includes(f.rarity) || f.junk || f.beh === 'mimic' || f.beh === 'chest') continue;
-  T.push({ id: 'sp:' + f.id, name: f.name, size: 'S', tier: { rare: 1, epic: 2, legendary: 3 }[f.rarity], model: 'fish', sp: f.id, text: f.blurb });
+  if (!['epic', 'legendary'].includes(f.rarity) || f.junk || f.beh === 'mimic' || f.beh === 'chest') continue;
+  T.push({ id: 'sp:' + f.id, name: f.name, size: 'S', tier: { epic: 2, legendary: 3 }[f.rarity], model: 'fish', sp: f.id, text: f.blurb });
 }
 // the eleven shard-bearers as skulls; the Tidemother as a statue
 for (const L of LEVIATHANS) T.push({ id: 'lev:' + L.id, name: L.name, size: L.final ? 'L' : 'S', tier: 4, model: L.final ? 'levstatue' : 'skull', lev: L.id, text: L.story });
