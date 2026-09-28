@@ -89,6 +89,7 @@ float waveAmp(vec2 p) {
   a += 0.55 * sstep(1500.0, 3000.0, dHome) + 0.5 * sstep(3000.0, 4600.0, dHome) + 0.55 * sstep(4600.0, 6500.0, dHome);
   ${spotGLSL()}
   a += 2.4 * sstep(${f1(WORLD.edge - 500)}, ${f1(WORLD.edge)}, dHome);
+  a += 1.6 * sstep(${f1(WORLD.edge)}, ${f1(WORLD.edge + 1200)}, dHome);
   ${SHELTERS.map(S => `a *= 0.32 + 0.68 * sstep(${f1(S.r0)}, ${f1(S.r1)}, length(p - vec2(${f1(S.x)}, ${f1(S.z)})));`).join('\n  ')}
   ${lakeGLSL()}
   return a;

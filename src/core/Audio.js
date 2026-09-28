@@ -210,6 +210,16 @@ export class Audio {
   anchorSet() { this.tone(90, 0.3, 'triangle', 0.25, 0.005, 0.5); this.noise(0.3, 0.15, 'lowpass', 400, 1); }
   scrape() { this.noise(0.4, 0.12, 'bandpass', 260 + Math.random() * 120, 1.5, 0.3); }
   clunk() { this.tone(160, 0.1, 'square', 0.12, 0.002, 0.5); this.noise(0.1, 0.15, 'lowpass', 1200, 1); }
+  /** Something enormous, far down, making a sound through the hull. */
+  groan(v = 1) { this.tone(38, 3.2, 'sawtooth', 0.2 * v, 0.6, -0.3); this.tone(57, 2.6, 'sine', 0.22 * v, 0.4, 0.4, 0.3); this.noise(3, 0.12 * v, 'lowpass', 180, 1, 0.2); }
+  /** Timber giving way: a ship, a mast, a tree. */
+  crack() { this.noise(0.12, 0.4, 'highpass', 1800, 1); this.noise(0.5, 0.35, 'bandpass', 700, 1.4, 0.5, 0.05); this.tone(90, 0.4, 'square', 0.15, 0.002, 0.4, 0.05); }
+  chopWood(pos) { const a = this._att(pos, 30); this.tone(170 + Math.random() * 40, 0.09, 'triangle', 0.3 * a, 0.001, 0.6); this.noise(0.1, 0.25 * a, 'bandpass', 900 + Math.random() * 300, 2); this.noise(0.05, 0.12 * a, 'highpass', 3000, 1, 1, 0.02); }
+  pickStone(pos) { const a = this._att(pos, 30); this.tone(1100 + Math.random() * 400, 0.06, 'square', 0.1 * a, 0.001, 0.2); this.noise(0.12, 0.25 * a, 'highpass', 2600, 1.5); this.tone(240, 0.1, 'triangle', 0.18 * a, 0.002, 0.3); }
+  treeFall(pos) { const a = this._att(pos, 60); this.tone(140, 1.4, 'sawtooth', 0.06 * a, 0.3, -0.5); this.noise(1.2, 0.12 * a, 'bandpass', 400, 2, 0.6); }
+  timber(pos) { const a = this._att(pos, 60); this.noise(0.8, 0.45 * a, 'lowpass', 500, 0.8, 0.3); this.tone(55, 0.6, 'triangle', 0.35 * a, 0.004, 0.4); this.noise(0.9, 0.12 * a, 'highpass', 2500, 1, 0.2, 0.05); }
+  place(wood = true) { if (wood) { this.tone(260, 0.08, 'triangle', 0.2, 0.001, 0.5); this.noise(0.08, 0.15, 'bandpass', 700, 2); } else { this.tone(180, 0.1, 'square', 0.1, 0.002, 0.4); this.noise(0.12, 0.2, 'lowpass', 1400, 1); } }
+  pickup() { this.tone(700, 0.05, 'triangle', 0.08, 0.002, 0.5); this.tone(1050, 0.07, 'triangle', 0.06, 0.002, 0, 0.04); }
   bubble() { this.tone(400 + Math.random() * 500, 0.06, 'sine', 0.04, 0.002, 1.8); }
 
   /* ---------------- continuous: ambience, engine, music ---------------- */

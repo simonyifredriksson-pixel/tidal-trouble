@@ -64,6 +64,21 @@ export class NPCs {
   }
   byId(id) { return this.list.find(n => n.def.id === id); }
 
+  /** Someone leaves their spot to stand somewhere else for a while (Old Gus on the beach). */
+  visit(n, pos, face) {
+    if (!n.home) n.home = { pos: n.pos.clone(), face: n.face };
+    n.pos.copy(pos); n.face = face;
+    n.c.root.position.copy(pos); n.c.root.rotation.y = face;
+    n.visiting = true;
+  }
+  /** ...and goes back when you are not looking. */
+  goHome(n) {
+    if (!n.home) return;
+    n.pos.copy(n.home.pos); n.face = n.home.face;
+    n.c.root.position.copy(n.pos); n.c.root.rotation.y = n.face;
+    n.visiting = false;
+  }
+
   update(dt) {
     const G = this.game;
     const me = G.player.pos;
@@ -73,7 +88,9 @@ export class NPCs {
       if (n.fline) n.fline.visible = n.c.root.visible;
       if (!n.c.root.visible) continue;
       n.talking = Math.max(0, n.talking - dt);
-      const P = n.def.pose;
+      // a visitor walks home once you have gone off and nobody is talking to them
+      if (n.visiting && d > 35 && !n.talking && !G.ui.talkEl && !G.intro?.active) this.goHome(n);
+      const P = n.visiting ? 'stand' : n.def.pose;
       const still = P === 'sit' || P === 'sitfish' || P === 'fish';
       const pose = P === 'sit' ? 'sit' : P === 'sitfish' ? 'sitfish' : P === 'fish' ? 'fish' : n.talking > 0 ? 'talk' : 'idle';
       // turn to face you when you are close (the sitters and the fishermen only turn their heads)

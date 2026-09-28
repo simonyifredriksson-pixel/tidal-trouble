@@ -14,6 +14,7 @@ import { MeshBuilder, shadeHex } from '../art/Geo.js';
 import { MAT } from '../art/Materials.js';
 import { buildRod } from '../art/RodArt.js';
 import { buildAnchor } from '../art/AnchorArt.js';
+import { pickMeshBuilder, plansMeshBuilder, pieceMesh } from '../art/BuildArt.js';
 import { damp, clamp, rng, TAU } from '../core/Util.js';
 
 function handMesh(skin, sleeve, side) {
@@ -75,6 +76,10 @@ function toolMesh(id) {
     b.color(0x8a9098).box(0.03, 0.13, 0.2, 0, 0.5, 0.09);
     b.color(0xd8dce0).box(0.034, 0.17, 0.035, 0, 0.5, 0.2);
     b.color(0x5a5e64).box(0.052, 0.08, 0.08, 0, 0.5, -0.02);
+  } else if (id === 'pick') {
+    pickMeshBuilder(b);
+  } else if (id === 'plans') {
+    plansMeshBuilder(b);
   } else if (id === 'trap') {
     b.color(0x5a4230);
     for (const [x, z] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.12], [0.18, 0.12]]) b.box(0.025, 0.24, 0.025, x, 0.12, z);
@@ -229,6 +234,14 @@ export class ViewModel {
     } else if (tool === 'axe') {
       R = { x: 0.27, y: -0.3, z: -0.48, rx: -0.55, ry: 0.15, rz: 0.15 };
       if (this.action === 'chop') { const k = clamp(this.actT / 0.42, 0, 1); const up = k < 0.35 ? k / 0.35 : 1 - (k - 0.35) / 0.65; R.rx = -0.55 - up * 1.2 + (k > 0.35 ? (k - 0.35) * 1.8 : 0); R.y += up * 0.12; R.z -= (k > 0.35 ? (1 - k) * 0.25 : 0); }
+    } else if (tool === 'pick') {
+      // a two-handed overhead swing
+      R = { x: 0.22, y: -0.3, z: -0.46, rx: -0.5, ry: 0.1, rz: 0.1 };
+      Lh = { x: 0.12, y: -0.4, z: -0.42, rx: -0.5, ry: 0, rz: 0.3, show: true };
+      if (this.action === 'chop') { const k = clamp(this.actT / 0.45, 0, 1); const up = k < 0.4 ? k / 0.4 : 1 - (k - 0.4) / 0.6; R.rx = -0.5 - up * 1.35 + (k > 0.4 ? (k - 0.4) * 2 : 0); R.y += up * 0.16; Lh.y += up * 0.14; Lh.rx = R.rx; }
+    } else if (tool === 'plans') {
+      R = { x: 0.16, y: -0.3, z: -0.42, rx: 0.9, ry: -0.25, rz: 0.1 };
+      Lh = { x: -0.1, y: -0.34, z: -0.44, rx: 0.7, ry: 0.3, rz: -0.2, show: true };
     } else if (tool === 'trap') {
       R = { x: 0.14, y: -0.38, z: -0.5, rx: 0, ry: 0.3, rz: 0 };
       Lh = { x: -0.14, y: -0.38, z: -0.5, rx: 0, ry: -0.3, rz: 0, show: true };
@@ -237,6 +250,18 @@ export class ViewModel {
       Lh = { x: -0.26, y: -0.46, z: -0.45, rx: -0.3, ry: 0, rz: 0, show: s.holding };
     }
     if (s.holding) { R = { x: 0.2, y: -0.4, z: -0.5, rx: -0.4, ry: -0.3, rz: 0.4 }; Lh = { x: -0.2, y: -0.4, z: -0.5, rx: -0.4, ry: 0.3, rz: -0.4, show: true }; }
+    // a log, a stone, a bundle of fibre carried in both hands to a blueprint
+    const mat = !s.holding && !s.swim ? this.heldMat : null;
+    if (mat !== this._matShown) {
+      if (this.matMesh) this.root.remove(this.matMesh);
+      this.matMesh = mat ? pieceMesh(mat) : null;
+      if (this.matMesh) { this.matMesh.castShadow = false; this.root.add(this.matMesh); }
+      this._matShown = mat;
+    }
+    if (mat) {
+      R = { x: 0.16, y: -0.36, z: -0.48, rx: -0.3, ry: -0.3, rz: 0.4 }; Lh = { x: -0.16, y: -0.36, z: -0.48, rx: -0.3, ry: 0.3, rz: -0.4, show: true };
+      if (this.action === 'throw') { const k = clamp(this.actT / 0.35, 0, 1); R.z -= Math.sin(k * Math.PI) * 0.18; Lh.z -= Math.sin(k * Math.PI) * 0.18; R.y += Math.sin(k * Math.PI) * 0.08; Lh.y += Math.sin(k * Math.PI) * 0.08; }
+    }
     // the anchor: lift it off the rail in both hands, swing it back, heave it over
     const throwing = this.action === 'anchorThrow' && this.actT < 0.9;
     if (throwing) {
@@ -311,6 +336,13 @@ export class ViewModel {
       // it hangs from both fists by its ring
       this.anchorHeld.position.set((this.right.position.x + this.left.position.x) / 2, (this.right.position.y + this.left.position.y) / 2 + 0.03, (this.right.position.z + this.left.position.z) / 2);
       this.anchorHeld.rotation.set(this.right.rotation.x * 0.5 + 0.3, 0, 0.1);
+    }
+    if (this.matMesh) {
+      this.matMesh.visible = this.visible && !(this.action === 'throw' && this.actT > 0.12 && this.actT < 0.5);
+      this.matMesh.position.set((this.right.position.x + this.left.position.x) / 2, (this.right.position.y + this.left.position.y) / 2 + 0.06, (this.right.position.z + this.left.position.z) / 2 - 0.02);
+      this.matMesh.rotation.set(0.2, this._matShown === 'wood' ? 0.25 : 0, 0);
+      this.matMesh.scale.setScalar(0.45);
+      this.toolHolder.visible = false;
     }
     this.left.visible = !!Lh.show && this.visible;
     this.right.visible = this.visible;

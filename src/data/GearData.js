@@ -173,7 +173,9 @@ export const TOOLS = [
   { id: 'camera', name: 'Camera', slot: 7, price: 150, blurb: 'Take a photo. The good ones go on the wall of your cabin.' },
   { id: 'grapple', name: 'Grappling Hook', slot: 8, price: 1800, blurb: 'Fire at rock, wood or a boat to pull yourself across. Also yanks loose things toward you.' },
   { id: 'auger', name: 'Ice Auger', slot: 9, price: 900, shop: 'frostfall', blurb: 'Drill a fishing hole through any ice. Halvard at Frostfall makes every one in the sea - you will not find one anywhere else.' },
-  { id: 'axe', name: 'Hand Axe', slot: 0, price: 0, owned: true, blurb: 'Splits firewood. Also, it turns out, the only thing a kraken respects. Press E next to a tentacle to chop it.' },
+  { id: 'axe', name: 'Hand Axe', slot: 0, price: 0, owned: true, blurb: 'Chops trees for wood and cuts bushes for fibre (left mouse). Also, it turns out, the only thing a kraken respects: press E next to a tentacle to chop it.' },
+  { id: 'pick', name: 'Pickaxe', slot: '-', key: 'Minus', price: 0, owned: true, blurb: 'Breaks rock for stone (left mouse). Black rock gives iron ore, reef crystal gives crystal.' },
+  { id: 'plans', name: 'Blueprint Book', slot: '=', key: 'Equal', price: 0, owned: true, blurb: 'Every plan the islanders know. Left mouse to open it and lay a blueprint out on the ground; then carry the materials to it (G) and build it piece by piece (E).' },
 ];
 export const TOOL_BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
 

@@ -22,7 +22,9 @@ import { smoothstep, clamp } from '../core/Util.js';
 
 export const WORLD = {
   half: 7400,          // square bounds of everything (the map, the terrain scan)
-  edge: 7300,          // the sea ends at this radius from the bay: past it, only fog and walls of water
+  edge: 7300,          // what every chart calls the end of the sea: fog and walls of water...
+  beyond: 7440,        // ...but the sea goes on. Cross this and something comes for you (Edge.js)
+  rim: 8900,           // the last hard stop - nobody has ever lived to see it
   seaFloor: -30,
   seed: 7127,
 };
@@ -332,6 +334,10 @@ export const STORM_SPOTS = [
 ];
 export function stormAt(x, z) {
   let s = 0.35 * smoothstep(WORLD.edge - 900, WORLD.edge, distHome(x, z)) + 0.12 * smoothstep(4500, 6500, distHome(x, z));
+  // past the edge of the charts it only gets worse
+  s = Math.max(s, 0.95 * smoothstep(WORLD.edge - 50, WORLD.edge + 450, distHome(x, z)));
+  // past the edge of the charts it only gets worse
+  s = Math.max(s, 0.95 * smoothstep(WORLD.edge - 50, WORLD.edge + 450, distHome(x, z)));
   for (const S of STORM_SPOTS) s = Math.max(s, S.s * (1 - smoothstep(S.r0, S.r1, Math.hypot(x - S.x, z - S.z))));
   return clamp(s, 0, 1);
 }
@@ -351,6 +357,7 @@ export function gloomAt(x, z) {
   const d = distHome(x, z);
   let g = 0.18 * smoothstep(3000, 6500, d);
   g = Math.max(g, 0.7 * (1 - smoothstep(350, 900, Math.hypot(x + 4600, z - 4500))));   // the Abyssal Reach
+  g = Math.max(g, 0.55 * smoothstep(WORLD.edge, WORLD.edge + 700, d));                    // beyond the edge
   return g;
 }
 
@@ -382,6 +389,8 @@ export function waveAmp(x, z) {
   for (const S of WAVE_SPOTS) a += S.a * (1 - smoothstep(S.r0, S.r1, Math.hypot(x - S.x, z - S.z)));
   // the rim of the world: a wall of water
   a += 2.4 * smoothstep(WORLD.edge - 500, WORLD.edge, dHome);
+  // and past it the sea keeps going, bigger still
+  a += 1.6 * smoothstep(WORLD.edge, WORLD.edge + 1200, dHome);
   // close in under a big island the sea is sheltered, so the docks are usable
   for (const S of SHELTERS) a *= 0.32 + 0.68 * smoothstep(S.r0, S.r1, Math.hypot(x - S.x, z - S.z));
   // lakes are nearly still, the frozen ones entirely; a lagoon is calmer

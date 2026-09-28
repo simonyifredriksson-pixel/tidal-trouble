@@ -177,6 +177,25 @@ export class Effects {
     }
   }
 
+  /** Wood chips or stone flakes knocked off by a blow, flying back toward whoever struck it (dx, dz). */
+  chips(x, y, z, col = 0xc8985a, n = 12, dx = 0, dz = 0) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 1.5 + Math.random() * 3;
+      this.lit.add(x, y, z, Math.cos(a) * s * 0.6 + dx * 2.5, 1.5 + Math.random() * 3.5, Math.sin(a) * s * 0.6 + dz * 2.5, 0.8 + Math.random() * 0.7, 0.03 + Math.random() * 0.05, i % 3 ? col : 0xe8d0a0, -9.8, 0.6, 0, y - 1.6);
+    }
+  }
+  /** A puff of dust where something heavy lands. */
+  dust(x, y, z, n = 14, r = 1) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = (0.6 + Math.random() * 1.6) * r;
+      this.lit.add(x + Math.cos(a) * r * 0.4, y + 0.1, z + Math.sin(a) * r * 0.4, Math.cos(a) * s, 0.3 + Math.random() * 0.8, Math.sin(a) * s, 1 + Math.random() * 0.8, 0.12 + Math.random() * 0.15 * r, Math.random() < 0.5 ? 0xb8a888 : 0x9a8a70, 0.2, 1.6, 0.6);
+    }
+  }
+  /** Leaves shaken loose. */
+  leaves(x, y, z, n = 10, col = 0x4a8a3a) {
+    for (let i = 0; i < n; i++) this.lit.add(x + (Math.random() - 0.5) * 3, y + Math.random() * 2, z + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 1.2, -0.3 - Math.random() * 0.4, (Math.random() - 0.5) * 1.2, 2 + Math.random() * 2, 0.06 + Math.random() * 0.05, col, -0.6, 1.2);
+  }
+
   confetti(x, y, z, n = 60) {
     const cols = [0xf2c14a, 0xe86a3a, 0x5ab4f0, 0x7fd07a, 0xc07af0, 0xffffff];
     for (let i = 0; i < n; i++) {

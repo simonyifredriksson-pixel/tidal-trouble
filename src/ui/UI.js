@@ -25,6 +25,7 @@ import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js'
 import { REGIONS, PLACES, WORLD, ZONES, MAX_ZONE, HOME_CENTRE, currentAt } from '../world/MapData.js';
 import { CHART_N, CHART_CELL } from '../game/IslandLife.js';
 import { ISLAND_INFO } from '../data/IslandData.js';
+import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost } from '../data/BuildData.js';
 import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
@@ -118,6 +119,7 @@ export class UI {
       <div class="hint hide"></div>
       <div class="hand-label"></div>
       <div class="baitchip chip"></div>
+      <div class="matsbar hide"></div>
       <div class="hotbar"></div>
       <div class="boatpanel hide"><div class="chip">
         <div class="row">${ic('boat')}<span class="bname"></span><span style="margin-left:auto" class="bspd"></span></div>
@@ -254,6 +256,15 @@ export class UI {
       if (b.water > 0.5) w.push('Taking on water!');
       if (kg > b.stats.cargoKg) w.push('Overloaded');
       this.el('.bwarn').textContent = w.join('  |  ');
+    }
+    // the crew's pack: shown while you are gathering or building
+    const mb = this.el('.matsbar'), mats = s.mats || {};
+    const building = ['axe', 'pick', 'plans'].includes(P.tool) || !!G.build?.held || !!G.build?.aim;
+    const mk = building ? JSON.stringify([mats, G.build?.held]) : '';
+    mb.classList.toggle('hide', !building);
+    if (mk !== this._matsKey) {
+      this._matsKey = mk;
+      mb.innerHTML = MATS.map(M => `<span class="chip mat ${G.build?.held === M.id ? 'on' : ''} ${(mats[M.id] || 0) ? '' : 'none'}">${ic(M.icon)}<b>${mats[M.id] || 0}</b><small>${esc(M.name)}</small></span>`).join('') + `<span class="chip mathint"><span class="key">G</span> hold</span>`;
     }
     // the Old Compass points at the nearest island you have never been to
     const cc = this.el('.ccompass');
@@ -1258,6 +1269,31 @@ export class UI {
     c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.stroke(); c.fill();
     c.restore();
+  }
+
+  /* ---------- the blueprint book ---------- */
+  _plans() {
+    const s = this.game.state.s, m = s.mats || {};
+    const cards = BLUEPRINTS.map(B => {
+      const c = bpCost(B);
+      const need = Object.entries(c).map(([k, n]) => `<span class="cost ${(m[k] || 0) >= n ? 'ok' : ''}">${ic(MAT_BY_ID[k].icon)}${n} ${esc(MAT_BY_ID[k].name)}</span>`).join('');
+      const built = (s.builds || []).filter(x => x.bp === B.id).length;
+      return `<div class="card bp"><h3>${ic(B.icon)}${esc(B.name)}${built ? `<small> - ${built} laid out</small>` : ''}</h3><p>${esc(B.blurb)}</p><p class="use"><b>Use:</b> ${esc(B.use)}</p>
+        <div class="costs">${need}</div><div class="row"><span class="price">${B.parts.length} pieces</span><button class="btn gold" data-act="bpPick" data-arg="${B.id}">${ic('plans')} Lay it out</button></div></div>`;
+    }).join('');
+    const pack = MATS.map(M => `<span class="cost ${(m[M.id] || 0) ? 'ok' : ''}">${ic(M.icon)}${m[M.id] || 0} ${esc(M.name)}</span>`).join('');
+    return this._wrap(`${this._head('plans', 'The Blueprint Book', 'Lay a plan out on the ground, then build it piece by piece: hold a material (G), walk up to a blue piece, press E.', false)}
+      <div class="sbody"><p class="packline"><b>In the pack:</b> ${pack}</p><div class="grid">${cards}</div>
+      <p class="note">${MATS.map(M => `<b>${esc(M.name)}:</b> ${esc(M.from)}`).join('<br>')}</p></div>`);
+  }
+
+  /* ---------- a storage chest ---------- */
+  _chest(d) {
+    const s = this.game.state.s, S = (s.builds || []).find(b => b.id === d.site);
+    const list = S?.store || [];
+    const rows = list.map((x, i) => { const sp = FISH_BY_ID[x.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(x.sp)}" alt=""><h3>${esc(catchName(sp, x.v))}</h3><p>${fmtKg(x.kg)}</p><button class="btn" data-act="chestTake" data-arg="${d.site}:${i}">Take it out</button></div>`; }).join('');
+    return this._wrap(`${this._head('chest', 'Storage Chest', `${list.length} of 16. To put a catch in, hold it and press E at the chest.`, false)}
+      <div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`);
   }
 
   /* ---------- bait picker ---------- */

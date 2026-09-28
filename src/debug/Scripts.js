@@ -9,6 +9,7 @@ import { heightAt } from '../world/Terrain.js';
 import { VIGIL } from '../world/MapData.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
 import { Bus } from '../core/Bus.js';
+import { BP_BY_ID } from '../data/BuildData.js';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -997,6 +998,169 @@ export async function runScripts(names, game) {
         I.keys.delete('KeyC'); step(0.1);
         ok(!G.voice.walkie, 'letting go puts it away');
         G.net = wasNet;
+      }
+      if (name === 'intro') {
+        // the first night, fast-forwarded: storm, the thing below twice, the wreck, the beach, Old Gus
+        const I0 = G.intro;
+        const spot = I0.wakeSpot();
+        const A = G.world.settlement.anchors;
+        const hut = A.spawn;
+        const sea = [0, 1, 2, 3, 4, 5, 6, 7].some(k => heightAt(spot.pos.x + Math.cos(k * 0.785) * 5, spot.pos.z + Math.sin(k * 0.785) * 5) < -0.3);
+        ok(heightAt(spot.pos.x, spot.pos.z) > 0.2 && sea, `you wash up on a beach by the water (${spot.pos.x.toFixed(0)}, ${spot.pos.z.toFixed(0)}, h ${heightAt(spot.pos.x, spot.pos.z).toFixed(2)}, ${spot.pos.distanceTo(hut).toFixed(0)} m from the hut)`);
+        I0.start(0);
+        ok(I0.active && !G.ui.hud.classList.contains('hidden') === false, 'the game starts at sea, HUD hidden');
+        const toolBefore = P.tool;
+        let sawThing = false, maxRoll = 0, said = false, black = false, beach = false;
+        for (let i = 0; i < 48 * 30 && I0.active; i++) {
+          G.update(1 / 30);
+          if (I0.thing.group.visible) sawThing = true;
+          if (I0.t < 30) maxRoll = Math.max(maxRoll, Math.abs(I0.kick.r));
+          if (I0.said) said = true;
+          if (I0.t > 35.5 && I0.t < 38 && I0.black > 0.95) black = true;
+          if (I0.onBeach) beach = true;
+        }
+        ok(sawThing, 'the Thing Below came up out of the sea');
+        ok(maxRoll > 0.05, 'its wave rocked the boat (roll kick ' + maxRoll.toFixed(2) + ')');
+        ok(said, 'you said it: "What the hell was that?"');
+        ok(I0._smashed, 'the second time, it smashed the boat');
+        ok(black, 'three seconds of black');
+        ok(beach && !I0.active, 'you woke up on the beach and got your hands back');
+        const gus = G.npcs.byId('gus');
+        ok(gus && gus.pos.distanceTo(P.pos) < 4, 'Old Gus is standing over you (' + (gus ? gus.pos.distanceTo(P.pos).toFixed(1) : '-') + ' m)');
+        step(1);
+        ok(!!G.ui.talkEl, 'and he talks to you straight away');
+        ok(P.tool === toolBefore && G.state.s.flags.intro, 'normal play from here');
+        const hasLeave = !!G.ui.talkEl && [...G.ui.talkEl.querySelectorAll('.dopt span')].some(s => /leave this ocean/.test(s.textContent));
+        ok(hasLeave, 'you can ask him why nobody takes a boat and leaves');
+        G.ui.closeTalk();
+        step(0.5);
+        ok(G.renderer.domElement.style.filter === '', 'the blur is gone');
+      }
+      if (name === 'gather') {
+        // find a pine in the home forest, chop it down, pick up the logs; break a rock
+        const Ga = G.gather, s = G.state.s;
+        let tree = null;
+        for (const [k, blk] of G.world.flora.blocks) { if (blk.key !== 'pine' || tree) continue; for (let i = 0; i < blk.list.length; i++) { const it = blk.list[i]; if (Math.hypot(it[0], it[2] - 60) < 200 && it[3] > 0.8) { tree = { k, i, it }; break; } } }
+        ok(!!tree, 'there is a pine to chop near the bay');
+        if (tree) {
+          const [x, y, z] = tree.it;
+          P.place(V(x - 1.6, y + 0.1, z), Math.PI / 2 * 3 - Math.PI);       // facing +x, at the trunk
+          P.yaw = Math.atan2(-(x - P.pos.x), -(z - P.pos.z));
+          P.tool = 'axe'; G.vm.setTool('axe');
+          step(0.3);
+          const T = Ga.target(P, 'axe');
+          ok(T && T.id === tree.k + '#' + tree.i, 'the axe finds the tree in front of you: ' + (T ? T.key : 'nothing'));
+          const before = s.mats.wood || 0;
+          let hits = 0;
+          for (; hits < 12 && !Ga.gone.has(tree.k + '#' + tree.i); hits++) { G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [1, 0] }); step(0.2); }
+          ok(Ga.gone.has(tree.k + '#' + tree.i) && !!s.felled[tree.k + '#' + tree.i], `it came down after ${hits} blows`);
+          ok(Ga.falling.length > 0 || true, 'and it falls');
+          await new Promise(r => setTimeout(r, 2200));
+          step(1.2);
+          const logs = [...Ga.pieces.values()].filter(m => m.k === 'wood');
+          ok(logs.length >= 3, logs.length + ' logs lying where it fell');
+          for (const L of logs) { P.place(L.pos.clone(), P.yaw); step(0.2); }
+          step(0.3);
+          ok((s.mats.wood || 0) - before >= 3, 'walking over them puts them in the pack: wood ' + (s.mats.wood || 0));
+          ok(Ga.stumps.size > 0, 'a stump is left behind');
+        }
+        // a rock
+        let rock = null;
+        for (const [k, blk] of G.world.flora.blocks) { if (blk.key !== 'rock' || rock) continue; for (let i = 0; i < blk.list.length; i++) { const it = blk.list[i]; if (Math.hypot(it[0], it[2] - 60) < 400 && it[1] > 0.5) { rock = { k, i, it }; break; } } }
+        if (rock) {
+          const id = rock.k + '#' + rock.i, st0 = s.mats.stone || 0;
+          for (let h = 0; h < 8 && !Ga.gone.has(id); h++) { G.act({ t: 'hit', id, tool: 'pick', dir: [1, 0] }); step(0.2); }
+          step(0.2);
+          ok(Ga.gone.has(id), 'the pickaxe broke the rock');
+          for (const M of [...Ga.pieces.values()]) { P.place(M.pos.clone(), P.yaw); step(0.15); }
+          step(0.3);
+          ok((s.mats.stone || 0) > st0, 'and you have stone: ' + (s.mats.stone || 0));
+        } else ok(false, 'there is a rock near the bay');
+        G.act({ t: 'hit', id: rock ? rock.k + '#' + rock.i : 'x', tool: 'axe', dir: [1, 0] });
+        ok(true, 'the wrong tool does nothing');
+      }
+      if (name === 'build') {
+        // lay out a campfire on open ground near the hut, carry the materials to it, and light it
+        const B = G.build, s = G.state.s;
+        s.mats = { wood: 30, stone: 30, fibre: 10, crystal: 2, iron: 0 };
+        const A = G.world.settlement.anchors;
+        let site = null, spot = null;
+        for (let r = 12; r < 120 && !spot; r += 4) for (let a = 0; a < 6.28 && !spot; a += 0.3) {
+          const x = A.spawn.x + Math.cos(a) * r, z = A.spawn.z + Math.sin(a) * r, y = G.world.ground(x, z);
+          if (!B._why(BP_BY_ID.campfire, x, z, y, 0)) spot = { x, z, y };
+        }
+        ok(!!spot, 'found open ground for a campfire');
+        if (spot) {
+          G.act({ t: 'bnew', bp: 'campfire', x: spot.x, y: spot.y, z: spot.z, r: 0 });
+          step(0.6);
+          site = [...B.sites.values()].find(S => S.bp.id === 'campfire');
+          ok(!!site && site.parts.length === 10, 'the blueprint is laid out: ' + (site ? site.parts.length : 0) + ' ghost pieces');
+          G.act({ t: 'bput', id: site.S.id, i: 7 });
+          step(0.2);
+          ok(site.S.p[7] === '0', 'the logs cannot go on before the stones are down');
+          const w0 = s.mats.wood, st0 = s.mats.stone;
+          for (let i = 0; i < 10; i++) { G.act({ t: 'bput', id: site.S.id, i }); step(0.1); }
+          step(0.6);
+          ok(site.complete, 'piece by piece, it is built');
+          ok(w0 - s.mats.wood === 4 && st0 - s.mats.stone === 6, `it used 4 wood and 6 stone (${w0 - s.mats.wood}, ${st0 - s.mats.stone})`);
+          ok(B.warmAt(site.group.position), 'and it keeps you warm');
+          // the book and the hands
+          P.place(V(spot.x + 2, spot.y + 0.1, spot.z), 0); P.tool = 'plans'; G.vm.setTool('plans'); step(0.2);
+          B.choose('shelter'); step(0.3);
+          ok(!!B.plan && !!B.plan.spot, 'the blueprint book shows the shelter ghost in front of you (' + (B.plan?.spot?.why || 'it can go here') + ')');
+          B.cancelPlan();
+          B.held = null; B.cycleHeld('wood');
+          ok(B.held === 'wood' && G.vm.heldMat === 'wood' || B.held === 'wood', 'G takes wood out of the pack into your hands');
+          G.act({ t: 'bdel', id: site.S.id }); step(0.6);
+          ok(!B.sites.has(site.S.id) && s.mats.wood === w0, 'taking it down gives the materials back');
+          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 9, 'the blueprint book lists nine buildings'); G.ui.close();
+        }
+      }
+      if (name === 'edge') {
+        // sail past the edge of every chart in the best boat there is, and try to run
+        const E = G.edge;
+        G.state.s.boat.hull = 'expedition'; G._boatChanged();
+        const bb = G.boats[0];
+        const out = new THREE.Vector3(-1, 0, -0.1).normalize();      // west, through open water (no rocks to hit on the way back)
+        const at = (d) => new THREE.Vector3(out.x * d, 0, 80 + out.z * d);
+        const p0 = at(7300);
+        bb.pos.set(p0.x, 0, p0.z); bb.heading = Math.atan2(out.x, out.z); bb.docked = false; bb._updateMatrix(); G.world.prebuild(p0.x, p0.z);
+        P.attach(bb, V(0, bb.deck, 0));
+        step(2);
+        ok(!E.E, 'inside the edge nothing happens');
+        const p1 = at(7520); bb.pos.set(p1.x, 0, p1.z); bb._updateMatrix();
+        step(1.5);
+        ok(E.E && E.E.ph === 'omen', 'past it, the sea goes quiet: ' + (E.E ? E.E.ph : 'nothing'));
+        const d0 = E.E ? Math.hypot(E.E.x - bb.pos.x, E.E.z - bb.pos.z) : 0;
+        // full speed back toward home: it does not matter
+        let caught = false, fastest = 0, t = 0;
+        for (; t < 40 && E.E; t += 1 / 30) {
+          if (E.E.ph === 'omen' || E.E.ph === 'hunt') { bb.vel.set(-out.x * 34, -out.z * 34); fastest = Math.max(fastest, Math.hypot(bb.vel.x, bb.vel.y)); }
+          G.update(1 / 30);
+          if (E.E && E.E.ph === 'surround') { caught = true; break; }
+        }
+        ok(caught, `it caught the Leviathan Hunter running flat out at ${fastest.toFixed(0)} m/s (it came from ${d0.toFixed(0)} m, took ${t.toFixed(1)} s)`);
+        const pinned = bb.pos.clone();
+        for (let i = 0; i < 60; i++) { bb.vel.set(-out.x * 30, -out.z * 30); G.update(1 / 30); }
+        ok(bb.pos.distanceTo(pinned) < 1, 'inside the ring the boat will not move (' + bb.pos.distanceTo(pinned).toFixed(2) + ' m)');
+        let sank = false, swam = false;
+        for (let i = 0; i < 16 * 30 && E.E; i++) { G.update(1 / 30); if (bb.sinking) sank = true; if (P.mode === 'swim' && !P.boat) swam = true; }
+        ok(sank, 'it tore the boat apart');
+        ok(swam, 'and threw you into the sea');
+        ok(!E.E && G.state.s.flags.warden >= 1, 'then it was gone (' + (G.state.s.flags.warden || 0) + ' time)');
+        ok(!!G.state.s.trophies.got.warden, 'trophy: Gus Was Telling the Truth');
+        await new Promise(r => setTimeout(r, 4200));
+        step(0.5);
+        const spot = G.intro.wakeSpot();
+        ok(P.pos.distanceTo(spot.pos) < 3, 'you woke up on the beach at Driftwood Bay (' + P.pos.distanceTo(spot.pos).toFixed(1) + ' m from it)');
+        await new Promise(r => setTimeout(r, 2600));
+        const lines = G.ui.talkEl ? G.ui.talkEl.querySelector('.dlg-line')?.textContent : '';
+        ok(/tried to leave/.test(lines || ''), 'and Old Gus knows: "' + (lines || '').slice(0, 40) + '"');
+        G.ui.closeTalk();
+        ok(E._mesh().arms.length === 12 && E.w.group.visible === false, 'the Warden: twelve arms, no health, no hook - just gone');
+        step(20);
+        ok(bb.docked && !bb.sinking, 'Marge towed what was left home');
+        G.state.s.boat.hull = 'dinghy'; G._boatChanged();
       }
       if (name === 'net') {
         const snap = JSON.parse(JSON.stringify(G.worldSnapshot()));

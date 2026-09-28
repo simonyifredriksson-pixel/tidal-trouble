@@ -12,6 +12,35 @@
 
 import { ISLAND_NPCS } from './NPCIslands.js';
 
+/* Old Gus on the beach, the morning you wash up - and whenever you want to
+   ask him about that night again. Each topic is a short exchange: `say` is
+   what he answers, `more` an optional follow-up question and his answer. */
+export const GUS_INTRO = {
+  wake: 'There you are. Easy now - do not try to get up yet. You have been coughing up half the sea for the best part of an hour. Found you face down in the surf, hanging on to a plank like it owed you money.',
+  back: 'Take your time. Ask what you like.',
+  topics: [
+    { id: 'where', q: 'Where am I?',
+      say: ['Driftwood Bay. There is the village up the hill, there is the pub, and there is a hut down by the cove with nobody living in it.', 'It is not on any chart you will have heard of. None of these islands are. You get used to that part. Mostly.'] },
+    { id: 'thing', q: 'Something came up out of the water. Something huge.',
+      say: ['Aye. I know.', 'Eyes like lanterns, head like a church, came up out of the storm and looked right at you. Then it took your boat apart like it was folding a letter.', 'It has been doing that to ships out on these waters since before my grandfather was a boy. We have never had a proper name for it. The old ones just say "the thing below", and then they change the subject.'],
+      more: { q: 'What is it? Why did it do that?', say: ['Kid, if I knew that I would be a great deal richer and a great deal less frightened.', 'All I know is it comes up in the storms, and it does not come up for fish.'] } },
+    { id: 'others', q: 'Has this happened to anyone else?',
+      say: ['Half this village came in the way you did. Face down on that beach. Melvin did. Marge did - she will tell you she did not, but she did.', 'You are not the first and you will not be the last. Most of them cannot say where they were headed. Some cannot say where they were from. It comes back, a bit. After a while it stops mattering.'] },
+    { id: 'now', q: 'What am I supposed to do now?',
+      say: ['Same as the rest of us. Fish.', 'Out here fish is everything. It is what we eat, it is what we sell, it is what we trade for timber and rope and nails. Every door on these islands opens for a good catch.', 'And the bay looks after its strays. There is a rod for you, and the rowboat tied up at the empty hut\'s dock is yours now. It floats. Mostly.'],
+      more: { q: 'And the hut?', say: ['Yours too. Bed, stove, a shelf for trophies if you ever catch anything worth keeping.', 'Take what you catch to Pim at the fish stall next door. And there is an axe and a pick in there - the islands will give you timber and stone if you ask them nicely. Folk build out here.'] } },
+    { id: 'leave', q: 'Why don\'t you just take the boat and leave this ocean?',
+      say: ['...', 'Because someone already tried.', 'Three of them. Tobias Marr, his sister Edda, and a big quiet fellow called Hollis Crane. Good sailors. Better than me. They fitted out the Kittiwake with every spare plank on the island and said they would sail straight out past the last of the fog and keep going until they hit somewhere with a proper name.'],
+      more: { q: 'What happened to them?', say: ['They never came back.', 'Five days later a trawler found the Kittiwake. What was left of her. Snapped clean into three pieces, like a biscuit, and the hull stove in from underneath. Not a soul aboard. Not a scrap of them.', 'Nobody knows what did it. I have my ideas. I keep them to myself.'],
+        more: { q: 'Do you think it was the thing that got me?', say: ['I think the sea has an edge, kid. The charts say so, and the charts are right for once.', 'And I think something makes very sure nobody goes over it. Leave it at that. Please.'] } } },
+  ],
+  bye: 'Go on, then. Get some sun on your face. And kid - stay off the water in a storm.',
+  // after the Warden
+  warden: ['You tried to leave.', 'Do not tell me about it. I can see it on you. Same look Edda Marr\'s mother had when they brought the Kittiwake in.', 'Now you know why I sit on this porch. The sea has an edge, and there is something on the other side of it that does not want company. You are luckier than they were. Do not try it twice.'],
+  wardenQ: 'I tried to leave. Something found me out there.',
+  asked: 'About the night I washed up...',
+};
+
 export const NPCS = [
   { id: 'gus', name: 'old gus', full: 'Old Gus', pr: 'he', role: 'lore', at: 'gusChair', pose: 'sit',
     look: { skin: 0xf1c9a5, shirt: 0x5a6a7a, pants: 0x6a2e2a, boots: 0x2a2a2a, hat: 'captain', hatCol: 0xf2f2ee, hair: 'short', hairCol: 0xdddddd, beard: 'full', beardCol: 0xeeeeee, nose: 1.3, belly: 0.4, vest: 0x5a3a2a },

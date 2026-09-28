@@ -325,7 +325,7 @@ export class IslandLife {
       if (Math.hypot(Q.pos.x - R.x, Q.pos.z - R.z) > R.r * 0.7) continue;
       if (G.state.has('thermal')) continue;
       // a fire, a hut or a wheelhouse keeps you alive
-      const warm = this.S.lights.some(L => L.flicker && L.pos.distanceTo(Q.pos) < 7) || (Q.boat && Q.boat.hull.cabin && !Q.boat.hull.cabin.open);
+      const warm = this.S.lights.some(L => L.flicker && L.pos.distanceTo(Q.pos) < 7) || (Q.boat && Q.boat.hull.cabin && !Q.boat.hull.cabin.open) || G.build?.warmAt(Q.pos);
       if (warm) continue;
       Q._coldT = (Q._coldT || 0) + dt;
       if (Q._coldT > 1.5) {

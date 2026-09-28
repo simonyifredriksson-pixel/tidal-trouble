@@ -336,7 +336,7 @@ export class Player {
     const r = G.colliders.resolve(P.x, P.z, RADIUS, P.y + 0.3, HEIGHT - 0.3, V);
     P.x = r.x; P.z = r.z;
     // edge of the world
-    const ex = P.x - HOME_CENTRE.x, ez = P.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.edge - 20;
+    const ex = P.x - HOME_CENTRE.x, ez = P.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.rim - 20;
     if (ed > E) { P.x = HOME_CENTRE.x + ex / ed * E; P.z = HOME_CENTRE.z + ez / ed * E; }
     P.y += V.y * dt;
     let g = G.ground(P.x, P.z);

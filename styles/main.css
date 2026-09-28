@@ -550,3 +550,30 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 #title { background: linear-gradient(90deg, rgba(8,30,70,0.78), rgba(8,30,70,0.2) 55%, transparent); }
 #title, #title * { cursor: default; }
 #title button, #screens button, #screens .dexcell, #screens .card[data-act] { cursor: pointer; }
+/* ---------- the first night: letterbox, black, the lines people say ---------- */
+#cine { position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: 0; transition: opacity 0.4s; }
+#cine.on { opacity: 1; }
+#cine .bars { position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+#cine .bars.top { top: 0; } #cine .bars.bot { bottom: 0; }
+#cine .blk { position: absolute; inset: 0; background: #000; opacity: 1; }
+#cine .say { position: absolute; left: 50%; bottom: 13vh; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.5s; max-width: 760px; }
+#cine .say.on { opacity: 1; }
+#cine .say b { display: block; font: 700 14px var(--display, serif); letter-spacing: 0.12em; text-transform: uppercase; color: #f2c14a; margin-bottom: 4px; }
+#cine .say span { font-weight: 800; font-size: 24px; color: #fbf4e2; text-shadow: 0 2px 6px #000, 0 0 2px #000; }
+#cine .skip { position: absolute; right: 22px; bottom: calc(9vh + 12px); font-weight: 800; font-size: 13px; color: #d8d0c0; opacity: 0; transition: opacity 0.6s; }
+#game { transition: none; transform-origin: 50% 50%; }
+
+/* ---------- the pack while you gather and build ---------- */
+.matsbar { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); display: flex; gap: 5px; font-size: 13px; }
+.matsbar .mat { display: flex; align-items: center; gap: 4px; padding: 4px 9px 4px 5px; }
+.matsbar .mat .gi { font-size: 20px; }
+.matsbar .mat b { font-size: 15px; }
+.matsbar .mat small { opacity: 0.75; }
+.matsbar .mat.none { opacity: 0.45; }
+.matsbar .mat.on { outline: 2px solid #f2c14a; }
+.matsbar .mathint { font-size: 12px; opacity: 0.8; }
+.card.bp p.use { font-size: 13px; color: var(--ink2); }
+.costs, .packline { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
+.cost { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 13px; padding: 2px 8px 2px 3px; border-radius: 10px; background: rgba(160, 60, 40, 0.18); }
+.cost.ok { background: rgba(60, 140, 60, 0.2); }
+.cost .gi { font-size: 18px; }

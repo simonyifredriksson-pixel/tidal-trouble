@@ -4,6 +4,10 @@ A chaotic low-poly fishing adventure for 1-4 players, in the browser.
 
 Go fishing. Catch weird things. Sail farther out. Try not to get eaten.
 
+- It starts at sea, in a storm, on the night something enormous comes up out of the water and takes your boat apart. You wake on the beach at Driftwood Bay with Old Gus standing over you. Ask him what happened - and why nobody just sails away.
+- The charts say the sea ends at the fog. It does not. Keep going and you find out what Gus meant: something past the edge of the world that cannot be fought, caught or outrun.
+- Chop trees with the axe (0) and break rock with the pickaxe (-): trees really fall, rocks really break, and what comes off lands at your feet. Open the Blueprint Book (=), lay a plan out on the ground, and build it piece by piece - hold a material (G), walk to a blue ghost piece, press E. Campfires, chests, bait stations, jetties, shelters, watchtowers. The whole crew builds the same blueprint together.
+
 - First-person fishing with a physical rod: cast, wait, strike, then fight the fish on the catch bar. Bigger, rarer and pricier fish always fight harder.
 - A huge sea in rings: the Inner waters round Driftwood Bay, then the Mid-Ocean, the Outer Ocean, the Extreme Waters and, at the very edge of the world, Vigil's End. Every ring out has rougher weather, stronger currents, darker water and bigger, rarer fish.
 - Twelve far islands to find, each with its own people, shops and something nobody else has: Whispering Woods (hidden lakes, and something between the trees at night), Sunscar (a live volcano), Skywatch (fishing from a ninety-metre cliff), the Crystal Reef (a lagoon that glows at night), Frostfall (the only Ice Auger in the sea), Dreadmire (swamp channels to take the boat through), Ironwreck (salvage and cheap repairs), the Lost Shores (notes left by people who vanished), Thunderpeak (fish that only bite in lightning), Tidebreaker (the fastest currents), the Sunken Crown (a drowned city full of relics) and the Abyssal Reach (the deepest water, and the biggest fish that are not leviathans).

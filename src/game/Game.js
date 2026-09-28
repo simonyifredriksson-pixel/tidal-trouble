@@ -47,6 +47,12 @@ import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js';
 import { SHOPS } from '../data/GearData.js';
 import { ISLAND_TELEPORTS, ISLAND_INFO } from '../data/IslandData.js';
 import { IslandLife } from './IslandLife.js';
+import { Intro } from './Intro.js';
+import { Edge } from './Edge.js';
+import { Gather } from './Gather.js';
+import { Build } from './Build.js';
+import { MAT_BY_ID, BP_BY_ID } from '../data/BuildData.js';
+import { GUS_INTRO } from '../data/NPCData.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
 import { mistAt, VIGIL, WORLD, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
 
@@ -105,6 +111,10 @@ export class Game {
     this.beasts = new Beasts(this);
     this.ocean = new Ocean(this);
     this.isles = new IslandLife(this);
+    this.intro = new Intro(this);
+    this.edge = new Edge(this);
+    this.gather = new Gather(this);
+    this.build = new Build(this);
     this.admin = this.admin || { autoCatch: false, autoCast: false };
     // every lightning bolt, storm or beast, is followed by its thunder
     this.world.sky.onThunder = d => setTimeout(() => this.audio.thunder(d), Math.min(2500, d / 340 * 1000));
@@ -135,7 +145,9 @@ export class Game {
     this.running = true;
     this.ui.showHUD(true);
     this.ui.hotbar();
-    if (mode !== 'continue' && !this.state.remote) {
+    // a new world (or a crew you have just joined) begins at sea, in the storm, on the first night
+    if ((mode === 'new' || mode === 'join') && !this.skipIntro) this.intro.start();
+    else if (mode !== 'continue' && !this.state.remote) {
       this.ui.subtitle(STORY.intro, 9);
       setTimeout(() => this.ui.radio('Radio: Morning, Driftwood Bay. Fish are biting and Old Gus is on his porch.'), 3000);
     }
@@ -370,6 +382,45 @@ export class Game {
       }
       case 'buy': this._buy(c, from); break;
       case 'heldGiant': break;
+      // gathering and building
+      case 'hit': this.gather.hostHit(c, from); break;
+      case 'mpick': this.gather.hostPick(c, from); break;
+      case 'bnew': this.build.hostNew(c, from); break;
+      case 'bput': this.build.hostPut(c, from); break;
+      case 'bdel': this.build.hostDel(c, from); break;
+      case 'chestPut': {
+        const S = (s.builds || []).find(b => b.id === c.site);
+        if (!S || !it || it.held !== from) break;
+        S.store = S.store || [];
+        if (S.store.length >= 16) { this.tell(from, 'The chest is full.', 'warn'); break; }
+        S.store.push({ sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav });
+        this.loot.remove(it); P.held = null;
+        this.tell(from, `Into the chest. (${S.store.length} of 16)`, 'good');
+        this._saveDirty = true;
+        break;
+      }
+      case 'chestTake': {
+        const S = (s.builds || []).find(b => b.id === c.site);
+        const x = S?.store?.[c.i];
+        if (!x) break;
+        S.store.splice(c.i, 1);
+        this.loot.spawn({ ...x, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), vel: new THREE.Vector3(0, 1.5, 0), flop: 0 });
+        this._saveDirty = true;
+        break;
+      }
+      case 'baitMake': {
+        if (!it || it.held !== from) break;
+        const sp = FISH_BY_ID[it.sp];
+        if (sp.junk || sp.lev || sp.great) { this.tell(from, 'You cannot make bait out of that.', 'warn'); break; }
+        const n = clamp(Math.round(1 + it.kg * 0.6), 1, 12);
+        S.addBait('pieces', n);
+        this.loot.remove(it); P.held = null;
+        this.tell(from, `Chopped into ${n} Fish Pieces.`, 'good');
+        break;
+      }
+      case 'restFire': P.hp = 100; if (this.isNight()) this._sleep(); else this.tell(from, 'You sit by the fire a while. Warm, and dry at last.', 'good'); break;
+      case 'lookout': { const n = this.isles.reveal(c.x, c.z, 1000); this.tell(from, n ? 'From up here you can see for miles. The chart fills in.' : 'You can see for miles. Nothing new out there.', 'good'); break; }
+      case 'sleepShelter': if (this.tod > 0.72 || this.tod < 0.2) { s.shelter = c.site; this._sleep(); } else { s.shelter = c.site; this.tell(from, 'Too early to sleep - but if you black out now, you will wake up here.', 'info'); } break;
       case 'tankHit': if (boat && boat.hull.fuel) { boat.ignite(boat.hull.fuel[0], boat.hull.fuel[2]); this.state.s.stats.fires++; this._everyone({ t: 'banner', title: 'THE FUEL TANK!', sub: 'Your rod hit the fuel tank. The boat is on fire!', icon: 'fire' }); } break;
     }
     return true;
@@ -748,13 +799,16 @@ export class Game {
     this.ui.fade(true, why === 'drown' ? 'You blacked out under the water...' : why === 'exhausted' ? 'Too tired to swim... someone fishes you out.' : 'Everything goes dark...');
     setTimeout(() => {
       const A = this.world.settlement.anchors;
-      P.place(A.spawn.clone(), Math.PI);
+      // your own shelter, if you have built one; home otherwise
+      const sh = this.build?.shelter();
+      if (sh) P.place(this.build.worldPoint(sh, 0, 0.3, 0.2), sh.S.r);
+      else P.place(A.spawn.clone(), Math.PI);
       P.hp = 100; P.breath = P.maxBreath;
       // the purse lives on the host: a guest wakes up for free
-      const fee = this.isHost ? Math.min(300, Math.round(this.state.s.money * 0.1)) : 0;
+      const fee = this.isHost && !sh ? Math.min(300, Math.round(this.state.s.money * 0.1)) : 0;
       if (fee > 0) this.state.spend(fee);
       this.ui.fade(false);
-      this.ui.toast(fee > 0 ? `You wake up at home. The doctor charged ${fee} coins.` : 'You wake up at home, soaked.', 'warn');
+      this.ui.toast(sh ? 'You come round in your shelter, soaked through.' : fee > 0 ? `You wake up at home. The doctor charged ${fee} coins.` : 'You wake up at home, soaked.', 'warn');
       this.passing = false;
     }, 2600);
   }
@@ -956,7 +1010,8 @@ export class Game {
   update(dt) {
     if (!this.running) return;
     const I = this.input, P = this.player, UI = this.ui;
-    const blocked = I.blocked || UI.isOpen;
+    const cine = !!this.intro?.active;
+    const blocked = I.blocked || UI.isOpen || cine;
     this._dt = dt;
     this.tod = (this.tod + dt / 1080) % 1;
     if (this.tod < dt / 1080) this.state.s.day++;
@@ -1006,6 +1061,10 @@ export class Game {
     this.ocean.update(dt, host);
     this.isles.update(dt, host);
     this.events.update(dt, host);
+    this.edge.update(dt, host);
+    this.gather.update(dt, host);
+    this.build.update(dt, I, blocked);
+    this.intro.update(dt, I);
     this.npcs.update(dt);
     for (const r of this.remotes.values()) r.update(dt);
     this.cabin.update();
@@ -1060,6 +1119,7 @@ export class Game {
       this.camera.rotation.z += (Math.random() - 0.5) * s * 0.5;
       this.shake = Math.max(0, this.shake - dt * 2);
     }
+    if (cine) { this.intro.applyCamera(this.camera); if (this.shake > 0) this.camera.rotation.z += (Math.random() - 0.5) * this.shake * 0.03; }
     const fov = this.state.settings.fov + (P.sprint && P.speed > 5 ? 4 : 0);
     if (Math.abs(this.camera.fov - fov) > 0.1) { this.camera.fov = damp(this.camera.fov, fov, 6, dt); this.camera.updateProjectionMatrix(); }
 
@@ -1074,7 +1134,8 @@ export class Game {
     const localStorm = stormAt(P.pos.x, P.pos.z), fog = fogAt(P.pos.x, P.pos.z), gloom = gloomAt(P.pos.x, P.pos.z);
     this.localStorm = localStorm;
     const sw = styleWeights(P.pos.x, P.pos.z);
-    const env = { tod: this.tod, storm: Math.max(this.world.storm, localStorm), dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0, gloom), frost: sw.frost || 0, underwater: P.underwater, lights, edge, mist: Math.max(mist, fog * 0.8) * (this.state.has('foglamp') ? 0.45 : 1) };
+    const introSea = cine && this.intro.t < 35.2;
+    const env = { tod: this.tod, storm: introSea ? 1 : Math.max(this.world.storm, localStorm), dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0, gloom, this.edge.dark, introSea ? 0.2 : 0), frost: sw.frost || 0, underwater: P.underwater, lights, edge, mist: Math.max(mist, fog * 0.8, introSea ? 0.55 : 0) * (this.state.has('foglamp') ? 0.45 : 1) };
     // how far out you have ever been (the map and the charts use it)
     if (dh > (this.state.s.farthest || 0)) this.state.s.farthest = Math.round(dh);
     // the first time anyone reaches Vigil's End
@@ -1084,6 +1145,7 @@ export class Game {
       this._everyone({ t: 'banner', title: "VIGIL'S END", sub: 'The last island before the edge of the sea. Six old fishermen, waiting for something.', icon: 'light' });
     }
     this.world.extraLights = this.boats.filter(b => b.lampOn).map(b => b.lampSrc);
+    this.build._lamps(dt);
     // the hold lanterns are real light while you are down there
     if (P.inHold && P.boat?.hull.hold) {
       const B = P.boat, Hd = B.hull.hold;
@@ -1106,7 +1168,7 @@ export class Game {
       this._tug = (this._tug || 0) + dt * 17;
       this.camera.rotation.x += Math.sin(this._tug) * k; this.camera.rotation.z += Math.cos(this._tug * 0.8) * k;
     }
-    this.vm.visible = P.mode !== 'drive' || true;
+    this.vm.visible = !cine;
     this.vm.update(dt, vmState, this.camera);
 
     // audio
@@ -1175,6 +1237,7 @@ export class Game {
       else if (this.ui.isOpen) { if (this.ui.screen === 'settings' || this.ui.screen === 'controls') this.ui.open('pause'); else this.ui.close(); }
       else this.ui.open('pause');
     }
+    if (this.intro?.active) return;
     const combo = I.keys.has('KeyL');       // L is the first key of the admin combination: J, M and 3 wait
     if (I.pressedRaw('KeyJ') && !I.blocked && !combo) this.ui.isOpen && this.ui.screen === 'journal' ? this.ui.close() : this.ui.open('journal');
     if (I.pressedRaw('KeyM') && !I.blocked && !combo) this.ui.isOpen && this.ui.screen === 'map' ? this.ui.close() : this.ui.open('map');
@@ -1189,7 +1252,7 @@ export class Game {
     }
     // hotbar
     const pick = id => { if (!s.tools[id]) { this.ui.toast((TOOL_BY_ID[id]?.name || 'That') + ' - buy it at Melvin\'s.', 'warn'); return; } if (this.fishing.state === 'fight') return; P.tool = id; this.vm.setTool(id); this.audio.click(); };
-    if (!combo) for (const T of TOOLS) if (I.pressed('Digit' + T.slot)) pick(T.id);
+    if (!combo) for (const T of TOOLS) if (I.pressed(T.key || 'Digit' + T.slot)) pick(T.id);
     if (I.mouse.wheel && this.fishing.state !== 'fight' && P.mode !== 'drive') {
       const owned = TOOLS.filter(T => s.tools[T.id]);
       const i = owned.findIndex(T => T.id === P.tool);
@@ -1215,7 +1278,10 @@ export class Game {
     }
     if (!P.held && P.tool === 'axe' && I.click(0)) {
       const a = this.great.armNear(P.pos);
-      if (a) this._chop(a); else { this.vm.play('chop'); this.audio.swoosh(); }
+      if (a) this._chop(a); else if (!P.boat) this.gather.swing('axe'); else { this.vm.play('chop'); this.audio.swoosh(); }
+    }
+    if (!P.held && P.tool === 'pick' && I.click(0)) {
+      if (!P.boat && P.mode !== 'swim') this.gather.swing('pick'); else { this.vm.play('chop'); this.audio.swoosh(); }
     }
     if (P.held && I.click(0)) {
       const it = this.loot.get(P.held);
@@ -1299,6 +1365,37 @@ export class Game {
         }
         if (dM >= dA) gun();
       }
+      // a blueprint piece in front of you
+      const BA = !b && this.build.aim;
+      if (BA && !it) {
+        const m = BA.P.p.m, M = MAT_BY_ID[m], have = (s.mats || {})[m] || 0;
+        if (this.build.held === m) opt.push({ label: `Place the ${M.name.toLowerCase()} (${have} left)  -  ${BA.site.bp.name}`, icon: M.icon, run: () => this.build.put(BA) });
+        else if (have > 0) opt.push({ label: `This piece needs ${M.name.toLowerCase()}: <span class="key">G</span> take some out (${have})`, html: true, icon: M.icon, run: () => this.build.cycleHeld(m) });
+        else opt.push({ label: `Needs ${M.name.toLowerCase()} - you have none. ${M.from}`, icon: M.icon, run: () => {} });
+      }
+      // finished buildings
+      const site = !b && this.build.near(P.pos, 2.6);
+      if (site) {
+        const id = site.bp.id;
+        if (id === 'campfire') opt.push({ label: this.isNight() ? 'Rest by the fire until morning' : 'Sit by the fire a while', icon: 'fire', run: () => this.act({ t: 'restFire' }) });
+        if (id === 'chest') {
+          if (it) opt.push({ label: `Put it in the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.act({ t: 'chestPut', site: site.S.id, id: it.id }) });
+          else opt.push({ label: `Open the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.ui.open('chest', { site: site.S.id }) });
+        }
+        if (id === 'baitstation' && it) opt.push({ label: 'Cut it up for bait', icon: 'pieces', run: () => { this.act({ t: 'baitMake', id: it.id }); this.audio.chopWood(); } });
+        if (id === 'shelter') opt.push({ label: this.tod > 0.72 || this.tod < 0.2 ? 'Sleep in your shelter' : 'Your shelter (you will wake up here)', icon: 'bed', run: () => this.act({ t: 'sleepShelter', site: site.S.id }) });
+        if (id === 'bench') opt.push({ label: 'Sit and watch the water', icon: 'seat', run: () => this.ui.subtitle('You sit a while. The sea goes on and on, further than anyone has ever sailed and come back.', 5) });
+      }
+      // the watchtower: a ladder up, and the view from the top
+      for (const S2 of this.build.sites.values()) {
+        if (!S2.complete || S2.bp.id !== 'watchtower' || b) continue;
+        const foot = this.build.worldPoint(S2, 0, 0, 1.8), top = this.build.worldPoint(S2, 0, 6.0, 0);
+        if (Math.hypot(P.pos.x - foot.x, P.pos.z - foot.z) < 1.4 && P.pos.y < S2.S.y + 2) opt.push({ label: 'Climb the ladder', icon: 'lift', run: () => { P.place(top.clone().add(new THREE.Vector3(0, 0.1, 0)), P.yaw); this.audio.step(true); } });
+        if (P.pos.distanceTo(top) < 2.2) {
+          opt.push({ label: 'Look out over the sea', icon: 'eye', run: () => this.act({ t: 'lookout', x: top.x, z: top.z }) });
+          opt.push({ label: 'Climb down', icon: 'lift', run: () => { P.place(this.build.worldPoint(S2, 0, 0.1, 2.3), P.yaw); this.audio.step(true); } });
+        }
+      }
       // npcs
       const n = this.npcs.nearest(P.pos, 3.2);
       if (n) opt.push({ label: 'Talk to ' + n.def.full, icon: 'people', run: () => this._talk(n) });
@@ -1330,7 +1427,15 @@ export class Game {
       if (cs) opt.unshift({ label: cs.D.cache + (this.cacheFull(cs.id) ? '' : ' (empty for now)'), icon: cs.D.icon, run: () => { this.act({ t: 'plunder', id: cs.id }); this.vm.play('throw'); } });
     }
     const o = opt[0];
-    UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : null);
+    // nothing to press E for: tell them what the axe, pick or book would do here
+    let tip = null;
+    if (!o && P.mode === 'walk' && !P.held && !b) {
+      const h = this.gather.hint(P);
+      if (h) tip = `<span class="key">LMB</span>${ic(P.tool === 'axe' ? 'axe' : 'pick')} ${h.text}`;
+      else if (P.tool === 'plans' && !this.build.plan) { const st = this.build.siteNear(P.pos, 3); tip = st && !st.complete ? `<span class="key">LMB</span>${ic('plans')} Open the blueprint book  <span class="key">X</span> take down this blueprint` : `<span class="key">LMB</span>${ic('plans')} Open the blueprint book`; }
+      else if (this.build.plan) tip = `<span class="key">LMB</span>${ic('plans')} Lay out the ${this.build.plan.bp.name}  <span class="key">R</span> turn  <span class="key">RMB</span> put away`;
+    }
+    UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : tip);
     if (E && o) o.run();
     this.hauling = !!(o && o.hold && I.held('KeyE'));
     if (this.hauling) o.hold(this._dt || 1 / 60);
@@ -1427,9 +1532,50 @@ export class Game {
     if (role === 'outfitter') opts.push({ label: 'Show me what you sell', icon: 'chest', cb: () => this.ui.open('tackle', { shop: d.shop }) });
     if (role === 'boatyard') opts.push({ label: 'Let me see the boats', icon: 'boat', cb: () => this.ui.open('boatyard', { yard: d.yard || 'home' }) });
     if (role === 'guild') opts.push({ label: 'The Guild Map, please', icon: 'crown', cb: () => { this.ui.open('guild'); if (this.state.s.tut === 4) this._tut(5); } });
+    if (d.id === 'gus') {
+      const f = this.state.s.flags;
+      if (f.warden && !f.wardenTold) opts.push({ label: GUS_INTRO.wardenQ, icon: 'wave', cb: () => this._gusTalkWarden(n) });
+      opts.push({ label: GUS_INTRO.asked, icon: 'ear', cb: () => this._gusTopics(n, GUS_INTRO.back) });
+    }
     opts.push({ label: 'Tell me more', icon: 'ear', cb: () => this._talk(n) });
     opts.push({ label: 'Never mind', bye: true });
     this.ui.dialogue(n, line, opts);
+  }
+
+  /* ---- Old Gus, the morning you wash up ---- */
+  /** Called when the intro ends: he is standing over you on the beach. */
+  gusIntro(n) {
+    if (!this.running) return;
+    n.talking = 8;
+    if (this.state.s.tut === 0) this._tut(1);
+    this._gusTopics(n, GUS_INTRO.wake);
+  }
+  /** Everything you can ask him about that night. */
+  _gusTopics(n, line) {
+    const asked = this._gusAsked = this._gusAsked || {};
+    const opts = GUS_INTRO.topics.map(T => ({ label: T.q, icon: T.id === 'leave' ? 'boat' : T.id === 'thing' ? 'tentacle' : 'ear', dim: !!asked[T.id], cb: () => { asked[T.id] = true; this._gusSay(n, T.say, T.more, () => this._gusTopics(n, GUS_INTRO.back)); } }));
+    opts.push({ label: 'Thanks, Gus.', bye: true, line: GUS_INTRO.bye });
+    n.talking = 6;
+    this.ui.dialogue(n, line, opts);
+  }
+  /** A few lines one after another, then a follow-up question if there is one. */
+  _gusSay(n, lines, more, back) {
+    n.talking = 6;
+    if (lines.length > 1) return this.ui.dialogue(n, lines[0], [{ label: '...', icon: 'ear', cb: () => this._gusSay(n, lines.slice(1), more, back) }]);
+    const opts = [];
+    if (more) opts.push({ label: more.q, icon: 'ear', cb: () => this._gusSay(n, more.say, more.more, back) });
+    opts.push({ label: 'I had some other questions.', icon: 'journal', cb: back });
+    opts.push({ label: 'Thanks, Gus.', bye: true, line: GUS_INTRO.bye });
+    this.ui.dialogue(n, lines[0], opts);
+  }
+  /** After the Warden sends you back. */
+  _gusTalkWarden(n) {
+    if (!this.running || this.intro.active) return;
+    const f = this.state.s.flags;
+    if (!f.warden && !this._gusWarden) return;
+    if (this.isHost) f.wardenTold = this.state.s.day;
+    this._gusWarden = false;
+    this._gusSay(n, GUS_INTRO.warden, null, () => this._gusTopics(n, GUS_INTRO.back));
   }
 
   _sellerMenu(n, line) {
@@ -1696,6 +1842,7 @@ export class Game {
       boats: this.boats.map(b => b.snapshot()), loot: this.loot.snapshot(), cr: this.creatures.snapshot(), ev: this.events.snapshot(), gr: this.great.snapshot(), bs: this.beasts.snapshot(), oc: this.ocean.snapshot(),
       traps: [...this.tools.traps.values()].map(({ mesh, ...o }) => o), holes: [...this.tools.holes.values()].map(({ mesh, ...o }) => o),
       holders: this.boats.map(b => (b.holders || []).map(h => +(h.bite > 0))),
+      ed: this.edge.snapshot(), mp: this.gather.snapshot(),
     };
   }
   applyWorld(w, dt = 0.1) {
@@ -1714,6 +1861,30 @@ export class Game {
     for (const id of [...this.tools.traps.keys()]) if (!tIds.has(id)) this.tools.removeTrap(id);
     for (const h of w.holes) this.tools.addHole(h);
     this.boats.forEach((b, i) => { b.holders = (w.holders[i] || []).map(x => ({ bite: x ? 1 : 0, c: null })); });
+    this.edge.applySnapshot(w.ed);
+    this.gather.applySnapshot(w.mp);
+  }
+
+  /** After the Warden: the sea closes over you, and you wake on the beach where you first came in. */
+  _edgeWake() {
+    const P = this.player;
+    if (this._waking) return;
+    this._waking = true;
+    this.fishing.cancel(true);
+    this.dropHeld(P, true);
+    this.ui.fade(true, 'The sea closes over you.');
+    setTimeout(() => {
+      const spot = this.intro.wakeSpot();
+      P.place(spot.pos.clone().add(new THREE.Vector3(0, 0.1, 0)), spot.yaw);
+      P.hp = 100; P.breath = P.maxBreath; P.stamina = P.maxStamina; P.exhausted = false;
+      if (this.isHost) { this.state.s.day++; this.tod = 0.28; }
+      this.world.prebuild(spot.pos.x, spot.pos.z);
+      this.ui.fade(false);
+      this.ui.banner('DRIFTWOOD BAY', 'You wake up on the same beach as the first time. You do not remember the swim.', 'wave', 5);
+      const gus = this.npcs.byId('gus');
+      if (gus) { this.npcs.visit(gus, spot.gus, Math.atan2(spot.pos.x - spot.gus.x, spot.pos.z - spot.gus.z)); this._gusWarden = true; setTimeout(() => this._gusTalkWarden(gus), 2200); }
+      this._waking = false;
+    }, 3600);
   }
 
   /** Handle a network event from `from`, or a local _everyone call. */
@@ -1821,6 +1992,11 @@ export class Game {
       }
       case 'fade': this.ui.fade(e.on, e.text || ''); break;
       case 'isle': this.isles?.onEvent(e); break;
+      case 'gather': this.gather?.onEvent(e); break;
+      case 'build': this.build?.onEvent(e); break;
+      case 'edge': this.edge?.onEvent(e); break;
+      case 'edgeWake': this._edgeWake(); break;
+      case 'intro': this.intro?.sync(e.at); break;
     }
   }
 
@@ -1850,6 +2026,8 @@ export class Game {
     const buy = (k, id) => this.act({ t: 'buy', k, id });
     switch (act) {
       case 'open': this.ui.open(arg, {}); if (arg === 'guild' && this.state.s.tut === 4) this._tut(5); break;
+      case 'bpPick': this.ui.close(); this.build.choose(arg); break;
+      case 'chestTake': { const [site, i] = String(arg).split(':'); this.act({ t: 'chestTake', site, i: +i }); break; }
       case 'buyRod': buy('rod', arg); break;
       case 'equipRod': buy('equipRod', arg); break;
       case 'buyBait': buy('bait', arg); break;

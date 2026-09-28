@@ -23,7 +23,7 @@ export function freshSave() {
     v: 1, day: 1, tod: 0.3, money: 120,
     rods: ['basic'], rod: 'basic',
     baits: { worm: 25, pieces: 5 }, bait: 'worm',
-    tools: { rod: true, hammer: true, bucket: true, axe: true },
+    tools: { rod: true, hammer: true, bucket: true, axe: true, pick: true, plans: true },
     gear: {},
     boat: { hull: 'dinghy', parts: {}, paint: 'natural', decor: [] },
     hulls: ['dinghy'], paints: ['natural'], decorOwned: [],
@@ -39,6 +39,8 @@ export function freshSave() {
     name: 'Fisher',
     // exploring: islands found (id -> day), the charted squares of the map, notes read, how far out you have been
     found: {}, chart: '', notes: {}, farthest: 0, salvaged: {},
+    // gathering and building: the crew's pack, what has been cut down (id -> day), and every blueprint laid out
+    mats: {}, felled: {}, builds: [],
   };
 }
 /* The islands everyone already knows about (their shops can be named from the start). */
@@ -74,7 +76,10 @@ export class State {
     s.stats = Object.assign(f.stats, s.stats || {});
     if (!ROD_BY_ID[s.rod]) s.rod = 'basic';
     if (!s.rods.includes('basic')) s.rods.unshift('basic');
-    s.tools.axe = true;
+    s.tools.axe = true; s.tools.pick = true; s.tools.plans = true;
+    s.mats = s.mats || {}; s.felled = s.felled || {}; s.builds = s.builds || [];
+    // a save from before the storm on the first night has already been through it
+    if (s.flags && s.flags.intro === undefined && (s.stats.caught > 0 || s.tut > 0)) s.flags.intro = 1;
     s.trophies = Object.assign(f.trophies, s.trophies || {});
     s.beasts = s.beasts || {}; s.beastSeen = s.beastSeen || {}; s.beastClues = s.beastClues || {}; s.mysteries = s.mysteries || [];
     s.secrets = s.secrets || {}; s.caches = s.caches || {};

@@ -57,6 +57,11 @@ T.push(
   { id: 'salvage', name: 'Salvage Rights', size: 'S', tier: 2, model: 'strongbox', text: 'Ten wrecks of Ironwreck salvaged. Big Olga offered you a job.' },
   { id: 'eruption', name: 'Under the Volcano', size: 'S', tier: 2, model: 'orb', text: 'A lump of Sunscar rock that landed next to your boat, still warm.' },
   { id: 'struck', name: 'Struck by Lightning', size: 'S', tier: 2, model: 'jar', text: 'A jar of glass fused from sand the moment lightning hit the water beside you at Thunderpeak.' },
+  // past the edge, and making a home on the islands
+  { id: 'warden', name: 'Gus Was Telling the Truth', size: 'S', tier: 4, rank: 1, model: 'orb', text: 'You sailed past the edge of every chart. Something far bigger than the sea was waiting there, and it sent you back. Nobody leaves.' },
+  { id: 'builder', name: 'Four Walls', size: 'S', tier: 1, model: 'logbook', text: 'The first thing you ever built on the islands with your own hands.' },
+  { id: 'settler', name: 'Settler', size: 'S', tier: 2, model: 'lantern', text: 'Six buildings of your own across the islands. You are not a castaway any more.' },
+  { id: 'woodsman', name: 'Woodsman', size: 'S', tier: 1, model: 'logbook', text: 'Twenty-five trees and rocks taken down. The islands grow back; you keep going.' },
 );
 
 export const TROPHIES = T;

@@ -440,7 +440,7 @@ export class Boat {
     }
     // world edge
     // the rim of the world: the sea stands up in a wall and will not let you through
-    const ex = this.pos.x - HOME_CENTRE.x, ez = this.pos.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.edge - 15;
+    const ex = this.pos.x - HOME_CENTRE.x, ez = this.pos.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.rim - 15;
     if (ed > E) { px -= ex / ed * (ed - E); pz -= ez / ed * (ed - E); n++; }
     if (n) {
       this.pos.x += px; this.pos.z += pz;

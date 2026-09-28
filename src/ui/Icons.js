@@ -122,6 +122,17 @@ const I = {
   current: [P('M4 14 L30 14 L30 8 L44 18 L30 28 L30 22 L4 22Z', B2), P('M4 14 L30 14 L30 8 L44 18 L4 18Z', B1), P('M4 30 L22 30 L22 26 L32 34 L22 42 L22 38 L4 38Z', B3)],
   lift: [P('M20 2 L28 2 L28 46 L20 46Z', M3), P('M12 18 L36 18 L36 34 L12 34Z', W2), P('M12 18 L24 18 L24 34 L12 34Z', W1), P('M16 22 L32 22 L32 30 L16 30Z', K2), P('M22 6 L26 6 L26 18 L22 18Z', K1)],
   target: [P('M24 4 L38 10 L44 24 L38 38 L24 44 L10 38 L4 24 L10 10Z', R2), P('M24 12 L32 16 L36 24 L32 32 L24 36 L16 32 L12 24 L16 16Z', C1), P('M24 18 L28 20 L30 24 L28 28 L24 30 L20 28 L18 24 L20 20Z', R2), P('M22 22 L26 22 L26 26 L22 26Z', R3)],
+  // gathering and building
+  pick: [P('M22 14 L26 14 L28 46 L24 46Z', W2), P('M22 14 L24 14 L26 46 L24 46Z', W1), P('M4 16 Q24 2 44 16 L40 18 Q24 8 8 18Z', M2), P('M4 16 Q24 2 44 16 L42 14 Q24 4 6 14Z', M1), P('M20 10 L28 10 L28 18 L20 18Z', M3)],
+  plans: [P('M6 10 L24 14 L24 44 L6 40Z', B2), P('M42 10 L24 14 L24 44 L42 40Z', B3), P('M9 14 L22 17 L22 40 L9 37Z', C1), P('M39 14 L26 17 L26 40 L39 37Z', C2), P('M11 22 L20 24 L20 26 L11 24Z', B2), P('M11 28 L20 30 L20 32 L11 30Z', B2), P('M28 22 L37 20 L37 30 L28 32Z', 'none'), P('M28 24 L36 22 L36 24 L28 26Z', B2), P('M31 26 L34 26 L34 34 L31 34Z', R2)],
+  log: [P('M4 18 L38 12 L42 30 L8 36Z', W2), P('M4 18 L38 12 L39 17 L5 23Z', W1), P('M36 12 Q46 16 42 30 Q32 28 36 12Z', C2), P('M38 17 Q42 20 40 26 Q36 24 38 17Z', W1)],
+  stone: [P('M8 36 L12 16 L26 8 L40 16 L42 34 L28 42Z', M2), P('M8 36 L12 16 L26 8 L26 24Z', M1), P('M26 24 L42 34 L28 42 L8 36Z', M3)],
+  fibre: [P('M22 44 L20 8 L24 8Z', F2), P('M22 44 L10 12 L14 10Z', F3), P('M22 44 L34 10 L38 12Z', F1), P('M22 44 L4 22 L8 20Z', F2), P('M22 44 L40 20 L44 22Z', F3), P('M16 34 L28 34 L28 38 L16 38Z', W2)],
+  ore: [P('M6 36 L10 18 L24 10 L38 16 L42 34 L26 42Z', K1), P('M6 36 L10 18 L24 10 L24 26Z', K2), P('M14 22 L18 20 L18 24Z', O2), P('M28 18 L33 20 L30 24Z', R1), P('M22 32 L27 30 L26 35Z', O1), P('M34 28 L37 30 L34 32Z', O2)],
+  seat: [P('M4 20 L44 20 L44 26 L4 26Z', W1), P('M4 26 L44 26 L44 28 L4 28Z', W3), P('M8 28 L12 28 L12 42 L8 42Z', W2), P('M36 28 L40 28 L40 42 L36 42Z', W2)],
+  dock: [P('M2 26 L46 26 L46 32 L2 32Z', W1), P('M2 32 L46 32 L46 34 L2 34Z', W3), P('M10 34 L14 34 L14 44 L10 44Z', W2), P('M34 34 L38 34 L38 44 L34 44Z', W2), P('M2 40 Q14 36 24 42 Q36 46 46 40 L46 46 L2 46Z', B2)],
+  hut: [P('M4 22 L24 6 L44 22Z', W3), P('M4 22 L24 6 L24 22Z', W2), P('M8 22 L40 22 L40 42 L8 42Z', W1), P('M8 22 L24 22 L24 42 L8 42Z', W2), P('M19 30 L29 30 L29 42 L19 42Z', K2), P('M4 42 L44 42 L44 46 L4 46Z', M2)],
+  build: [P('M6 42 L14 34 L18 38 L10 46Z', W2), P('M14 34 L34 14 L38 18 L18 38Z', W1), P('M30 6 L44 10 L40 22 L32 18 L34 14Z', M2), P('M30 6 L44 10 L42 14 L33 11Z', M1), P('M4 30 L16 30 L16 34 L4 34Z', 'none')],
 };
 
 export function ic(name, cls = '') {
@@ -131,7 +142,7 @@ export function ic(name, cls = '') {
 export const ICON_NAMES = Object.keys(I);
 
 /* Which icon stands for what. */
-export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe' };
+export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe', pick: 'pick', plans: 'plans' };
 export const EVENT_ICON = { storm: 'storm', migration: 'school', giant: 'fin', thief: 'mask', whirlpool: 'whirl', meteor: 'meteor' };
 export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light',
   whisper: 'pine', sunscar: 'volcano', skywatch: 'cliff', crystal: 'crystal', frostfall: 'mountain', dread: 'swamp', ironwreck: 'wreck', lost: 'ghost',

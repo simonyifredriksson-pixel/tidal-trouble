@@ -20,7 +20,7 @@ import { State } from './game/State.js';
 import { Net } from './net/Net.js';
 import { Remote } from './game/Remote.js';
 import { heightAt } from './world/Terrain.js';
-import { VIGIL, REGIONS } from './world/MapData.js';
+import { VIGIL, REGIONS, HOME_CENTRE } from './world/MapData.js';
 import { U } from './art/Materials.js';
 
 const Q = new URLSearchParams(location.search);
@@ -129,6 +129,8 @@ function startGame(mode, lock = true) {
   if (game.running) return;
   ui.hideTitle();
   ui.close();
+  // tests, staged shots and teleports go straight to the island; ?intro plays it anyway
+  game.skipIntro = !Q.has('intro') && (Q.has('script') || Q.has('stage') || Q.has('nointro') || Q.has('at') || Q.has('nethost'));
   game.start(mode);
   game.applySettings();
   if (Q.has('tod')) game.tod = +Q.get('tod');
@@ -176,6 +178,7 @@ function wireNet() {
     game.player.id = net.selfId;
     ui.hideTitle();
     ui.close();
+    game.skipIntro = Q.has('netjoin') || Q.has('uijoin') || Q.has('nointro');
     if (!game.running) { game.start('join'); game.applySettings(); }
     game._boatChanged();
     ui.open('lobby', {});
@@ -185,6 +188,8 @@ function wireNet() {
   };
   net.on.join = (id, p) => {
     if (!game.remotes.has(id)) game.remotes.set(id, new Remote(game, id, p, idx++));
+    // still out in the storm? then so are they, at the same moment
+    if (game.intro?.active) net.sendEvent({ t: 'intro', to: id, at: game.intro.t });
     ui.toast((p?.name || 'Someone') + ' joined the crew!', 'good');
     game.chat.system((p?.name || 'Someone') + ' joined the crew');
     game.voice.connectAll();
@@ -324,6 +329,29 @@ function stage(name) {
     else if (name === 'wreckage') { const R = b.breaks.find(x => x.kind === 'rail'); P.attach(b, new THREE.Vector3(-Math.sign(R.x) * 1.2, b.deck, R.z - 3.5)); const w = b.toWorld(new THREE.Vector3(R.x, b.deck, R.z)); P.yaw = yawTo(P.pos, w); P.pitch = -0.3; }
     else { P.attach(b, new THREE.Vector3(0.6, b.deck, -8.4)); P.yaw = b.heading + Math.PI + 0.08; P.pitch = 0.18; }
     advance(0.3);
+  }
+  // the first night, held at one moment: ?stage=intro:SECONDS[:YAW]
+  if (name.startsWith('intro:')) {
+    const [, sec = '0', yaw] = name.split(':');
+    G.intro.start(+sec);
+    G.intro.hold = +sec;
+    if (yaw !== undefined) G.intro.yaw = +yaw;
+  }
+  // the Warden, at a phase: ?stage=warden:PHASE:SECONDS
+  if (name.startsWith('warden:')) {
+    const [, ph = 'surround', sec = '3'] = name.split(':');
+    G.state.s.boat.hull = 'expedition'; G._boatChanged();
+    const bx = 5390, bz = 5390;      // just past the edge, beyond Vigil's End
+    b.pos.set(bx, 0, bz); b.heading = Math.PI * 1.25; b.docked = false; b._updateMatrix(); world.prebuild(bx, bz);
+    P.attach(b, new THREE.Vector3(0, b.deck, -2)); P.yaw = b.heading + Math.PI + 0.9; P.pitch = 0.25;
+    const E = G.edge;
+    E._begin({ boat: b.id }, bx, bz);
+    E.E.ph = ph; E.E.t = +sec;
+    const dx = bx - HOME_CENTRE.x, dz = bz - HOME_CENTRE.z, d = Math.hypot(dx, dz);
+    E.E.x = bx + dx / d * (ph === 'hunt' ? 400 : 110); E.E.z = bz + dz / d * (ph === 'hunt' ? 400 : 110); E.E.a = Math.atan2(-dx, -dz);
+    E.hold = { ph, t: +sec };
+    if (name.endsWith(':face')) { P.yaw = Math.atan2(-dx, -dz); P.pitch = 0.32; }
+    G.tod = 0.5;
   }
   // any teleport, at a time of day: ?stage=tp:ID[@TOD[@YAW]]  (ids like isle:whisper keep their colon)
   if (name.startsWith('tp:')) {
