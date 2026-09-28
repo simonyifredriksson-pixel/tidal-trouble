@@ -54,7 +54,7 @@ import { Build } from './Build.js';
 import { MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID } from '../data/BuildData.js';
 import { GUS_INTRO } from '../data/NPCData.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
-import { mistAt, VIGIL, WORLD, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
+import { mistAt, VIGIL, WORLD, HOME_CENTRE, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const fill = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] !== undefined ? o[k] : m));
@@ -1834,6 +1834,21 @@ export class Game {
       case 'secretsReset': s.secrets = {}; s.caches = {}; this._changed(); break;
       case 'refill': s.caches = {}; this._changed(); break;
       // the chart and the islands
+      case 'edgeTest': {
+        // past the edge of the charts, at the helm, heading home - it is coming
+        if (!b) break;
+        const dx = -1, dz = -0.1, l = Math.hypot(dx, dz), d = WORLD.beyond + 40;
+        const x = HOME_CENTRE.x + dx / l * d, z = HOME_CENTRE.z + dz / l * d;
+        this.edge.E = null; this.edge.cool = 0; this.edge.hold = null;
+        b.stowAnchor(); b.pos.set(x, 0, z); b.vel.set(0, 0); b.heading = Math.atan2(-dx, -dz); b.yawRate = 0;
+        b.docked = false; b.stolen = false; b.autopilot = null; b.sinking = 0; b.hp = b.stats.hp; b.water = 0; b._updateMatrix();
+        P.attach(b, new THREE.Vector3(b.hull.helm[0], b.deck, b.hull.helm[2]));
+        if (P === this.player) { P.mode = 'drive'; P.yaw = b.heading + Math.PI; P.pitch = 0; }
+        b.driver = P.id;
+        this.world.prebuild(x, z);
+        this.tell(P.id, 'You are past the edge of every chart. Full throttle (W) for home - see if you can outrun it.', 'warn');
+        break;
+      }
       case 'chartAll': this.isles.chartAll(); break;
       case 'islesAll': for (const I of ISLAND_INFO) this.isles._discover(I, P); break;
       case 'chartReset': this.isles.chartReset(); s.found = {}; s.sighted = {}; break;

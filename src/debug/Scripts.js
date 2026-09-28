@@ -1185,6 +1185,11 @@ export async function runScripts(names, game) {
           G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 13, 'the blueprint book lists thirteen buildings'); G.ui.close();
         }
       }
+      if (name === 'edgebtn') {
+        G.ui.open('admin', {}); const btn = document.querySelector('[data-arg="edgeTest"]'); ok(!!btn, 'the admin panel has the edge-of-the-world button');
+        btn && btn.click(); G.ui.close(); step(2);
+        ok(P.boat && P.mode === 'drive' && G.edge.E, 'you are at the helm past the edge, and it has noticed you: ' + (G.edge.E ? G.edge.E.ph : 'nothing'));
+      }
       if (name === 'jetty') {
         // a jetty from the beach out over the sea: walk to the end and fish from it; a watchtower: climb it and look out
         const B = G.build, s = G.state.s;
