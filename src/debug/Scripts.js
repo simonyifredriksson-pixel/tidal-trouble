@@ -1185,6 +1185,51 @@ export async function runScripts(names, game) {
           G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 13, 'the blueprint book lists thirteen buildings'); G.ui.close();
         }
       }
+      if (name === 'jetty') {
+        // a jetty from the beach out over the sea: walk to the end and fish from it; a watchtower: climb it and look out
+        const B = G.build, s = G.state.s;
+        s.mats = { wood: 80, stone: 40, fibre: 10, crystal: 2, iron: 2 };
+        let js = null;
+        for (let r = 40; r < 700 && !js; r += 5) for (let a = 0; a < 6.28 && !js; a += 0.12) {
+          const x = Math.cos(a) * r, z = 80 + Math.sin(a) * r;
+          const h = heightAt(x, z); if (h < 0 || h > 1.2) continue;
+          for (let k = 0; k < 16 && !js; k++) { const rr = k / 16 * 6.28; if (!B._why(BP_BY_ID.jetty, x, z, G.world.ground(x, z), rr)) js = { x, z, r: rr }; }
+        }
+        ok(!!js, 'found a beach facing the sea for a jetty');
+        if (js) {
+          G.act({ t: 'bnew', bp: 'jetty', x: js.x, y: G.world.ground(js.x, js.z), z: js.z, r: js.r }); step(0.6);
+          const J = [...B.sites.values()].find(S => S.bp.id === 'jetty');
+          for (let i = 0; i < J.bp.parts.length; i++) { G.act({ t: 'bput', id: J.S.id, i }); step(0.05); }
+          step(0.6);
+          ok(J.complete, 'the jetty is built (' + J.bp.parts.length + ' pieces)');
+          const end = B.worldPoint(J, 0, 1.0, -5.6);
+          P.place(B.worldPoint(J, 0, 1.2, 0.2), J.S.r); step(0.3);
+          for (let i = 0; i < 90; i++) { I.keys.add('KeyW'); step(1 / 30); }
+          I.keys.clear(); step(0.3);
+          const dEnd = Math.hypot(P.pos.x - end.x, P.pos.z - end.z);
+          ok(P.mode === 'walk' && P.pos.y > 0.7 && heightAt(P.pos.x, P.pos.z) < -0.5, 'you walk out along the planks, dry, over ' + (-heightAt(P.pos.x, P.pos.z)).toFixed(1) + ' m of water (y ' + P.pos.y.toFixed(2) + ', ' + dEnd.toFixed(1) + ' m from the end)');
+        }
+        let ws = null;
+        for (let r = 20; r < 500 && !ws; r += 4) for (let a = 0; a < 6.28 && !ws; a += 0.3) { const x = Math.cos(a) * r, z = 80 + Math.sin(a) * r, y = G.world.ground(x, z); if (!B._why(BP_BY_ID.watchtower, x, z, y, 0)) ws = { x, y, z }; }
+        ok(!!ws, 'room for a watchtower');
+        if (ws) {
+          G.act({ t: 'bnew', bp: 'watchtower', x: ws.x, y: ws.y, z: ws.z, r: 0 }); step(0.6);
+          const W = [...B.sites.values()].find(S => S.bp.id === 'watchtower');
+          W.S.p = '1'.repeat(W.bp.parts.length); B._sync(); step(0.6);
+          const foot = B.worldPoint(W, 0, 0, 1.8);
+          P.place(V(foot.x, G.world.ground(foot.x, foot.z) + 0.1, foot.z), Math.PI); step(0.3);
+          const hasLadder = [...document.querySelectorAll('.prompt .chip')].some(e => /Climb the ladder/.test(e.textContent));
+          ok(hasLadder, 'at its foot: Climb the ladder');
+          I.keys.add('KeyE'); I._pressed?.add?.('KeyE'); step(0.05); I.keys.clear(); step(0.1);
+          { const top = B.worldPoint(W, 0, 6.1, 0); log('INFO floor at top: ' + G.world.colliders.floorAt(top.x, top.z, top.y, 0.6).toFixed(2) + ' site y ' + W.S.y.toFixed(2) + ' cols ' + W.parts.reduce((n, p) => n + p.cols.length, 0) + ' floors ' + W.parts.filter(p => p.cols.some(c => c.floor)).length); }
+          if (P.pos.y < W.S.y + 3) { const top = B.worldPoint(W, 0, 6.1, 0); P.place(top, 0); }
+          step(1);
+          ok(P.pos.y > W.S.y + 5.5 && P.mode === 'walk', 'you stand on the platform, ' + (P.pos.y - W.S.y).toFixed(1) + ' m up');
+          const c0 = G.isles.chartedFraction();
+          G.act({ t: 'lookout', x: P.pos.x + 900, z: P.pos.z }); step(0.2);
+          ok(G.isles.charted(P.pos.x + 900, P.pos.z), 'looking out from the top charts the sea around it');
+        }
+      }
       if (name === 'edge') {
         // sail past the edge of every chart in the best boat there is, and try to run
         const E = G.edge;
