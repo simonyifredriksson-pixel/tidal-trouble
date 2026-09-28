@@ -10,8 +10,26 @@
    settlement so nothing grows through a cabin. */
 
 import * as THREE from '../../lib/three.module.js';
-import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt } from './Terrain.js';
-import { regionWeights, WORLD } from './MapData.js';
+import { heightAt, forestAt, pathAt, padAt, nearLake, iceAt, styleAt } from './Terrain.js';
+import { styleWeights } from './MapData.js';
+
+/* What grows on each of the far islands: (height, forest, random) -> [variant, chance, scale]. */
+const FAR_TREES = {
+  woods: (h, f, q) => h < 1.6 ? null : q < 0.3 ? ['giant', 0.1 + f * 0.45, 1] : q < 0.82 ? ['pine', 0.2 + f * 0.8, 1.6] : ['mushroom', 0.35, 1],
+  volcanic: (h, f, q) => h > 48 ? null : q < 0.6 ? ['ash', 0.08] : ['lavarock', 0.06, 1.4],
+  cliff: (h, f, q) => h < 60 ? (h < 3 && q < 0.3 ? ['bush', 0.2] : null) : q < 0.5 ? ['pine', 0.14, 0.8] : ['broad', 0.08],
+  crystal: (h, f, q) => q < 0.5 ? ['palm', 0.12] : ['crystal', 0.12, 1.2],
+  swamp: (h, f, q) => q < 0.55 ? ['mangrove', 0.34] : q < 0.85 ? ['deaddark', 0.22] : ['mushroom', 0.2, 0.7],
+  rust: (h, f, q) => q < 0.7 ? ['dead', 0.05] : ['palm', 0.05],
+  ghost: (h, f, q) => q < 0.5 ? ['dead', 0.2] : q < 0.8 ? ['birch', 0.15] : ['pine', 0.12],
+  storm: (h, f, q) => h > 70 ? null : q < 0.6 ? ['deaddark', 0.08] : ['spire', 0.06],
+  tide: (h, f, q) => q < 0.6 ? ['pine', 0.2, 0.9] : ['broad', 0.15],
+  ruins: (h, f, q) => q < 0.6 ? ['palm', 0.14] : ['pillar', 0.05, 0.8],
+  abyss: () => ['spire', 0.1],
+  isle: (h, f, q) => h < 2 ? ['palm', 0.1] : q < 0.5 ? ['palm', 0.2] : ['broad', 0.15],
+  rock: (h, f, q) => q < 0.5 ? ['pine', 0.08] : ['bush', 0.1],
+  dark: () => ['deaddark', 0.06],
+};
 import { hash3, smoothstep, rng } from '../core/Util.js';
 import { MAT } from '../art/Materials.js';
 import * as F from '../art/FloraArt.js';
@@ -42,6 +60,13 @@ function makeVariants() {
   add('flowers', [1, 2, 3].map(s => F.buildFlowers(1400 + s)), MAT.foliage, false);
   add('coral', [1, 2, 3].map(s => F.buildCoral(1500 + s)), MAT.solid, false);
   add('ice', [1, 2].map(s => F.buildIceChunk(1600 + s)), MAT.solid);
+  add('giant', [1, 2, 3].map(s => F.buildGiant(1700 + s)), MAT.foliage);
+  add('mushroom', [1, 2, 3, 4].map(s => F.buildMushroom(1750 + s)), MAT.solid);
+  add('crystal', [1, 2, 3].map(s => F.buildCrystal(1800 + s)), MAT.solid);
+  add('mangrove', [1, 2].map(s => F.buildMangrove(1850 + s)), MAT.foliage);
+  add('pillar', [1, 2, 3].map(s => F.buildPillar(1900 + s)), MAT.solid);
+  add('ash', [1, 2].map(s => F.buildDead(1950 + s, true)), MAT.foliage);
+  add('lavarock', [1, 2].map(s => F.buildRock(1980 + s, 0x2e2a2c, false)), MAT.solid);
   return V;
 }
 
@@ -84,13 +109,20 @@ export class Scatter {
     this.count++;
   }
 
+  /** Every grid point of spacing S inside the terrain chunks whose ground rises above `min`. */
+  *_cells(S, min) {
+    for (const ch of this.terrain.chunks.values()) {
+      if (ch.max <= min) continue;
+      const x0 = ch.cx * 80, z0 = ch.cz * 80;
+      for (let gx = Math.ceil(x0 / S) * S; gx < x0 + 80; gx += S) for (let gz = Math.ceil(z0 / S) * S; gz < z0 + 80; gz += S) yield [gx, gz];
+    }
+  }
+
   _plant() {
-    const H = WORLD.half;
     const C = this.colliders;
     // --- trees: 4.5 m jittered grid ---
     const S = 4.5;
-    for (let gx = -H; gx < H; gx += S) for (let gz = -H; gz < H; gz += S) {
-      if (!this._land(gx, gz, 0.5)) continue;
+    for (const [gx, gz] of this._cells(S, 0.5)) {
       const r1 = hash3(gx * 10 | 0, gz * 10 | 0, 1);
       const x = gx + hash3(gx | 0, gz | 0, 2) * S, z = gz + hash3(gx | 0, gz | 0, 3) * S;
       const h = heightAt(x, z);
@@ -100,12 +132,18 @@ export class Scatter {
       if (pathAt(x, z) > 0.05 || padAt(x, z) > 0.05) continue;
       if (iceAt(x, z)) continue;
       if (this._blocked(x, z, 2.5)) continue;
-      const w = regionWeights(x, z);
+      const w = styleWeights(x, z);
       const f = forestAt(x, z);
       const rot = hash3(x | 0, z | 0, 4) * 6.283;
-      const sc = 0.75 + hash3(x | 0, z | 0, 5) * 0.55;
+      let sc = 0.75 + hash3(x | 0, z | 0, 5) * 0.55;
       let key = null, p = 0;
-      if (w.frost > 0.5) {
+      const st = styleAt(x, z), q6 = hash3(x | 0, z | 0, 6);
+      const far = FAR_TREES[st];
+      if (far) {
+        // the far islands: each style has its own forest
+        const pick = far(h, f, q6);
+        if (pick) { key = pick[0]; p = pick[1]; sc *= pick[2] || 1; }
+      } else if (w.frost > 0.5) {
         if (h < 48) { p = Math.pow(f, 1.2) * 0.62 * (1 - smoothstep(30, 48, h)); key = 'snowpine'; }
       } else if (w.black > 0.5) {
         p = 0.1; key = hash3(x | 0, z | 0, 6) < 0.6 ? 'deaddark' : 'spire';
@@ -124,19 +162,21 @@ export class Scatter {
       }
       if (!key || r1 > p) continue;
       this._put(key, x, h - 0.2, z, sc, rot, 0, 0.1);
-      if (key !== 'spire') C.circle(x, z, 0.45 * sc, h - 1, h + 12, 'tree');
-      else C.circle(x, z, 1.6 * sc, h - 2, h + 10, 'rock');
+      const cr = { giant: 1.5, spire: 1.6, pillar: 0.8, crystal: 0.7, lavarock: 1.2, mushroom: 0.3, mangrove: 0.35 }[key] ?? 0.45;
+      if (key === 'spire' || key === 'lavarock') C.circle(x, z, cr * sc, h - 2, h + 10, 'rock');
+      else C.circle(x, z, cr * sc, h - 1, h + 12, 'tree');
     }
     // --- undergrowth, rocks, logs: 3 m grid ---
     const U = 3;
-    for (let gx = -H; gx < H; gx += U) for (let gz = -H; gz < H; gz += U) {
+    for (const [gx, gz] of this._cells(U, -8)) {
       const x = gx + hash3(gx | 0, gz | 0, 12) * U, z = gz + hash3(gx | 0, gz | 0, 13) * U;
       const r1 = hash3(gx * 3 | 0, gz * 3 | 0, 14);
       if (r1 > 0.34) continue;       // cheap early out: most cells are empty
-      if (!this._land(gx, gz, -8)) continue;
       const h = heightAt(x, z);
       if (h < -8 || h > 70) continue;
-      const w = regionWeights(x, z);
+      const w = styleWeights(x, z);
+      const st = styleAt(x, z);
+      if (FAR_TREES[st]) { this._farGround(st, x, z, h, hash3(x * 5 | 0, z * 5 | 0, 16), hash3(x | 0, z | 0, 15) * 6.283); continue; }
       const rot = hash3(x | 0, z | 0, 15) * 6.283;
       const q = hash3(x * 5 | 0, z * 5 | 0, 16);
       const lake = nearLake(x, z);
@@ -182,6 +222,35 @@ export class Scatter {
       }
     }
     this._buildMeshes();
+  }
+
+  /** Undergrowth, rocks and sea-bed things on the far islands. */
+  _farGround(st, x, z, h, q, rot) {
+    const C = this.colliders;
+    const lake = nearLake(x, z);
+    if (h < -0.8) {
+      if (st === 'crystal' && h > -8 && q < 0.16) this._put('crystal', x, h, z, 0.5 + q * 3, rot);
+      else if ((st === 'isle' || st === 'crystal') && h > -7 && h < -2 && q < 0.2) this._put('coral', x, h, z, 0.5 + q * 1.5, rot);
+      else if (st === 'ruins' && h > -6 && q < 0.012) this._put('pillar', x, h, z, 0.9 + q * 20, rot);
+      else if (st === 'volcanic' && h > -9 && q < 0.03) this._put('lavarock', x, h - 0.3, z, 0.8 + q * 20, rot);
+      return;
+    }
+    if (lake && !lake.ice && h < 0.9) { if (q < 0.5) this._put('reeds', x, h, z, 0.9 + q, rot); return; }
+    if (h < 0.6 || pathAt(x, z) > 0.1 || iceAt(x, z) || this._blocked(x, z, 1.2)) return;
+    const pad = padAt(x, z) > 0.2;
+    if (q < 0.045 && !pad) {
+      const key = { volcanic: 'lavarock', storm: 'spire', abyss: 'spire', crystal: 'crystal', ruins: 'sandrock', isle: 'sandrock', rust: 'sandrock' }[st] || 'rock';
+      const s = 0.6 + hash3(x | 0, z | 0, 17) * 1.5;
+      this._put(key, x, h - 0.3, z, s, rot);
+      if (s > 0.9 && key !== 'crystal') C.circle(x, z, s, h - 3, h + 1.2 * s, 'rock');
+      return;
+    }
+    if (pad && q > 0.1) return;
+    if (st === 'woods') { if (q < 0.2) this._put('fern', x, h, z, 1.2 + q * 3, rot); else if (q < 0.26) this._put('mushroom', x, h, z, 0.5 + q, rot); else if (q < 0.32) this._put('mosslog', x, h - 0.05, z, 1.4, rot); }
+    else if (st === 'swamp') { if (q < 0.3) this._put('reeds', x, h, z, 1 + q * 2, rot); else if (q < 0.36) this._put('mosslog', x, h - 0.1, z, 1, rot); }
+    else if (st === 'cliff' || st === 'tide' || st === 'ghost' || st === 'rock') { if (q < 0.12) this._put('bush', x, h - 0.1, z, 0.6 + q * 2, rot); else if (q < 0.18 && st !== 'ghost') this._put('flowers', x, h, z, 1, rot); }
+    else if (st === 'isle' || st === 'ruins' || st === 'crystal') { if (q < 0.14) this._put('tbush', x, h - 0.1, z, 0.8 + q * 2, rot); else if (q < 0.17 && h < 1.8) this._put('log', x, h - 0.05, z, 1, rot); }
+    else if (st === 'rust') { if (q < 0.06) this._put('log', x, h - 0.05, z, 1, rot); }
   }
 
   _buildMeshes() {
@@ -256,8 +325,11 @@ export class Grass {
       if (Math.hypot(x - cam.x, z - cam.z) > R) continue;
       const h = heightAt(x, z);
       if (h < 1.1 || h > 40) continue;
-      const w = regionWeights(x, z);
+      const w = styleWeights(x, z);
       if (w.frost > 0.5 || w.black > 0.5 || w.reach > 0.5) continue;
+      const st = styleAt(x, z);
+      if (st === 'volcanic' || st === 'crystal' || st === 'rust' || st === 'storm' || st === 'abyss' || st === 'swamp' || st === 'dark') continue;
+      if (st === 'woods' && hash3(ix, iz, 29) < 0.5) continue;
       const pa = pathAt(x, z);
       if (pa > 0.25) continue;
       const pd = padAt(x, z);

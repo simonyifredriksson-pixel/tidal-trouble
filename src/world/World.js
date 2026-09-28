@@ -13,7 +13,7 @@ import { Scatter, Grass } from './Scatter.js';
 import { Settlement } from './Settlement.js';
 import { Secrets } from './Secrets.js';
 import { Colliders } from './Colliders.js';
-import { waveHeight, regionAt, regionWeights, WORLD } from './MapData.js';
+import { waveHeight, regionAt, regionWeights, currentAt, WORLD } from './MapData.js';
 
 export class World {
   constructor(scene) {
@@ -50,12 +50,14 @@ export class World {
     this.extraLights = [];     // dynamic sources added by the game (boat lamps, fires)
     this.time = 0;
     this.storm = 0;
+    this.wind = { x: 2.5, z: 0 };
     this.whirl = null;
     this.glow = null;
   }
 
   prebuild(x, z) {
     this.terrain.prebuild(x, z);
+    this.water.rebuild(x, z, true);
     this.grass.update({ x, z }, true);
   }
 
@@ -70,6 +72,9 @@ export class World {
     return this.sea(x, z);
   }
 
+  /** The current at a point right now, {x, z, s} in m/s (a shared object - copy it if you keep it). */
+  current(x, z) { return currentAt(x, z, this.time, -heightAt(x, z)); }
+
   ground(x, z) { return groundAt(x, z); }
   height(x, z) { return heightAt(x, z); }
   region(x, z) { return regionAt(x, z); }
@@ -79,6 +84,9 @@ export class World {
 
   update(dt, cam, focus, env, night) {
     this.time += dt;
+    // the wind veers slowly round the compass and howls in a storm
+    const wa = this.time * 0.0035 + Math.sin(this.time * 0.011) * 1.2, ws = 2.5 + this.storm * 11 + Math.sin(this.time * 0.05) * 1.2;
+    this.wind.x = Math.cos(wa) * ws; this.wind.z = Math.sin(wa) * ws;
     this.terrain.update(cam.x, cam.z, 5);
     this.flora.update(cam);
     this.grass.update(cam);

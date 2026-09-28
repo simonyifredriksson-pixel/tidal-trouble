@@ -37,8 +37,12 @@ export function freshSave() {
     secrets: {}, caches: {},               // hidden places found (id -> day) and caches opened (id -> day)
     player: null, boatPos: null, boatCargo: [], traps: [], holes: [],
     name: 'Fisher',
+    // exploring: islands found (id -> day), the charted squares of the map, notes read, how far out you have been
+    found: {}, chart: '', notes: {}, farthest: 0, salvaged: {},
   };
 }
+/* The islands everyone already knows about (their shops can be named from the start). */
+export const KNOWN_SHOPS = new Set(['home', 'tropic', 'frost', 'open', 'reach']);
 
 export function defaultSettings() {
   return { sens: 1, invert: false, fov: 75, volume: 0.8, music: 0.5, shake: true, shadows: true, grass: 1, name: 'Fisher', look: 0 };
@@ -75,7 +79,10 @@ export class State {
     s.beasts = s.beasts || {}; s.beastSeen = s.beastSeen || {}; s.beastClues = s.beastClues || {}; s.mysteries = s.mysteries || [];
     s.secrets = s.secrets || {}; s.caches = s.caches || {};
     s.great = s.great || {}; s.kraken = Object.assign(f.kraken, s.kraken || {}); s.heard = s.heard || {};
+    s.found = s.found || {}; s.chart = s.chart || ''; s.notes = s.notes || {}; s.farthest = s.farthest || 0; s.salvaged = s.salvaged || {};
   }
+  /** Can the game name the place a shop is on? (the far islands only once you have been there) */
+  knowsShop(id) { return KNOWN_SHOPS.has(id || 'home') || !!this.s.found[id]; }
 
   /* ---------------- trophies ---------------- */
   /** Earn a trophy. Returns true the first time. */
@@ -90,7 +97,8 @@ export class State {
   shelfPlan(caps = null) {
     const T = this.s.trophies;
     const ids = Object.keys(T.got).filter(id => TROPHY_BY_ID[id]);
-    ids.sort((a, b) => (TROPHY_BY_ID[b].tier - TROPHY_BY_ID[a].tier) || ((T.placed[a] === undefined) - (T.placed[b] === undefined)) || (T.got[a] - T.got[b]));
+    // rank breaks ties inside a tier: the real monsters outrank the ocean beasts for the big spaces
+    ids.sort((a, b) => (TROPHY_BY_ID[b].tier - TROPHY_BY_ID[a].tier) || ((TROPHY_BY_ID[b].rank || 0) - (TROPHY_BY_ID[a].rank || 0)) || ((T.placed[a] === undefined) - (T.placed[b] === undefined)) || (T.got[a] - T.got[b]));
     const keep = { S: [], L: [] };
     for (const id of ids) { const z = TROPHY_BY_ID[id].size; if (keep[z].length < (caps ? caps[z] : Infinity)) keep[z].push(id); }
     return keep;

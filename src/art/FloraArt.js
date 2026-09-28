@@ -314,6 +314,98 @@ export function buildCoral(seed) {
   return b.build();
 }
 
+/* ---------------- the far islands ---------------- */
+
+/** A giant of Whispering Woods: buttress roots, a trunk you could live in, a canopy up in the dark. */
+export function buildGiant(seed) {
+  const r = rng(seed);
+  const b = new MeshBuilder(r);
+  const H = 26 + r() * 12;
+  b.setSway(0).color(0x4a3a2a, 0.08).cyl(1.6, 0.9, 0, H * 0.8, 8, false);
+  // buttress roots flaring out round the base
+  for (let k = 0; k < 6; k++) {
+    const a = k / 6 * TAU + r() * 0.3, L = 2.6 + r() * 1.4;
+    b.color(shadeHex(0x4a3a2a, 0.85 + r() * 0.2));
+    b.tri([Math.cos(a) * 1.1, 3.2 + r(), Math.sin(a) * 1.1], [Math.cos(a) * L, 0, Math.sin(a) * L], [Math.cos(a + 0.3) * 1.2, 0, Math.sin(a + 0.3) * 1.2]);
+    b.tri([Math.cos(a) * 1.1, 3.2 + r(), Math.sin(a) * 1.1], [Math.cos(a - 0.3) * 1.2, 0, Math.sin(a - 0.3) * 1.2], [Math.cos(a) * L, 0, Math.sin(a) * L]);
+  }
+  // a few great limbs, and the canopy on them in heavy dark layers
+  for (let i = 0; i < 4; i++) {
+    const a = r() * TAU, y = H * (0.55 + r() * 0.2);
+    b.color(0x3e3024).tube([0, y, 0], [Math.cos(a) * 5, y + 4, Math.sin(a) * 5], 0.5, 0.25, 5);
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = r() * TAU, d = i === 0 ? 0 : 3 + r() * 4, y = H * 0.82 + r() * 4;
+    b.setSway(0.15).color(mixHex(0x1e3a22, 0x2e5a30, r()), 0.05).lump(4 + r() * 2.5, Math.cos(a) * d, y, Math.sin(a) * d, 0.3, 0.55, 0);
+  }
+  // moss hanging off the limbs
+  b.color(0x6a8a4a).setSway(0.6);
+  for (let i = 0; i < 10; i++) { const a = r() * TAU, d = 2 + r() * 4, y = H * 0.7 + r() * 3; b.card([Math.cos(a) * d, y, Math.sin(a) * d], [Math.cos(a) * d + 0.3, y, Math.sin(a) * d], [Math.cos(a) * d + 0.15, y - 2 - r() * 2, Math.sin(a) * d]); }
+  return b.build();
+}
+
+/** Mushrooms as tall as a person, in rings under the giants. `glow` returns the cap spots as a second geometry. */
+export function buildMushroom(seed) {
+  const r = rng(seed);
+  const b = new MeshBuilder(r);
+  const n = 1 + Math.floor(r() * 3);
+  const cap = [0xc84a3a, 0x8a5aa8, 0xd8a04a, 0x5a8ab0][Math.floor(r() * 4)];
+  for (let i = 0; i < n; i++) {
+    const a = r() * TAU, d = i ? 0.6 + r() * 0.6 : 0, h = (i ? 0.6 : 1.2) + r() * 0.8, x = Math.cos(a) * d, z = Math.sin(a) * d;
+    b.color(0xe8e0c8).cyl(0.12 * (i ? 0.7 : 1), 0.09, 0, h, 6, false, x, z);
+    b.color(cap).setSway(0.05).lathe([[0.02, h + 0.35], [0.4, h + 0.25], [0.62, h + 0.04], [0.55, h - 0.02]].map(([rr, y]) => [rr * (i ? 0.65 : 1), y]), 8, x, z);
+    b.color(0xf2ecd8); for (let k = 0; k < 4; k++) { const q = r() * TAU; b.box(0.1, 0.04, 0.1, x + Math.cos(q) * 0.3, h + 0.22, z + Math.sin(q) * 0.3); }
+  }
+  return b.build();
+}
+
+/** A crystal cluster: tall faceted prisms, pale glassy colours. */
+export function buildCrystal(seed, tones = [0x9af0f0, 0xc8b0f8, 0xf0b8e0, 0xb8f0c8]) {
+  const r = rng(seed);
+  const b = new MeshBuilder(r);
+  const n = 3 + Math.floor(r() * 5);
+  for (let i = 0; i < n; i++) {
+    const a = r() * TAU, d = i ? r() * 1.4 : 0, h = (i ? 1.2 : 2.6) + r() * 3.2, w = (i ? 0.25 : 0.45) + r() * 0.25;
+    b.color(tones[Math.floor(r() * tones.length)]);
+    b.push(Math.cos(a) * d, 0, Math.sin(a) * d, (r() - 0.5) * 0.7, r() * TAU, (r() - 0.5) * 0.7);
+    b.cyl(w, w * 0.9, -0.4, h, 6, false);
+    b.cone(w * 0.9, h, h + w * 1.8, 6);
+    b.pop();
+  }
+  return b.build();
+}
+
+/** A mangrove: a canopy held up on a cage of arching roots. */
+export function buildMangrove(seed) {
+  const r = rng(seed);
+  const b = new MeshBuilder(r);
+  const H = 5 + r() * 3;
+  b.setSway(0).color(0x3a3228).cyl(0.3, 0.2, 1.6, H, 5, false);
+  for (let k = 0; k < 7; k++) {
+    const a = k / 7 * TAU + r() * 0.4, L = 1.8 + r() * 1.2;
+    b.color(0x4a3e30).tube([0, 1.8 + r() * 0.8, 0], [Math.cos(a) * L * 0.6, 1.4, Math.sin(a) * L * 0.6], 0.1, 0.08, 4);
+    b.tube([Math.cos(a) * L * 0.6, 1.4, Math.sin(a) * L * 0.6], [Math.cos(a) * L, -0.6, Math.sin(a) * L], 0.08, 0.06, 4);
+  }
+  for (let i = 0; i < 4; i++) { const a = r() * TAU, d = i ? 1 + r() * 1.2 : 0; b.setSway(0.3).color(mixHex(0x2e4a26, 0x4a6a32, r())).lump(1.6 + r(), Math.cos(a) * d, H + r(), Math.sin(a) * d, 0.3, 0.6); }
+  // grey moss in beards
+  b.color(0x8a907a).setSway(0.7);
+  for (let i = 0; i < 6; i++) { const a = r() * TAU, d = 1 + r() * 1.5, y = H - 0.2; b.card([Math.cos(a) * d, y, Math.sin(a) * d], [Math.cos(a) * d + 0.25, y, Math.sin(a) * d], [Math.cos(a) * d, y - 1.4 - r(), Math.sin(a) * d]); }
+  return b.build();
+}
+
+/** A broken column of the drowned city, fallen drum at its foot. */
+export function buildPillar(seed) {
+  const r = rng(seed);
+  const b = new MeshBuilder(r);
+  const H = 3 + r() * 7, stone = mixHex(0xd8c8a0, 0xb8a888, r());
+  b.color(shadeHex(stone, 0.85)).box(1.8, 0.5, 1.8, 0, 0.25, 0);
+  for (let y = 0.5; y < H; y += 1.1) b.color(shadeHex(stone, 0.9 + r() * 0.15)).cyl(0.6, 0.58, y, Math.min(H, y + 1.08), 10, true, (r() - 0.5) * 0.05, (r() - 0.5) * 0.05);
+  if (r() < 0.5) b.color(shadeHex(stone, 0.95)).box(1.6, 0.4, 1.6, 0, H + 0.2, 0);
+  b.color(0xd8b048).box(1.3, 0.1, 0.1, 0, H * 0.6, 0.62);
+  b.color(shadeHex(stone, 0.8)).push(1.6, 0.55, 0.4, 0, r() * TAU, Math.PI / 2); b.cyl(0.58, 0.58, -0.5, 0.5, 10, true); b.pop();
+  return b.build();
+}
+
 export function buildIceChunk(seed) {
   const r = rng(seed);
   const b = new MeshBuilder(r);

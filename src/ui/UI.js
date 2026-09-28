@@ -12,19 +12,23 @@
 import { ic, TOOL_ICON, EVENT_ICON, REGION_ICON, CLUE_ICON, PART_ICON } from './Icons.js';
 import { fishThumb, rodThumb, boatThumb, levThumb, objThumb } from './Thumbs.js';
 import { FISH, FISH_BY_ID, RARITY, GIANTS, JOURNAL_ORDER, fishValue, catchName, VARIANT_BY_ID, VARIANTS, valueBreakdown } from '../data/FishData.js';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS } from '../data/GearData.js';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID, SHOPS, soldAt, shopOf } from '../data/GearData.js';
 import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js';
 import { SECTIONS, sectionEntries, discovered, progress, habitat, sizeClass, BEHAVIOUR, TIME } from '../data/JournalData.js';
 import { buildGreat, buildKrakenStatue } from '../art/GreatArt.js';
 import { BEASTS, BEAST_BY_ID } from '../data/BeastData.js';
 import { buildBeast } from '../art/BeastArt.js';
-import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats } from '../data/BoatData.js';
+import { HULLS, HULL_BY_ID, PARTS, PAINTS, DECOR, boatStats, partCap, partYard } from '../data/BoatData.js';
+const YARDS = { home: "Marge's Boatyard", whisper: "Tamsin's Boats", sunscar: "Rico's Swift Hulls", crystal: "Captain Odile's Shipyard", ironwreck: "Big Olga's Yard",
+  tide: "Delphine's Yard", thunder: "Brakka's Storm Yard", abyssal: "Nemo Black's Dock", reach: "Bartholomew Kettle's Slipway" };
 import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js';
-import { REGIONS, PLACES, WORLD, ZONES } from '../world/MapData.js';
+import { REGIONS, PLACES, WORLD, ZONES, MAX_ZONE, HOME_CENTRE, currentAt } from '../world/MapData.js';
+import { CHART_N, CHART_CELL } from '../game/IslandLife.js';
+import { ISLAND_INFO } from '../data/IslandData.js';
 import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
-import { worldMapCanvas } from './MapArt.js';
+import { worldMapCanvas, mapView, fogCanvas } from './MapArt.js';
 import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -120,11 +124,14 @@ export class UI {
         <div class="row">${ic('shield')}<div class="bar hp"><i></i></div></div>
         <div class="row">${ic('leak')}<div class="bar water"><i></i></div></div>
         <div class="row">${ic('box')}<span class="bcargo"></span></div>
+        <div class="row bcurrow"><svg class="carrow" viewBox="0 0 20 20" width="18" height="18"><path d="M10 2 L16 11 L12 11 L12 18 L8 18 L8 11 L4 11 Z" fill="currentColor"/></svg><span class="bcur"></span></div>
+        <div class="row">${ic('anchor')}<span class="banc"></span></div>
         <div class="bwarn warn"></div>
       </div></div>
       <div class="stats">
         <span class="chip hpchip hide">${ic('heart')}<div class="bar"><i style="background:var(--red)"></i></div></span>
         <span class="chip breath hide">${ic('bubble')}<div class="bar water"><i></i></div></span>
+        <span class="chip ccompass hide"><svg class="cneedle" viewBox="0 0 20 20" width="20" height="20"><path d="M10 1 L14 11 L10 9 L6 11 Z" fill="#e0503a"/><path d="M10 19 L14 11 L10 9 L6 11 Z" fill="#d8d0b8"/></svg><span class="cname"></span></span>
       </div>
       <div class="swimring hide"><svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="25" class="bg"/><circle cx="30" cy="30" r="25" class="fg"/></svg><span>${ic('wave')}</span><b></b>
       </div>
@@ -217,7 +224,7 @@ export class UI {
     this.el('.zone-chip .zt').textContent = Z.name;
     this.el('.zone-chip').style.color = Z.css;
     const bait = BAIT_BY_ID[s.bait];
-    this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
+    this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(bait.icon || s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
     this.el('.baitchip').classList.toggle('hide', P.tool !== 'rod');
     this.el('.hand-label').textContent = P.held ? (FISH_BY_ID[G.loot.get(P.held)?.sp]?.name || '') : TOOL_BY_ID[P.tool]?.name || '';
     // boat
@@ -231,12 +238,34 @@ export class UI {
       this.el('.boatpanel .bar.water i').style.width = Math.round(b.water * 100) + '%';
       const kg = b.cargoKg();
       this.el('.bcargo').textContent = `${G.loot.onBoat(b).length} catches  ${fmtKg(kg)} / ${fmtKg(b.stats.cargoKg)}`;
+      // which way the sea is pushing you, relative to where you are looking
+      const fl = b.flow || { x: 0, y: 0 }, fs = Math.hypot(fl.x, fl.y);
+      const fwd = fl.x * -Math.sin(P.yaw) + fl.y * -Math.cos(P.yaw), rgt = fl.x * Math.cos(P.yaw) + fl.y * -Math.sin(P.yaw);
+      this.el('.carrow').style.transform = `rotate(${Math.round(Math.atan2(rgt, fwd) * 180 / Math.PI)}deg)`;
+      this.el('.carrow').style.color = fs > 2.5 ? '#ff7a5a' : fs > 1.2 ? '#f2c14a' : '#9ad8f0';
+      const A = b.anchor, AS = b.anchorSpec;
+      const drifting = !b.docked && A.st !== 'set' && !b.driver && !b.autopilot;
+      this.el('.bcur').textContent = `Current ${fs.toFixed(1)} m/s` + (drifting && fs > 0.15 ? '  -  drifting' : '');
+      this.el('.banc').textContent = AS.name + ': ' + ({ stow: b.docked ? 'stowed (tied up)' : 'stowed', fly: 'flying', sink: `sinking, ${Math.round(A.len)} m`, hang: `hanging, ${Math.round(A.len)} m`, set: A.drag > 0 ? 'DRAGGING!' : `holding, ${Math.round(A.len)} m` }[A.st]) + (A.st === 'stow' ? `  (${AS.rope} m, holds ${AS.hold})` : '');
       const w = [];
+      if (A.drag > 0) w.push('The anchor is dragging');
       if (b.fires.length) w.push('FIRE ON DECK - use the bucket!');
       if (b.leaks.length) w.push(b.leaks.length + ' leak' + (b.leaks.length > 1 ? 's' : '') + ' - use the hammer');
       if (b.water > 0.5) w.push('Taking on water!');
       if (kg > b.stats.cargoKg) w.push('Overloaded');
       this.el('.bwarn').textContent = w.join('  |  ');
+    }
+    // the Old Compass points at the nearest island you have never been to
+    const cc = this.el('.ccompass');
+    const tgt = G.isles && G.state.has('compass') ? G.isles.nearestUnfound(P.pos) : null;
+    cc.classList.toggle('hide', !tgt);
+    if (tgt) {
+      const dx = tgt.x - P.pos.x, dz = tgt.z - P.pos.z;
+      const fwd = dx * -Math.sin(P.yaw) + dz * -Math.cos(P.yaw), rgt = dx * Math.cos(P.yaw) + dz * -Math.sin(P.yaw);
+      // a compass that is not quite sure of itself
+      const wob = Math.sin(this.t * 1.7) * 6 + Math.sin(this.t * 4.1) * 2;
+      this.el('.cneedle').style.transform = `rotate(${Math.round(Math.atan2(rgt, fwd) * 180 / Math.PI + wob)}deg)`;
+      this.el('.cname').textContent = tgt.d < 1200 ? 'Close now' : (tgt.d / 1000).toFixed(1) + ' km';
     }
     // hp and breath
     this.el('.hpchip').classList.toggle('hide', P.hp > 99);
@@ -471,7 +500,7 @@ export class UI {
     const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v}</span></div>`;
     card.innerHTML = `<div class="rodcard"><img src="${rodThumb(id)}" alt=""><div><b>${esc(R.name)}</b><p>${esc(R.blurb)}</p>
       ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Catch zone', Math.round(R.band * 100), 26, Math.round(cur.band * 100))}
-      <small>Best for: ${esc(ZONES[Math.min(4, R.tier - 1)].name)}${R.tier >= 5 ? ' - and leviathans' : ''}</small></div></div>`;
+      <small>Best for: ${esc(ZONES[Math.min(MAX_ZONE, [0, 1, 2, 4, 6, 7][R.tier] ?? 4)].name)}${R.tier >= 5 ? ' - and leviathans' : ''}</small></div></div>`;
   }
   /** The seller counts it out: a compact receipt inside the conversation. */
   dialogueReceipt(e) {
@@ -529,6 +558,7 @@ export class UI {
     this.game.chat?.forceClose();
     this.screen = name;
     this.data = data;
+    if (name === 'map') this.mapC = null;
     const s = $('#screens');
     s.classList.add('on');
     this.root.classList.add('menu');
@@ -558,7 +588,7 @@ export class UI {
     sc.innerHTML = `<div class="screen">${html}</div>`;
     const nb = sc.querySelector('.sbody');
     if (nb) nb.scrollTop = scroll;
-    if (this.screen === 'map' || this.screen === 'guild') this._drawMap();
+    if (this.screen === 'map' || this.screen === 'guild') { this._drawMap(); this._wireMap(); }
     this._pumpThumbs();
     const jc = sc.querySelector('#joincode');
     if (jc) {
@@ -582,6 +612,11 @@ export class UI {
     if (act === 'close') return this.close();
     if (act === 'closeTalk') return this.closeTalk();
     if (act === 'tab') { this.tab[this.screen] = el.dataset.arg; this.data.sel = null; return this.render(); }
+    if (act === 'mapZoom') {
+      if (el.dataset.arg === 'me') { this.mapC = null; if (!this.mapZoom) this.mapZoom = 1; }
+      else { this.mapZoom = +el.dataset.arg; if (!this.mapZoom) this.mapC = null; }
+      return this.render();
+    }
     const fn = this.game.uiAct(act, el.dataset.arg, el);
     if (this.screen) this.render();
     return fn;
@@ -664,71 +699,97 @@ export class UI {
       <div class="foot"><button class="btn gold" data-act="${this.game.running ? 'open' : 'close'}" data-arg="pause">Done</button></div>`);
   }
 
-  /* ---------- tackle shop (Melvin) ---------- */
+  /** Where something is sold, in words - or a hint if you have not found that island yet. */
+  _soldWhere(shop, seller = false) {
+    const S = SHOPS[shop || 'home'];
+    if (!S) return 'somewhere out there';
+    if (!this.game.state.knowsShop(shop)) return 'on an island you have not found yet';
+    return seller ? S.seller : (S.outfit ? S.outfit + ' in ' + S.place : S.place);
+  }
+
+  /* ---------- tackle shops: Melvin at home, and every island's outfitter ---------- */
   _tackle() {
     const G = this.game, s = G.state.s;
+    const shop = this.data?.shop || 'home';
     const t = this._tabs([['rods', 'Rods', 'rod'], ['bait', 'Bait', 'worm'], ['tools', 'Equipment', 'harpoon'], ['gear', 'Gear', 'diving']], 'rods');
+    const here = (item, kind) => soldAt(item, shop, kind);
+    const sold = (item, kind) => `<span class="soldby">${ic('map')}${esc(kind === 'rod' ? 'Sold by ' + this._soldWhere(item.shop, true) : 'Sold at ' + this._soldWhere(shopOf(item)))}</span>`;
+    // what this shop stocks comes first, everything else after it
+    const order = (list, kind) => [...list].sort((a, b) => (here(b, kind) ? 1 : 0) - (here(a, kind) ? 1 : 0));
     let body = '';
     if (t.cur === 'rods') {
       const cur = ROD_BY_ID[s.rod];
-      body = `<div class="grid">${RODS.map(R => {
+      body = `<div class="grid">${order(RODS, 'rod').map(R => {
         const own = s.rods.includes(R.id), eq = s.rod === R.id;
         const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
           <h3>${esc(R.name)}</h3><p>${esc(R.blurb)}</p>
-          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Zone', Math.round(R.band * 100), 26, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 320, cur.line)}
-          <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(4, R.tier - 1)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
-          <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : R.shop === 'home' ? `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>` : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><span class="soldby">${ic('map')}Sold by ${esc(SHOPS[R.shop].seller)}</span>`}</div></div>`;
+          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Zone', Math.round(R.band * 100), 27, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 320, cur.line)}
+          <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(MAX_ZONE, [0, 1, 2, 4, 6, 7][R.tier] ?? 4)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
+          <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : here(R, 'rod') ? `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>` : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span>${sold(R, 'rod')}`}</div></div>`;
       }).join('')}</div>`;
     } else if (t.cur === 'bait') {
-      body = `<div class="grid">${BAITS.map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}"><h3>${ic(B.id)}${esc(B.name)}</h3><p>${esc(B.blurb)}</p>
+      body = `<div class="grid">${order(BAITS, 'bait').map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}"><h3>${ic(B.icon || B.id)}${esc(B.name)}</h3><p>${esc(B.blurb)}</p>
         <div class="row"><span>You have <b>${s.baits[B.id] || 0}</b></span><span class="price">${ic('coin')}${B.price * B.pack} / ${B.pack}</span></div>
-        <div class="row" style="margin-top:6px"><button class="btn gold" data-act="buyBait" data-arg="${B.id}" ${s.money < B.price * B.pack ? 'disabled' : ''}>Buy ${B.pack}</button>
+        <div class="row" style="margin-top:6px">${here(B, 'bait') ? `<button class="btn gold" data-act="buyBait" data-arg="${B.id}" ${s.money < B.price * B.pack ? 'disabled' : ''}>Buy ${B.pack}</button>` : sold(B, 'bait')}
         <button class="btn" data-act="setBait" data-arg="${B.id}" ${(s.baits[B.id] || 0) > 0 ? '' : 'disabled'}>Use</button></div></div>`).join('')}</div>`;
     } else if (t.cur === 'tools') {
-      body = `<div class="grid">${TOOLS.filter(T => T.price > 0).map(T => {
+      body = `<div class="grid">${order(TOOLS.filter(T => T.price > 0), 'tool').map(T => {
         const own = !!s.tools[T.id];
         return `<div class="card ${own ? 'owned' : ''}"><h3>${ic(TOOL_ICON[T.id])}${esc(T.name)}</h3><p>${esc(T.blurb)}</p>
-          <div class="row">${own ? `<span class="price">Owned  -  slot ${T.slot}</span>` : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span><button class="btn gold" data-act="buyTool" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
+          <div class="row">${own ? `<span class="price">Owned  -  slot ${T.slot}</span>` : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span>${here(T, 'tool') ? `<button class="btn gold" data-act="buyTool" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>` : sold(T, 'tool')}`}</div></div>`;
       }).join('')}</div>`;
     } else {
-      body = `<div class="grid">${GEAR.map(T => {
+      body = `<div class="grid">${order(GEAR, 'gear').map(T => {
         const own = !!s.gear[T.id];
-        const icon = { diving: 'diving', sonar: 'sonar', lucky: 'lucky', gloves: 'gloves' }[T.id];
+        const icon = T.icon || { diving: 'diving', sonar: 'sonar', lucky: 'lucky', gloves: 'gloves' }[T.id];
         return `<div class="card ${own ? 'owned' : ''}"><h3>${ic(icon)}${esc(T.name)}</h3><p>${esc(T.blurb)}</p>
-          <div class="row">${own ? '<span class="price">Owned</span>' : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span><button class="btn gold" data-act="buyGear" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
+          <div class="row">${own ? '<span class="price">Owned</span>' : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span>${here(T, 'gear') ? `<button class="btn gold" data-act="buyGear" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>` : sold(T, 'gear')}`}</div></div>`;
       }).join('')}</div>`;
     }
-    const shopName = { frost: "Ingrid's Ice Gear", tropic: "Coco's Trading Post" }[this.data?.shop] || "Melvin's Bait & Tackle";
-    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : 'Everything is on sale. Nothing is refundable.')}${t.html}<div class="sbody">${body}</div>`);
+    const shopName = SHOPS[shop]?.outfit || "Melvin's Bait & Tackle";
+    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : shop === 'home' ? 'Everything is on sale. Nothing is refundable.' : 'Some of this you will not find anywhere else in the sea.')}${t.html}<div class="sbody">${body}</div>`);
   }
 
   /* ---------- boatyard (Marge) ---------- */
   _boatyard() {
     const G = this.game, s = G.state.s;
+    const yard = this.data?.yard || 'home';
     const t = this._tabs([['hulls', 'Boats', 'boat'], ['parts', 'Upgrades', 'wrench'], ['paint', 'Paint', 'paint'], ['decor', 'Decorations', 'flag'], ['repair', 'Repairs', 'hammer']], 'hulls');
     const cur = boatStats(s.boat);
+    const yardName = y => YARDS[y] || 'a shipwright';
+    const yardWhere = y => this.game.state.knowsShop(y) ? yardName(y) + ' in ' + (SHOPS[y]?.place || 'Driftwood Bay') : 'a shipwright on an island you have not found yet';
     let body = '';
     if (t.cur === 'hulls') {
-      body = `<div class="grid">${HULLS.map(H => {
-        const own = s.hulls.includes(H.id), eq = s.boat.hull === H.id;
+      // the boats built here first, then the rest of the sea's
+      const list = [...HULLS].sort((a, b) => ((b.yard === yard) - (a.yard === yard)) || (a.price - b.price));
+      body = `<div class="grid">${list.map(H => {
+        const own = s.hulls.includes(H.id), eq = s.boat.hull === H.id, here = H.yard === yard;
         const st = boatStats({ ...s.boat, hull: H.id });
-        const bar = (label, v, max, base, unit = '') => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${Math.round(v)}${unit}</span></div>`;
+        // lower is better for repair difficulty, so its bar and colours run the other way
+        const bar = (label, v, max, base, unit = '', lowGood = false, show = null) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, (lowGood ? (max - v) : v) / max * 100)}%"></i></div><span class="${(lowGood ? v < base : v > base) ? 'up' : (lowGood ? v > base : v < base) ? 'down' : ''}">${show ?? Math.round(v) + unit}</span></div>`;
+        const pct = v => Math.round(v * 100);
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${boatThumb({ hull: H.id, parts: s.boat.parts, paint: s.boat.paint, decor: [] })}" alt="">
           <h3>${esc(H.name)}</h3><p>${esc(H.blurb)}</p>
-          ${bar('Speed', st.speed * 1.94, 45, cur.speed * 1.94, 'kn')}${bar('Hull', st.hp, 1600, cur.hp)}${bar('Cargo', st.cargoKg, 9000, cur.cargoKg, 'kg')}${bar('Waves', st.waves * 10, 60, cur.waves * 10)}
-          <div class="row">${own ? (eq ? '<span class="price">Your boat</span>' : `<button class="btn" data-act="useHull" data-arg="${H.id}">Switch to this</button>`) : `<span class="price">${ic('coin')}${fmtInt(H.price)}</span><button class="btn gold" data-act="buyHull" data-arg="${H.id}" ${s.money < H.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
+          ${bar('Speed', st.speed * 1.94, 50, cur.speed * 1.94, 'kn')}${bar('Acceleration', st.accel, 9, cur.accel, '', false, st.accel.toFixed(1))}${bar('Turning', st.turn, 1.4, cur.turn, '', false, st.turn.toFixed(2))}
+          ${bar('Stability', pct(st.stability), 100, pct(cur.stability), '%')}${bar('Storage', st.cargoKg, 16000, cur.cargoKg, 'kg')}${bar('Durability', st.hp, 3200, cur.hp)}
+          ${bar('Storm resistance', st.waves * 10, 70, cur.waves * 10, '', false, st.waves.toFixed(1) + ' m')}${bar('Fishing space', st.space, 90, cur.space, ' m2', false, st.space + ' m2, ' + st.slots + ' rods')}
+          ${bar('Equipment capacity', st.cap, 4, cur.cap, '', false, 'level ' + st.cap)}${bar('Repair difficulty', st.repair, 2, cur.repair, '', true, 'x' + st.repair.toFixed(1))}${bar('Deep water', pct(st.deep), 100, pct(cur.deep), '%')}
+          <div class="row">${own ? (eq ? '<span class="price">Your boat</span>' : `<button class="btn" data-act="useHull" data-arg="${H.id}">Switch to this</button>`) : `<span class="price">${ic('coin')}${fmtInt(H.price)}</span>${here ? `<button class="btn gold" data-act="buyHull" data-arg="${H.id}" ${s.money < H.price ? 'disabled' : ''}>Buy</button>` : `<span class="soldby">${ic('map')}Built by ${esc(yardWhere(H.yard))}</span>`}`}</div></div>`;
       }).join('')}</div>`;
     } else if (t.cur === 'parts') {
       const H = HULL_BY_ID[s.boat.hull];
       body = `<div class="grid">${PARTS.map(P => {
         const lv = s.boat.parts[P.id] || 0;
-        const na = (P.id === 'mount' && !H.mount);
+        const cap = partCap(P, H);
+        const na = (P.id === 'mount' && !H.mount) || (P.id === 'rod' && H.lightningRod);
         const next = P.prices[lv + 1];
+        const where = partYard(P, lv + 1);
+        const elsewhere = where && where !== yard;
         return `<div class="card"><h3>${ic(PART_ICON[P.id])}${esc(P.name)}</h3><p>${esc(P.blurb)}</p>
-          <div class="lv">${P.names.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('')}</div>
-          <p style="margin:0 0 6px"><b>${esc(P.names[lv])}</b>${lv < P.max ? '  ->  ' + esc(P.names[lv + 1]) : ''}</p>
-          <div class="row">${na ? '<span class="price">Needs a bigger boat</span>' : lv >= P.max ? '<span class="price">Maxed</span>' : `<span class="price">${ic('coin')}${fmtInt(next)}</span><button class="btn gold" data-act="buyPart" data-arg="${P.id}" ${s.money < next ? 'disabled' : ''}>Upgrade</button>`}</div></div>`;
+          <div class="lv">${P.names.map((_, i) => `<i class="${i <= lv ? 'on' : ''}" ${i > cap ? 'style="opacity:0.25"' : ''}></i>`).join('')}</div>
+          <p style="margin:0 0 6px"><b>${esc(P.names[Math.min(lv, cap)])}</b>${lv < cap ? '  ->  ' + esc(P.names[lv + 1]) : ''}</p>
+          <div class="row">${P.id === 'rod' && H.lightningRod ? '<span class="price">Built in</span>' : na ? '<span class="price">Needs a bigger boat</span>' : lv >= P.max ? '<span class="price">Maxed</span>' : lv >= cap ? `<span class="price">This hull cannot carry more</span>` : elsewhere ? `<span class="price">${ic('coin')}${fmtInt(next)}</span><span class="soldby">${ic('map')}Fitted by ${esc(yardWhere(where))}</span>` : `<span class="price">${ic('coin')}${fmtInt(next)}</span><button class="btn gold" data-act="buyPart" data-arg="${P.id}" ${s.money < next ? 'disabled' : ''}>Upgrade</button>`}</div></div>`;
       }).join('')}</div>`;
     } else if (t.cur === 'paint') {
       body = `<div class="grid">${PAINTS.map(P => {
@@ -745,11 +806,11 @@ export class UI {
     } else {
       const b = G.boats[0];
       const miss = b ? b.stats.hp - b.hp : 0;
-      const cost = Math.ceil(miss * 0.6) + (b ? b.leaks.length * 15 : 0);
-      body = `<div class="card" style="max-width:520px"><h3>${ic('hammer')}Full repair</h3><p>Marge patches every plank, pumps out the water and puts out anything that is on fire. Hull ${b ? Math.round(b.hp) : 0} / ${b ? b.stats.hp : 0}, ${b ? b.leaks.length : 0} leaks.</p>
-        <div class="row"><span class="price">${ic('coin')}${cost}</span><button class="btn gold" data-act="repair" ${cost <= 0 || s.money < cost ? 'disabled' : ''}>Repair</button></div></div>`;
+      const cost = b ? Math.ceil((miss * 0.6 + b.leaks.length * 15) * (b.stats.repair || 1) * (yard === 'ironwreck' ? 0.5 : 1)) : 0;
+      body = `<div class="card" style="max-width:520px"><h3>${ic('hammer')}Full repair</h3><p>Every plank patched, the water pumped out and anything on fire put out. Hull ${b ? Math.round(b.hp) : 0} / ${b ? b.stats.hp : 0}, ${b ? b.leaks.length : 0} leaks.${b && b.stats.repair > 1.05 ? ' This hull is hard to work on: repairs cost x' + b.stats.repair.toFixed(1) + '.' : ''}${yard === 'ironwreck' ? ' Big Olga charges half.' : ''}</p>
+        <div class="row"><span class="price">${ic('coin')}${cost}</span><button class="btn gold" data-act="repair" data-arg="${yard}" ${cost <= 0 || s.money < cost ? 'disabled' : ''}>Repair</button></div></div>`;
     }
-    return this._wrap(`${this._head('boat', "Marge's Boatyard", 'You break it, I fix it. You sink it, I build you a new one.')}${t.html}<div class="sbody">${body}</div>`);
+    return this._wrap(`${this._head('boat', yardName(yard), yard === 'home' ? 'You break it, I fix it. You sink it, I build you a new one.' : 'Every island builds boats for its own water. The best ones are built farthest out.')}${t.html}<div class="sbody">${body}</div>`);
   }
 
   /* ---------- fish market (Pim) ---------- */
@@ -839,7 +900,9 @@ export class UI {
           <p class="note">${(() => { const b = G.boats[0]; return b ? `${esc(b.hull.name)}: hull ${Math.round(b.hp)}/${b.stats.hp}, water ${Math.round(b.water * 100)}%, ${b.leaks.length} hole${b.leaks.length === 1 ? '' : 's'}, ${b.fires.length} fire${b.fires.length === 1 ? '' : 's'}${b.breaks.length ? ', broken: ' + b.breaks.map(x => x.kind).join(', ') : ''}. Fix breaks with the hammer, holes with the hammer or salvaged planks, water with the bucket.` : 'No boat.'; })()}</p></section>
         <section><h3>${ic('eye')}Hidden places</h3><div class="row">${btn('Reveal them all', 'secretsAll', 'gold')}${btn('Refill every cache', 'refill')}${btn('Forget them all', 'secretsReset', 'dark')}</div>
           <p class="note">${SECRETS.map(D => `${esc(D.name)}: ${s.secrets?.[D.id] ? 'found day ' + s.secrets[D.id] : 'not found'}${s.caches?.[D.id] !== undefined ? ', cache opened day ' + s.caches[D.id] : ''}`).join('<br>')}<br>Teleports to each are in the list below.</p></section>
-        <section><h3>${ic('map')}Teleport</h3><div class="row">${G.constructor.TELEPORTS.map(T => btn(T.name, 'tp:' + T.id)).join('')}</div></section>
+        <section><h3>${ic('map')}Teleport</h3><div class="row">${G.constructor.TELEPORTS.map(T => btn(T.name, 'tp:' + T.id)).join('')}</div>
+          <div class="row">${btn('Chart the whole sea', 'chartAll', 'gold')}${btn('Discover every island', 'islesAll', 'gold')}${btn('Forget the chart and the islands', 'chartReset', 'dark')}</div>
+          <p class="note">${G.isles ? Math.round(G.isles.chartedFraction() * 100) + '% charted. ' : ''}Islands found: ${Object.keys(s.found || {}).length} / 12.</p></section>
         <section><h3>${ic('wrench')}World</h3><div class="row">${btn('Reset boat', 'resetBoat')}${btn('Reset character', 'resetChar')}${btn('Every tool and gear', 'tools')}${btn('Earn and place all trophies', 'allTrophies')}${btn('Clear trophies', 'clearTrophies', 'dark')}</div>
           <div class="row">${[['Dawn', 0.26], ['Noon', 0.5], ['Dusk', 0.745], ['Night', 0.92]].map(([l, v]) => btn(l, 'tod:' + v, 'dark')).join('')}${['storm', 'giant', 'migration', 'meteor'].map(k => btn('Event: ' + k, 'event:' + k, 'dark')).join('')}</div></section>
       </div>`);
@@ -1063,24 +1126,109 @@ export class UI {
   /* ---------- world map ---------- */
   _map() { return this._wrap(`${this._head('map', 'Map of the Waters', 'Driftwood Bay and beyond', false)}${this._mapBody(false)}`); }
   _mapBody(guild) {
-    return `<div class="mapwrap"><canvas class="worldmap" width="720" height="720" data-guild="${guild ? 1 : 0}"></canvas>
+    const G = this.game, s = G.state.s, z = this.mapZoom || 0;
+    // only the waters you know go in the legend
+    const known = Object.values(REGIONS).filter(r => r.band ? (r.id === 'open' || (s.farthest || 0) > ({ mid: 1500, outer: 3000, extreme: 4500 }[r.id] || 0)) : !G.isles || G.isles.charted(r.x, r.z));
+    const pct = G.isles ? Math.round(G.isles.chartedFraction() * 100) : 0;
+    return `<div class="mapwrap"><div class="mapcol"><canvas class="worldmap" width="720" height="720" data-guild="${guild ? 1 : 0}"></canvas>
+      <div class="mapzoom">${[['The whole sea', 0], ['Region', 1], ['Close up', 2]].map(([n, k]) => `<button class="btn ${z === k ? 'gold' : ''}" data-act="mapZoom" data-arg="${k}">${n}</button>`).join('')}
+        <button class="btn" data-act="mapZoom" data-arg="me">${ic('arrow')} Centre on me</button><span class="spacer"></span><b>${pct}% of the sea charted</b></div></div>
       <div class="legend">
         <div>${ic('arrow')} You</div><div>${ic('boat')} Your boat</div><div>${ic('people')} Friends</div>
         <div>${ic('target')} Leviathan lure point</div><div>${ic('eye')} Clue to inspect</div><div>${ic('trap')} Your traps</div>
-        ${Object.values(REGIONS).map(r => `<div>${ic(REGION_ICON[r.id])} ${esc(r.name)}</div>`).join('')}
-        <p style="font-size:12px;color:var(--ink2)">${Object.values(REGIONS).map(r => `<b>${esc(r.name)}:</b> ${esc(r.blurb)}`).join('<br>')}</p>
+        ${G.state.has('charts') ? `<div>${ic('current')} Currents (from your charts)</div>` : ''}
+        ${known.map(r => `<div>${ic(REGION_ICON[r.id] || 'map')} ${esc(r.name)}</div>`).join('')}
+        <p style="font-size:12px;color:var(--ink2)">The dark is sea nobody has charted for you. Sail into it to fill it in. Scroll or use the buttons to zoom, and drag to look around.</p>
+        <p style="font-size:12px;color:var(--ink2)">${known.map(r => `<b>${esc(r.name)}:</b> ${esc(r.blurb)}`).join('<br>')}</p>
       </div></div>`;
+  }
+  /* wheel to zoom, drag to pan; only the canvas redraws while you do */
+  _wireMap() {
+    const cv = document.querySelector('canvas.worldmap');
+    if (!cv) return;
+    const spanOf = () => [2 * WORLD.half, 5000, 1600][this.mapZoom || 0];
+    cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      const z = clamp((this.mapZoom || 0) + (e.deltaY < 0 ? 1 : -1), 0, 2);
+      if (z === (this.mapZoom || 0)) return;
+      // zoom in on the point under the mouse
+      if (z > (this.mapZoom || 0) && this._mapView) {
+        const r = cv.getBoundingClientRect(), V = this._mapView;
+        this.mapC = { x: V.x0 + (e.clientX - r.left) / r.width * V.span, z: V.z0 + (e.clientY - r.top) / r.height * V.span };
+      }
+      this.mapZoom = z; this.render();
+    }, { passive: false });
+    let drag = null;
+    cv.addEventListener('pointerdown', e => { if (!this.mapZoom) return; const V = this._mapView; drag = { x: e.clientX, y: e.clientY, cx: V.x0 + V.span / 2, cz: V.z0 + V.span / 2 }; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const r = cv.getBoundingClientRect(), k = spanOf() / r.width;
+      this.mapC = { x: drag.cx - (e.clientX - drag.x) * k, z: drag.cz - (e.clientY - drag.y) * k };
+      this._drawMap();
+    });
+    const up = () => { drag = null; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   }
   _drawMap() {
     const cv = document.querySelector('canvas.worldmap');
     if (!cv) return;
-    const G = this.game, c = cv.getContext('2d');
-    const N = 720, H = WORLD.half;
-    c.drawImage(worldMapCanvas(N), 0, 0);
-    const toPx = (x, z) => [(x + H) / (2 * H) * N, (z + H) / (2 * H) * N];
-    c.font = '700 13px Nunito, sans-serif'; c.textAlign = 'center';
-    for (const p of PLACES) { const [px, py] = toPx(p.x, p.z); c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillText(p.name, px + 1, py + 1); c.fillStyle = '#fbf4e2'; c.fillText(p.name, px, py); }
-    const s = G.state.s;
+    const G = this.game, c = cv.getContext('2d'), s = G.state.s, P = G.player, isles = G.isles;
+    const N = 720, H = WORLD.half, z = this.mapZoom || 0;
+    const span = [2 * H, 5000, 1600][z];
+    let V;
+    if (!z) { V = { cv: worldMapCanvas(N), x0: -H, z0: -H, span }; }
+    else {
+      const C = this.mapC || P.pos;
+      const cx = clamp(C.x, -H + span / 2, H - span / 2), cz = clamp(C.z, -H + span / 2, H - span / 2);
+      V = mapView(cx, cz, span, N);
+      // a drag moves smoothly between the snapped windows
+      V = { ...V, x0: cx - span / 2, z0: cz - span / 2, ox: V.x0, oz: V.z0 };
+    }
+    this._mapView = V;
+    const k = N / span;
+    const toPx = (x, zz) => [(x - V.x0) * k, (zz - V.z0) * k];
+    c.fillStyle = '#1a2a38'; c.fillRect(0, 0, N, N);
+    if (V.ox !== undefined) c.drawImage(V.cv, (V.ox - V.x0) * k, (V.oz - V.z0) * k);
+    else c.drawImage(V.cv, 0, 0);
+    // the currents, where you have charted them and own the Current Masters' charts
+    if (G.state.has('charts')) {
+      const step = span / 26, cur = { x: 0, z: 0, s: 0 };
+      c.strokeStyle = 'rgba(210,240,255,0.7)'; c.lineWidth = 1.6;
+      for (let gz = V.z0 + step / 2; gz < V.z0 + span; gz += step) for (let gx = V.x0 + step / 2; gx < V.x0 + span; gx += step) {
+        if (isles && !isles.charted(gx, gz)) continue;
+        const h = heightAt(gx, gz);
+        if (h > -1) continue;
+        const f = currentAt(gx, gz, 0, -h, cur);
+        if (f.s < 0.15) continue;
+        const [px, py] = toPx(gx, gz), L = Math.min(1, f.s / 3) * step * k * 0.8 + 4;
+        const ux = f.x / f.s, uz = f.z / f.s, ex = px + ux * L / 2, ey = py + uz * L / 2;
+        c.beginPath(); c.moveTo(px - ux * L / 2, py - uz * L / 2); c.lineTo(ex, ey);
+        c.moveTo(ex, ey); c.lineTo(ex - ux * 4 - uz * 3, ey - uz * 4 + ux * 3); c.moveTo(ex, ey); c.lineTo(ex - ux * 4 + uz * 3, ey - uz * 4 - ux * 3);
+        c.stroke();
+      }
+    }
+    // the fog over everything nobody has charted
+    if (isles) {
+      const fog = fogCanvas(isles, CHART_N, CHART_CELL, 1500);
+      c.imageSmoothingEnabled = true;
+      const sx = (V.x0 + H) / CHART_CELL, sy = (V.z0 + H) / CHART_CELL, sw = span / CHART_CELL;
+      c.drawImage(fog, sx, sy, sw, sw, 0, 0, N, N);
+    }
+    // the edge of the sea
+    { const [ex, ey] = toPx(HOME_CENTRE.x, HOME_CENTRE.z); c.strokeStyle = 'rgba(255,120,90,0.45)'; c.setLineDash([8, 8]); c.lineWidth = 2; c.beginPath(); c.arc(ex, ey, WORLD.edge * k, 0, 6.28); c.stroke(); c.setLineDash([]); }
+    const kinds = [['region', 'mystery'], ['region', 'mystery', 'town', 'lake'], null][z];
+    c.font = `700 ${z ? 14 : 12}px Nunito, sans-serif`; c.textAlign = 'center';
+    // islands seen through the Skywatch telescope go on the map before you reach them
+    const sighted = new Set(Object.keys(s.sighted || {}).map(id => REGIONS[ISLAND_INFO.find(I => I.id === id)?.region]?.name));
+    for (const p of PLACES) {
+      if (kinds && !kinds.includes(p.kind) && p.name !== 'Driftwood Bay') continue;
+      const seen = isles && !isles.charted(p.x, p.z);
+      if (seen && !sighted.has(p.name)) continue;
+      const [px, py] = toPx(p.x, p.z);
+      if (seen) { c.strokeStyle = '#ffd9a0'; c.lineWidth = 2; c.setLineDash([3, 3]); c.beginPath(); c.arc(px, py - 4, 7, 0, 6.28); c.stroke(); c.setLineDash([]); c.fillStyle = '#ffd9a0'; c.fillText('?', px, py); c.fillText(p.name, px, py - 16); continue; }
+      if (px < -60 || py < -20 || px > N + 60 || py > N + 20) continue;
+      c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillText(p.name, px + 1, py + 1); c.fillStyle = p.kind === 'mystery' ? '#ffd9a0' : '#fbf4e2'; c.fillText(p.name, px, py);
+    }
     // hidden places: on no chart until you have been there
     for (const D of SECRETS) {
       if (!s.secrets?.[D.id]) continue;
@@ -1105,7 +1253,6 @@ export class UI {
     for (const e of G.events.list) if (e.r) dot(e.x, e.z, '#9ab8ff', 7);
     for (const b of G.boats) dot(b.pos.x, b.pos.z, '#f08a2a', 6);
     for (const p of G.remotes.values()) dot(p.pos.x, p.pos.z, '#8af0ff', 5);
-    const P = G.player;
     const [px, py] = toPx(P.pos.x, P.pos.z);
     c.save(); c.translate(px, py); c.rotate(-P.yaw + Math.PI);
     c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2;
@@ -1117,7 +1264,7 @@ export class UI {
   _bait() {
     const s = this.game.state.s;
     return this._wrap(`${this._head('worm', 'Choose Your Bait', 'What happens if I use THIS?', false)}
-      <div class="baitwheel">${BAITS.map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}" data-act="setBait" data-arg="${B.id}">${ic(B.id)}<h3 style="justify-content:center">${esc(B.name)}</h3><p>x${s.baits[B.id] || 0}</p></div>`).join('')}</div>
+      <div class="baitwheel">${BAITS.map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}" data-act="setBait" data-arg="${B.id}">${ic(B.icon || B.id)}<h3 style="justify-content:center">${esc(B.name)}</h3><p>x${s.baits[B.id] || 0}</p></div>`).join('')}</div>
       <div class="foot"><button class="btn gold" data-act="close">Done</button></div>`);
   }
 

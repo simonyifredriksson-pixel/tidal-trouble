@@ -204,6 +204,12 @@ export class Audio {
     this.noise(2.2, 0.5 * a, 'bandpass', 700, 0.6, 0.3);
     this.tone(55, 2.4, 'sine', 0.25 * a, 0.3, 0.8);
   }
+  /** Anchor: a link of chain (or a creak of rope) paying out or coming in. */
+  chain(chain = true, v = 1) { if (chain) { this.tone(1800 + Math.random() * 900, 0.03, 'square', 0.035 * v, 0.001, 0.3); this.noise(0.04, 0.05 * v, 'highpass', 3200, 2); } else this.noise(0.09, 0.05 * v, 'bandpass', 500 + Math.random() * 300, 3); }
+  ratchet() { this.tone(2400, 0.02, 'square', 0.04, 0.001, 0.5); }
+  anchorSet() { this.tone(90, 0.3, 'triangle', 0.25, 0.005, 0.5); this.noise(0.3, 0.15, 'lowpass', 400, 1); }
+  scrape() { this.noise(0.4, 0.12, 'bandpass', 260 + Math.random() * 120, 1.5, 0.3); }
+  clunk() { this.tone(160, 0.1, 'square', 0.12, 0.002, 0.5); this.noise(0.1, 0.15, 'lowpass', 1200, 1); }
   bubble() { this.tone(400 + Math.random() * 500, 0.06, 'sine', 0.04, 0.002, 1.8); }
 
   /* ---------------- continuous: ambience, engine, music ---------------- */

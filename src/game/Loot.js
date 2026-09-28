@@ -401,7 +401,11 @@ export class Loot {
     }
   }
 
-  value(it) { return fishValue(FISH_BY_ID[it.sp], it.kg, it.mult); }
+  value(it) {
+    const sp = FISH_BY_ID[it.sp];
+    // a relic out of the drowned city sells for twice as much in a Relic Satchel
+    return fishValue(sp, it.kg, it.mult) * (sp?.relic && this.game.state.has('relicbag') ? 2 : 1);
+  }
 
   /* a favourite wears a little gold star that floats above it */
   _star(it) {

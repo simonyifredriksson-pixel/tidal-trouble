@@ -15,8 +15,8 @@
 import * as THREE from '../../lib/three.module.js';
 import { Noise2D } from '../core/Noise.js';
 import { smoothstep, clamp, lerp, hash3 } from '../core/Util.js';
-import { hexToLinear, mixHex } from '../art/Geo.js';
-import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights } from './MapData.js';
+import { hexToLinear, mixHex, shadeHex as shadeHexT } from '../art/Geo.js';
+import { WORLD, ISLANDS, LAKES, PADS, CHANNELS, PATHS, regionWeights, styleWeights, distHome } from './MapData.js';
 
 const N = new Noise2D(WORLD.seed);
 const N2 = new Noise2D(WORLD.seed + 101);
@@ -26,8 +26,9 @@ const N3 = new Noise2D(WORLD.seed + 333);
 const GRID = 160;
 const islandGrid = new Map();
 for (const isl of ISLANDS) {
-  isl.reach = isl.r * 1.3 + (isl.h + 40) / isl.slope;
-  isl.reach = Math.min(isl.reach, isl.r + 420);
+  // the underwater slope runs all the way down to the sea bed, however deep it is out here
+  isl.reach = isl.r * 1.3 + (Math.max(0, isl.h) + 10 - Math.min(-40, seabed(isl.x, isl.z))) / isl.slope;
+  isl.reach = Math.min(isl.reach, isl.r + 900);
   isl.seed = (hash3(isl.x | 0, isl.z | 0, 7) * 1000) | 0;
   const x0 = Math.floor((isl.x - isl.reach) / GRID), x1 = Math.floor((isl.x + isl.reach) / GRID);
   const z0 = Math.floor((isl.z - isl.reach) / GRID), z1 = Math.floor((isl.z + isl.reach) / GRID);
@@ -42,7 +43,14 @@ function seabed(x, z) {
   let b = WORLD.seaFloor + 7 * N.fbm(x * 0.004, z * 0.004, 3);
   const db = Math.hypot(x + 680, z - 820);
   b -= 150 * (1 - smoothstep(60, 400, db));
-  b -= 28 * smoothstep(-380, -900, x);
+  const dh = Math.hypot(x, z - 80);
+  b -= 28 * smoothstep(-380, -900, x) * (1 - smoothstep(1500, 2400, dh));
+  // the sea floor falls away the farther out you go
+  b -= 30 * smoothstep(1300, 2600, dh) + 50 * smoothstep(2800, 4600, dh) + 70 * smoothstep(4800, 6800, dh);
+  b += 14 * N2.fbm(x * 0.0012 + 7, z * 0.0012 - 3, 3) * smoothstep(1300, 2600, dh);
+  // the Abyssal Trench: the deepest water in the world
+  const dt = Math.hypot(x + 4680, z - 4580);
+  b -= 330 * (1 - smoothstep(120, 620, dt));
   return b;
 }
 
@@ -52,6 +60,11 @@ function islandH(isl, x, z) {
   if (dist > isl.reach) return -1e9;
   const w = 1 + isl.warp * N2.fbm(x * isl.wf + isl.seed, z * isl.wf - isl.seed * 0.7, 3) * 1.4;
   const R = isl.r * w;
+  if (isl.h < 0) {
+    // a drowned bank: a shallow plateau with gently shelving sides, never dry land
+    const top = isl.h + isl.hill * N.fbm(x * 0.02 + isl.seed, z * 0.02, 2);
+    return dist < R ? Math.min(-0.6, top) : Math.min(-0.6, top) - (dist - R) * isl.slope;
+  }
   if (dist < R) {
     const t = 1 - dist / R;
     const core = Math.pow(smoothstep(0, 1, t / isl.rise), isl.shape);
@@ -158,10 +171,51 @@ export function nearLake(x, z) {
 }
 
 /* ---------------- colour ---------------- */
+/** The dominant terrain style at a point ('home', 'frost', 'volcanic'...). */
+export function styleAt(x, z) {
+  const sw = styleWeights(x, z);
+  let best = null, bv = 0.5;
+  for (const k in sw) if (sw[k] > bv) { bv = sw[k]; best = k; }
+  if (best) return best;
+  const d = distHome(x, z);
+  return d < 1500 ? 'home' : d < 3000 ? 'isle' : d < 4500 ? 'rock' : 'dark';
+}
+/* Colours for the far islands, by style: [sand, grass/ground, rock, underwater sand]. */
+const STYLE_COL = {
+  woods:    { sand: 0xb8a878, low: 0x3e6a30, high: 0x2a4a22, rock: 0x5a5e54, sea: 0x6a6a4a, ink: 0x6a5a3a },
+  volcanic: { sand: 0x2e2a2a, low: 0x4a3a32, high: 0x3a2a26, rock: 0x2a2224, sea: 0x3a3230, ink: 0x6a4a3a, lava: true },
+  cliff:    { sand: 0x9a9a8a, low: 0x8aa060, high: 0x6a8a4a, rock: 0xb0aa98, sea: 0x7a7a6a, ink: 0xa89a7a },
+  crystal:  { sand: 0xf4f0e8, low: 0xd8e8e0, high: 0xa8d8d0, rock: 0xc8e0f0, sea: 0xe8f0f0, ink: 0xe0e0d8 },
+  swamp:    { sand: 0x5a5438, low: 0x4a5a30, high: 0x3a4a28, rock: 0x4a4a3a, sea: 0x3a3a28, ink: 0x5a4a30 },
+  rust:     { sand: 0x8a7056, low: 0x7a6a4a, high: 0x6a5a40, rock: 0x7a4a32, sea: 0x5a4a3a, ink: 0x8a6a4a },
+  ghost:    { sand: 0xa8a494, low: 0x7a806a, high: 0x6a705a, rock: 0x6a6a64, sea: 0x6a6a60, ink: 0x8a8676 },
+  storm:    { sand: 0x5a5a62, low: 0x4a5a58, high: 0x3a4448, rock: 0x3a3e48, sea: 0x3a3e46, ink: 0x5a5a5e },
+  tide:     { sand: 0xc8c0a0, low: 0x6a9a6a, high: 0x5a8a5a, rock: 0x6a7278, sea: 0x8a8a78, ink: 0x9a9280 },
+  ruins:    { sand: 0xe8d8a8, low: 0xa8b070, high: 0x8aa060, rock: 0xc8b890, sea: 0xd8c898, ink: 0xc8b08a },
+  abyss:    { sand: 0x2a2632, low: 0x3a3440, high: 0x2e2a36, rock: 0x241e2c, sea: 0x14101a, ink: 0x3a3440 },
+  isle:     { sand: 0xecdcac, low: 0x7aae48, high: 0x5f9236, rock: 0x8a8272, sea: 0xd8c898, ink: 0xc8b084 },
+  rock:     { sand: 0x9a968a, low: 0x6a8a54, high: 0x5a7a4a, rock: 0x6a6e70, sea: 0x6a6a64, ink: 0x8a8676 },
+  dark:     { sand: 0x4a4a50, low: 0x4a5448, high: 0x3a443a, rock: 0x3a3c42, sea: 0x2a2c32, ink: 0x5a5a5a },
+};
+
 export function colourAt(x, z, h, ny) {
-  const rw = regionWeights(x, z);
+  const rw = styleWeights(x, z);
   const v = N.noise(x * 0.05, z * 0.05) * 0.5 + N2.noise(x * 0.15, z * 0.15) * 0.25;
   const inLake = nearLake(x, z);
+  const st = STYLE_COL[styleAt(x, z)];
+  if (st) {
+    // the far islands: one palette per style
+    const rock = ny < 0.72;
+    if (h < -0.35) return mixHex(st.sea, st === STYLE_COL.crystal ? 0x3a9aa8 : st === STYLE_COL.abyss ? 0x0a0810 : 0x2a3a3a, smoothstep(-0.3, -14, h) * 0.85);
+    let c;
+    if (st.lava && h > 55 && ny > 0.5) c = mixHex(0x6a2a1a, 0x8a3a1a, 0.5 + v);                 // the scorched crater rim
+    else if (rock) c = mixHex(st.rock, shadeHexT(st.rock, 0.8), 0.5 + v);
+    else if (h < 1.4 && !inLake) c = mixHex(st.sand, shadeHexT(st.sand, 0.92), 0.5 + v);
+    else if (st === STYLE_COL.frost) c = mixHex(0xf1f6f8, 0xdde8ee, 0.5 + v);
+    else c = mixHex(st.low, st.high, smoothstep(0.4, 0.8, forestAt(x, z)) * 0.8 + v * 0.3);
+    if (!rock && h > 0.6) { const pa = pathAt(x, z); if (pa > 0) c = mixHex(c, st.ink, pa * 0.9); }
+    return c;
+  }
   let c;
   if (h < -0.35) {
     // under water
@@ -223,9 +277,18 @@ export class Terrain {
   }
 
   _scan() {
-    // find chunks that contain any ground shallower than -10 m
-    for (let cx = -Math.ceil(HALF / CHUNK); cx < Math.ceil(HALF / CHUNK); cx++) {
-      for (let cz = -Math.ceil(HALF / CHUNK); cz < Math.ceil(HALF / CHUNK); cz++) {
+    // find chunks that contain any ground shallower than -11 m. The sea is
+    // 15 km across and almost all of it is deep water, so only the chunks
+    // round an island (or a lake) are ever looked at.
+    const cand = new Set();
+    for (const isl of ISLANDS) {
+      const R = Math.min(isl.reach, isl.r * 1.4 + 60 + 12 / isl.slope);
+      for (let cx = Math.floor((isl.x - R) / CHUNK); cx <= Math.floor((isl.x + R) / CHUNK); cx++)
+        for (let cz = Math.floor((isl.z - R) / CHUNK); cz <= Math.floor((isl.z + R) / CHUNK); cz++) cand.add(cx + ',' + cz);
+    }
+    for (const key of cand) {
+      const [cx, cz] = key.split(',').map(Number);
+      {
         let max = -1e9;
         for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
           const h = heightAt(cx * CHUNK + i * CHUNK / 4, cz * CHUNK + j * CHUNK / 4);
@@ -237,13 +300,11 @@ export class Terrain {
     }
   }
 
-  /** Build every coarse chunk now (called under the loading screen). */
-  buildCoarse() {
-    for (const ch of this.chunks.values()) {
-      ch.lod1 = this._mesh(ch.cx, ch.cz, 8, false);
-      this.group.add(ch.lod1);
-    }
-  }
+  /** Coarse chunks are built lazily now: only what is within sight of the
+      player, the first time it comes into view (the sea is too big to build
+      every island at load). */
+  buildCoarse() {}
+  _coarse(ch) { ch.lod1 = this._mesh(ch.cx, ch.cz, 8, false); this.group.add(ch.lod1); }
 
   _mesh(cx, cz, cells, receive) {
     const size = CHUNK / cells;
@@ -313,12 +374,19 @@ export class Terrain {
 
   /** Stream detailed chunks around (x, z) within a time budget in ms. */
   update(x, z, budgetMs = 6) {
-    const NEAR = 250, FAR = 380;
+    const NEAR = 250, FAR = 380, VIEW = 3400;
     const t0 = performance.now();
-    const want = [];
+    const want = [], coarse = [];
     for (const ch of this.chunks.values()) {
       const d = Math.hypot(ch.cx * CHUNK + CHUNK / 2 - x, ch.cz * CHUNK + CHUNK / 2 - z);
       ch.dist = d;
+      // islands over the horizon are not drawn at all (the fog has them long before this)
+      if (d > VIEW) {
+        if (ch.lod1) ch.lod1.visible = false;
+        if (ch.lod0) { this.group.remove(ch.lod0); ch.lod0.geometry.dispose(); ch.lod0 = null; }
+        continue;
+      }
+      if (!ch.lod1 && d < (this._coarseR || VIEW)) coarse.push(ch);
       if (d < NEAR && !ch.lod0) want.push(ch);
       if (d > FAR && ch.lod0) {
         this.group.remove(ch.lod0);
@@ -335,11 +403,18 @@ export class Terrain {
       this.group.add(ch.lod0);
       if (ch.lod1) ch.lod1.visible = false;
     }
-    return want.length;
+    // islands coming over the horizon: the nearest first, a few a frame
+    coarse.sort((a, b) => a.dist - b.dist);
+    for (const ch of coarse) {
+      if (performance.now() - t0 > budgetMs * 1.5) break;
+      this._coarse(ch);
+      if (ch.lod0) ch.lod1.visible = false;
+    }
+    return want.length + coarse.length;
   }
 
   /** Build all near chunks immediately (loading screen). */
-  prebuild(x, z) { this.update(x, z, 1e9); }
+  prebuild(x, z) { this._coarseR = 1700; this.update(x, z, 1e9); this._coarseR = 0; }
 }
 
 /* ---------------- ice sheet mesh ---------------- */

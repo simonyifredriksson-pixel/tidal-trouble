@@ -22,7 +22,7 @@
 
 import * as THREE from '../../lib/three.module.js';
 import { FISH_BY_ID, FISH, rollSize, RARITY, ZMIN, rollVariant, zoneSizeBoost, zoneValue, fightOf, VARIANT_BY_ID } from '../data/FishData.js';
-import { zoneAt } from '../world/MapData.js';
+import { zoneAt, stormAt, FISH_SPOTS } from '../world/MapData.js';
 import { ROD_BY_ID, BAIT_BY_ID, RODS } from '../data/GearData.js';
 import { buildBobber } from '../art/RodArt.js';
 import { fishMesh } from '../art/FishArt.js';
@@ -33,6 +33,11 @@ const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 /* ---------------- species selection (shared with holders and traps) ---------------- */
 export function pickSpecies(ctx, r = Math.random) {
+  const pick = weighted(speciesWeights(ctx), r);
+  return pick ? pick.f : FISH_BY_ID.boot;
+}
+/** Every species that can bite here, with its weight. */
+export function speciesWeights(ctx) {
   const list = [];
   for (const f of FISH) {
     if (f.where === 'meteor') { if (!ctx.meteor) continue; }
@@ -41,6 +46,8 @@ export function pickSpecies(ctx, r = Math.random) {
     else if (f.where !== 'all' && !f.where.includes(ctx.region)) continue;
     if (f.zoneOnly !== undefined && (ctx.zone || 0) !== f.zoneOnly) continue;
     if (f.hotspot && ctx.hotspot !== f.hotspot) continue;
+    // a fish that lives in one spot (the ruins, the vents, the rip...) bites only there
+    if (f.spot && !(ctx.spots && ctx.spots.includes(f.spot))) continue;
     if (f.weather === 'storm' && !ctx.storm) continue;
     if (f.water === 'lake' && ctx.water !== 'lake') continue;
     if (f.water === 'fresh' && ctx.water !== 'lake' && ctx.water !== 'ice') continue;
@@ -56,8 +63,12 @@ export function pickSpecies(ctx, r = Math.random) {
     if (tm <= 0) continue;
     let w = f.rarity === 'junk' ? 4 : RARITY[f.rarity].w;
     if (ctx.lucky) { if (f.rarity === 'epic' || f.rarity === 'legendary') w *= 2.2; else if (f.rarity === 'rare') w *= 1.5; }
+    if (ctx.lucky2 && ['rare', 'epic', 'legendary'].includes(f.rarity)) w *= 1.4;
+    if (ctx.magnet && (f.junk || f.beh === 'chest' || f.id === 'strongbox')) w *= 2;
+    if (ctx.bolt && f.weather === 'storm') w *= 3;
     if (ctx.deep && (f.rarity === 'rare' || f.rarity === 'epic')) w *= 1.4;
-    if (ctx.migration && f.rarity === 'common') w *= 3;
+    if ((ctx.migration || ctx.hotspot === 'school') && f.rarity === 'common') w *= 3;
+    if (f.spot) w *= 2.5;
     if (ctx.whirl && f.rarity !== 'common') w *= 1.8;
     if (ctx.meteor && f.id === 'starfish') w *= 30;
     if (f.id === 'bombfish' && ctx.bait === 'explosive') w *= 4;
@@ -65,7 +76,8 @@ export function pickSpecies(ctx, r = Math.random) {
     if (ctx.mystery && f.id === 'strongbox') w *= 400;
     if (f.hotspot && ctx.hotspot === f.hotspot) w *= 30;
     if (ctx.hotspot && !f.hotspot && ['rare', 'epic', 'legendary'].includes(f.rarity)) w *= 2.2;
-    if (ctx.hotspot === 'debris' && f.junk && f.junk !== 'chest') w *= 6;
+    if ((ctx.hotspot === 'debris' || ctx.hotspot === 'wreck') && f.junk && f.junk !== 'chest') w *= 6;
+    if (ctx.hotspot === 'wreck' && (f.id === 'strongbox' || f.beh === 'chest')) w *= 5;
     if (ctx.storm && f.weather === 'storm') w *= 8;
     // a hidden place has its own fish, and the grotto keeps most of the others out
     if (ctx.site && f.site === ctx.site) w *= 12;
@@ -74,13 +86,15 @@ export function pickSpecies(ctx, r = Math.random) {
     // the farther out, the crazier it gets
     const z = ctx.zone || 0, zm = ZMIN[f.id] ?? 0;
     if (z < zm) w *= 0.03;
-    else w *= 1 + (z - zm) * 0.12;
-    const rs = { common: 1 - 0.14 * z, uncommon: 1 + 0.3 * z, rare: 1 + 0.65 * z, epic: 1 + 1.1 * z, legendary: 1 + 1.5 * z, junk: 1 - 0.1 * z }[f.rarity] ?? 1;
+    else w *= 1 + Math.min(4, z - zm) * 0.12;
+    // rarity leans rarer with every zone, but beyond the Abyss it flattens out
+    // (the far species are already rare and valuable in their own right)
+    const zr = z <= 4 ? z : 4 + (z - 4) * 0.35;
+    const rs = { common: 1 - 0.14 * zr, uncommon: 1 + 0.3 * zr, rare: 1 + 0.65 * zr, epic: 1 + 1.1 * zr, legendary: 1 + 1.5 * zr, junk: 1 - 0.1 * zr }[f.rarity] ?? 1;
     w *= Math.max(0.25, rs);
     list.push({ f, w: w * aff * tm });
   }
-  const pick = weighted(list, r);
-  return pick ? pick.f : FISH_BY_ID.boot;
+  return list;
 }
 
 export function rollCatch(sp, r = Math.random, luck = 0, zone = 0) {
@@ -123,7 +137,12 @@ export class Fishing {
     this.msgT = 0;
   }
 
-  get rod() { return ROD_BY_ID[this.game.state.s.rod] || ROD_BY_ID.basic; }
+  get rod() {
+    const R = ROD_BY_ID[this.game.state.s.rod] || ROD_BY_ID.basic;
+    // the Pressure Line: in really deep water the rod holds as if it were a size stronger
+    if (this.game.state.has('pressure') && this.state === 'fight' && this.game.world.height(this.bpos.x, this.bpos.z) < -150) return { ...R, rating: R.rating + 0.2 };
+    return R;
+  }
   get active() { return this.state !== 'idle'; }
 
   cancel(silent = false) {
@@ -145,7 +164,10 @@ export class Fishing {
       lucky: G.state.has('lucky'), deep: G.world.height(p.x, p.z) < -20,
       migration: ev.near('migration', p, 90), whirl: ev.near('whirlpool', p, 80), meteor: ev.near('meteor', p, 30),
       zone: this.zoneHere(),
-      storm: ev.storm > 0.45 || (G.beasts?.stormy?.() ?? false),
+      storm: ev.storm > 0.45 || (G.beasts?.stormy?.() ?? false) || stormAt(p.x, p.z) > 0.6,
+      spots: FISH_SPOTS.filter(S => Math.hypot(p.x - S.x, p.z - S.z) < S.r).map(S => S.id),
+      magnet: G.state.has('magnet'), bolt: !!G.isles?.recentBolt(p),
+      lucky2: G.state.has('prismlens') && (tod < 0.22 || tod > 0.8),
       hotspot: G.ocean?.hotspotAt(p)?.kind || null,
       mystery: !!G.ocean?.mysteryAt(p),
       site: G.world.secrets?.siteAt(p)?.id || null,
@@ -164,6 +186,11 @@ export class Fishing {
     if (ev.near('meteor', this.bpos, 30)) t /= 2;
     if (G.state.s.bait === 'glow' && (G.tod < 0.22 || G.tod > 0.8)) t /= 1.3;
     if (G.ocean?.hotspotAt(this.bpos)) t /= 2.2;
+    const night = G.tod < 0.22 || G.tod > 0.8;
+    // island gear: a moth lantern over a lake at night, a prism lens in the dark, lightning in the water
+    if (night && G.state.has('moth') && (this.water === 'lake' || this.water === 'ice')) t /= 1.6;
+    if (night && G.state.has('prismlens')) t /= 1.3;
+    if (G.isles?.recentBolt(this.bpos)) t /= 3;
     return t;
   }
 

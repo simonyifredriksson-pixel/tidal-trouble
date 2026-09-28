@@ -1,4 +1,4 @@
-/* Hooked - UI in the same low-poly language as the world:
+﻿/* Hooked - UI in the same low-poly language as the world:
    faceted panels (irregular chamfered corners, hard-stop gradients that
    read as planes), wood, parchment, sea glass. No emoji anywhere. */
 
@@ -315,7 +315,13 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .story p { font-size: 15px; line-height: 1.55; font-weight: 700; color: var(--ink); max-width: 760px; }
 .story .bottle { padding: 12px 16px; margin-bottom: 10px; background: linear-gradient(135deg, rgba(255,255,255,0.6) 0 50%, rgba(255,255,255,0.35) 50%); clip-path: var(--cut-s); font-family: var(--display); font-size: 16px; line-height: 1.5; }
 .mapwrap { position: relative; display: grid; grid-template-columns: 1fr 250px; gap: 14px; min-height: 0; }
-.mapwrap canvas { width: 100%; aspect-ratio: 1; clip-path: var(--cut); background: #1a4a58; display: block; max-height: 68vh; }
+.mapcol { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.mapzoom { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; width: min(64vh, 58vw); }
+.mapzoom .btn { padding: 5px 12px; font-size: 14px; }
+.mapwrap:has(.mapcol) { grid-template-columns: auto minmax(220px, 1fr); }
+.mapzoom .spacer { flex: 1; }
+.mapwrap canvas { width: min(64vh, 58vw); aspect-ratio: 1; clip-path: var(--cut); background: #1a4a58; display: block; touch-action: none; cursor: grab; }
+.mapwrap .legend { max-height: 70vh; overflow-y: auto; }
 .legend { display: grid; gap: 6px; align-content: start; font-weight: 800; font-size: 13px; }
 .legend div { display: flex; align-items: center; gap: 8px; }
 .legend .gi { font-size: 22px; }

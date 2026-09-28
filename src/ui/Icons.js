@@ -113,6 +113,14 @@ const I = {
   shield: [P('M24 4 L40 10 L38 30 L24 44 L10 30 L8 10Z', M2), P('M24 4 L40 10 L38 30 L24 24Z', M1), P('M24 24 L38 30 L24 44Z', M3), P('M20 14 L28 14 L28 28 L20 28Z', R2)],
   box: [P('M8 16 L24 8 L40 16 L40 36 L24 44 L8 36Z', W2), P('M8 16 L24 8 L40 16 L24 24Z', W1), P('M24 24 L40 16 L40 36 L24 44Z', W3)],
   light: [P('M18 6 L30 6 L34 20 L28 30 L20 30 L14 20Z', G1), P('M18 6 L24 6 L24 30 L20 30 L14 20Z', '#fff4c8'), P('M19 30 L29 30 L28 38 L20 38Z', M2), P('M21 38 L27 38 L26 42 L22 42Z', M3)],
+  volcano: [P('M2 42 L18 16 L30 16 L46 42Z', K1), P('M18 16 L30 16 L24 42 L2 42Z', K2), P('M18 16 L30 16 L27 20 L21 20Z', R2), P('M21 20 L27 20 L25 30 L23 30Z', O2), P('M20 12 L22 4 L25 11Z', M3), P('M26 12 L30 6 L28 14Z', M2)],
+  crystal: [P('M20 6 L28 6 L30 34 L24 42 L18 34Z', '#9af0f0'), P('M20 6 L24 6 L24 42 L18 34Z', '#d8fcff'), P('M8 18 L14 16 L18 36 L12 40Z', '#c8b0f8'), P('M34 14 L40 18 L36 38 L30 36Z', '#f0b8e0'), P('M34 14 L37 16 L33 37 L30 36Z', '#fcd8f0')],
+  cliff: [P('M12 44 L12 8 L36 6 L38 44Z', M2), P('M12 44 L12 8 L22 8 L20 44Z', M1), P('M10 8 L38 6 L38 10 L10 12Z', F2), P('M20 2 L24 2 L24 8 L20 8Z', W2), P('M2 42 L46 42 L46 46 L2 46Z', B2)],
+  swamp: [P('M14 22 L18 22 L16 40Z', W3), P('M8 44 L14 30 L16 40Z', W3), P('M24 44 L18 30 L16 40Z', W3), P('M4 20 Q16 4 30 18 L24 22 L8 24Z', F3), P('M20 14 Q34 6 44 20 L38 24 L24 22Z', F2), P('M2 40 Q12 36 24 42 Q36 46 46 40 L46 46 L2 46Z', '#5a6a3a')],
+  wreck: [P('M6 30 L40 22 L36 34 L10 40Z', W3), P('M6 30 L40 22 L40 25 L7 33Z', W2), P('M18 26 L20 6 L22 6 L22 26Z', W2), P('M22 8 L34 14 L22 18Z', C3), P('M2 38 Q14 34 24 40 Q36 44 46 38 L46 46 L2 46Z', B2)],
+  ghost: [P('M12 44 L12 18 Q12 6 24 6 Q36 6 36 18 L36 44 L32 40 L28 44 L24 40 L20 44 L16 40Z', C1), P('M12 44 L12 18 Q12 6 24 6 L24 40 L20 44 L16 40Z', C2), P('M17 18 L21 18 L21 24 L17 24Z', K2), P('M27 18 L31 18 L31 24 L27 24Z', K2)],
+  current: [P('M4 14 L30 14 L30 8 L44 18 L30 28 L30 22 L4 22Z', B2), P('M4 14 L30 14 L30 8 L44 18 L4 18Z', B1), P('M4 30 L22 30 L22 26 L32 34 L22 42 L22 38 L4 38Z', B3)],
+  lift: [P('M20 2 L28 2 L28 46 L20 46Z', M3), P('M12 18 L36 18 L36 34 L12 34Z', W2), P('M12 18 L24 18 L24 34 L12 34Z', W1), P('M16 22 L32 22 L32 30 L16 30Z', K2), P('M22 6 L26 6 L26 18 L22 18Z', K1)],
   target: [P('M24 4 L38 10 L44 24 L38 38 L24 44 L10 38 L4 24 L10 10Z', R2), P('M24 12 L32 16 L36 24 L32 32 L24 36 L16 32 L12 24 L16 16Z', C1), P('M24 18 L28 20 L30 24 L28 28 L24 30 L20 28 L18 24 L20 20Z', R2), P('M22 22 L26 22 L26 26 L22 26Z', R3)],
 };
 
@@ -125,6 +133,8 @@ export const ICON_NAMES = Object.keys(I);
 /* Which icon stands for what. */
 export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe' };
 export const EVENT_ICON = { storm: 'storm', migration: 'school', giant: 'fin', thief: 'mask', whirlpool: 'whirl', meteor: 'meteor' };
-export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light' };
+export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light',
+  whisper: 'pine', sunscar: 'volcano', skywatch: 'cliff', crystal: 'crystal', frostfall: 'mountain', dread: 'swamp', ironwreck: 'wreck', lost: 'ghost',
+  thunder: 'storm', tide: 'current', crown: 'crown', abyssal: 'abyss', mid: 'wave', outer: 'wave', extreme: 'storm' };
 export const CLUE_ICON = { mark: 'eye', scale: 'scale', sound: 'ear', sonar: 'ping', catch: 'hook' };
-export const PART_ICON = { engine: 'engine', hull: 'shield', storage: 'box', lights: 'light', mount: 'harpoon', sonar: 'sonar', holders: 'rod' };
+export const PART_ICON = { engine: 'engine', hull: 'shield', storage: 'box', lights: 'light', mount: 'harpoon', sonar: 'sonar', holders: 'rod', anchor: 'anchor' };

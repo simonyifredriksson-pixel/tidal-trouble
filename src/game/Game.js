@@ -25,7 +25,7 @@ import { PLAYER_LOOKS } from '../art/Character.js';
 import { fishMesh } from '../art/FishArt.js';
 import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js';
 import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js';
-import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats } from '../data/BoatData.js';
+import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats, partCap } from '../data/BoatData.js';
 import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js';
 import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js';
 import { nearLake } from '../world/Terrain.js';
@@ -45,8 +45,10 @@ import { GREAT, GREAT_BY_ID, KRAKEN } from '../data/GreatData.js';
 import { TROPHY_BY_ID, speciesTrophy } from '../data/TrophyData.js';
 import { VIGIL_FISHERMEN, NPC_BY_ID } from '../data/NPCData.js';
 import { SHOPS } from '../data/GearData.js';
+import { ISLAND_TELEPORTS, ISLAND_INFO } from '../data/IslandData.js';
+import { IslandLife } from './IslandLife.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
-import { mistAt, VIGIL } from '../world/MapData.js';
+import { mistAt, VIGIL, WORLD, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const fill = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] !== undefined ? o[k] : m));
@@ -102,6 +104,7 @@ export class Game {
     this.great = new Great(this);
     this.beasts = new Beasts(this);
     this.ocean = new Ocean(this);
+    this.isles = new IslandLife(this);
     this.admin = this.admin || { autoCatch: false, autoCast: false };
     // every lightning bolt, storm or beast, is followed by its thunder
     this.world.sky.onThunder = d => setTimeout(() => this.audio.thunder(d), Math.min(2500, d / 340 * 1000));
@@ -122,6 +125,10 @@ export class Game {
     }
     for (const t of s.traps || []) this.tools.addTrap(t);
     for (const h of s.holes || []) this.tools.addHole(h);
+    // augers only come from Frostfall now, so Ingrid keeps a few holes open on Frostbite Lake for everyone
+    if (!this.state.remote && ![...this.tools.holes.values()].some(h => Math.hypot(h.x - 30, h.z + 650) < 40)) {
+      for (const [x, z] of [[30, -640], [18, -652], [42, -658]]) { const h = { id: uid('h'), x, z, ingrid: true }; this.tools.addHole(h); (s.holes = s.holes || []).push(h); }
+    }
     this.world.prebuild(this.player.pos.x, this.player.pos.z);
     if (!this.state.remote) this._backfillTrophies();
     this.cabin.update();
@@ -166,7 +173,7 @@ export class Game {
   isNight() { return this.tod < 0.22 || this.tod > 0.8; }
   isLake(x, z) {
     const L = nearLake(x, z);
-    return !!L && !L.ice && Math.hypot(x - L.x, z - L.z) < L.r * 1.2;
+    return !!L && !L.ice && !L.sea && Math.hypot(x - L.x, z - L.z) < L.r * 1.2;
   }
   fishMeshCache(id) {
     this._fmc = this._fmc || {};
@@ -264,7 +271,7 @@ export class Game {
         if (!boat) break;
         const L = boat.leaks[c.leak];
         if (!L) break;
-        L.fix += c.dt / 1.6;
+        L.fix += c.dt / (1.6 * (boat.stats.repair || 1)) * (S.has('patchkit') ? 2 : 1);
         if (L.fix >= 1) { boat.leaks.splice(c.leak, 1); this.tell(from, 'Leak fixed.', 'good'); }
         break;
       }
@@ -272,7 +279,7 @@ export class Game {
         if (!boat) break;
         const B = boat.breaks[c.i];
         if (!B) break;
-        B.fix += c.dt / (B.kind === 'rail' ? 2.2 : 3.2);
+        B.fix += c.dt / ((B.kind === 'rail' ? 2.2 : 3.2) * (boat.stats.repair || 1)) * (S.has('patchkit') ? 2 : 1);
         if (B.fix >= 1) { boat.breaks.splice(c.i, 1); this.tell(from, { rail: 'Rail nailed back together.', wheel: 'The wheel turns freely again.', engine: 'The engine coughs back to life.', mount: 'The harpoon gun is unjammed.' }[B.kind], 'good'); }
         break;
       }
@@ -298,6 +305,9 @@ export class Game {
       case 'drive':
         if (boat && boat.driver === from) boat.control(c.th, c.st);
         break;
+      case 'anchorThrow': if (boat && boat.throwAnchor(new THREE.Vector3(...c.p), new THREE.Vector3(...c.v))) s.stats.anchors = (s.stats.anchors || 0) + 1; break;
+      case 'anchorReel': if (boat) boat.haulAnchor(0.3); break;
+      case 'anchorDrop': if (boat) boat.dropAnchor(); break;
       case 'harpoon':
         if (c.id === 'lev') this.creatures.levHit(c.dmg);
         else {
@@ -693,8 +703,15 @@ export class Game {
     const dir = P.pos.clone().sub(from).setY(0).normalize();
     this.knockPlayer(P, dir, force + 4, 'thrown');
   }
-  shock(P, it) {
+  shock(P, it, bolt = false) {
     const pos = it ? it.pos : P.pos;
+    if (bolt) {
+      // lightning down the mast: no gloves in the world help with that
+      this._everyone({ t: 'zap', p: pos.toArray() });
+      if (P === this.player) { P.stunT = 1.6; this.dropHeld(P, true); this.hurtPlayer(P, 14, 'shock'); this.ui.banner('STRUCK!', 'Lightning hit the boat and went straight through everyone aboard. A lightning rod would have taken it.', 'storm', 3); }
+      else this.net?.sendEvent({ t: 'shock', to: P.id, sting: false, name: 'Lightning' });
+      return;
+    }
     const sp = it ? FISH_BY_ID[it.sp] : null;
     const sting = sp?.beh === 'sting';
     if (!sting) this._everyone({ t: 'zap', p: pos.toArray() });
@@ -856,14 +873,15 @@ export class Game {
     else if (k === 'gear') { const Gd = GEAR_BY_ID[id]; if (Gd && !s.gear[id] && ok(Gd.price)) s.gear[id] = true; }
     else if (k === 'hull') { const H = HULL_BY_ID[id]; if (H && !s.hulls.includes(id) && ok(H.price)) { s.hulls.push(id); s.boat.hull = id; this._boatChanged(); } }
     else if (k === 'useHull') { if (s.hulls.includes(id)) { s.boat.hull = id; this._boatChanged(); } }
-    else if (k === 'part') { const P = PART_BY_ID[id]; const lv = s.boat.parts[id] || 0; if (P && lv < P.max && ok(P.prices[lv + 1])) { s.boat.parts[id] = lv + 1; this._boatChanged(); } }
+    else if (k === 'part') { const P = PART_BY_ID[id]; const lv = s.boat.parts[id] || 0; if (P && lv < partCap(P, HULL_BY_ID[s.boat.hull] || {}) && ok(P.prices[lv + 1])) { s.boat.parts[id] = lv + 1; this._boatChanged(); } }
     else if (k === 'paint') { const P = PAINT_BY_ID[id]; if (P && !s.paints.includes(id) && ok(P.price)) { s.paints.push(id); s.boat.paint = id; this._boatChanged(); } }
     else if (k === 'applyPaint') { if (s.paints.includes(id)) { s.boat.paint = id; this._boatChanged(); } }
     else if (k === 'decor') { const D = DECOR_BY_ID[id]; if (D && !s.decorOwned.includes(id) && ok(D.price)) { s.decorOwned.push(id); s.boat.decor.push(id); this._boatChanged(); } }
     else if (k === 'toggleDecor') { if (s.decorOwned.includes(id)) { const i = s.boat.decor.indexOf(id); if (i >= 0) s.boat.decor.splice(i, 1); else s.boat.decor.push(id); this._boatChanged(); } }
     else if (k === 'repair') {
       const b = this.boats[0];
-      const cost = Math.ceil((b.stats.hp - b.hp) * 0.6) + b.leaks.length * 15;
+      // harder hulls cost more to fix; Big Olga at Ironwreck charges half of what anyone else does
+      const cost = Math.ceil(((b.stats.hp - b.hp) * 0.6 + b.leaks.length * 15) * (b.stats.repair || 1) * (id === 'ironwreck' ? 0.5 : 1));
       if (cost > 0 && ok(cost)) { b.hp = b.stats.hp; b.leaks = []; b.water = 0; b.fires = []; this.tell(from, 'Good as new. Mostly.', 'good'); }
     }
     this._saveDirty = true;
@@ -939,6 +957,7 @@ export class Game {
     if (!this.running) return;
     const I = this.input, P = this.player, UI = this.ui;
     const blocked = I.blocked || UI.isOpen;
+    this._dt = dt;
     this.tod = (this.tod + dt / 1080) % 1;
     if (this.tod < dt / 1080) this.state.s.day++;
     this.state.s.tod = this.tod;
@@ -962,11 +981,30 @@ export class Game {
       this._slaps(dt);
     }
     for (const b of this.boats) b.visuals(dt, this.fx, this.world, this._night());
+    // foam on the current: the stronger it runs, the more you see
+    if (P.boat || P.mode === 'swim') {
+      const c = this.world.current(P.pos.x, P.pos.z);
+      const n = c.s > 0.25 ? Math.min(4, c.s * 1.5) * dt * 20 : 0;
+      for (let i = 0; i < n; i++) {
+        if (Math.random() > n - i) break;
+        const a = Math.random() * 6.28, r = 3 + Math.random() * 22, x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
+        if (this.world.height(x, z) > -0.5) continue;
+        this.fx.foam(x, this.world.sea(x, z) + 0.04, z, c.x, c.z);
+      }
+    }
+    // the anchor, from the helm and from the deck
+    this._anchorWarnT = (this._anchorWarnT || 0) - dt;
+    if (P.boat && this._anchorWarnT <= 0) {
+      const A = P.boat.anchor;
+      if (P.mode === 'drive' && A.st === 'set' && Math.abs(P.boat.throttle) > 0.3) { this.ui.toast('The anchor is still down! Haul it up at the bow before you motor off.', 'warn'); this._anchorWarnT = 6; }
+      else if (A.drag > 0) { this.ui.toast(`The anchor is dragging - this current is too strong for the ${P.boat.anchorSpec.name}. Marge sells heavier ones.`, 'warn'); this._anchorWarnT = 9; }
+    }
     this.loot.update(dt, host);
     this.creatures.update(dt, host);
     this.great.update(dt, host);
     this.beasts.update(dt, host);
     this.ocean.update(dt, host);
+    this.isles.update(dt, host);
     this.events.update(dt, host);
     this.npcs.update(dt);
     for (const r of this.remotes.values()) r.update(dt);
@@ -992,7 +1030,7 @@ export class Game {
         }
       }
       // the abyss in the dark with no lights: something keeps bumping the hull
-      if (this.isHost && P.boat && this.zone >= 4 && P.boat.stats.lights < 1 && Math.random() < 0.06) {
+      if (this.isHost && P.boat && this.zone >= 4 && P.boat.stats.lights < 1 && (P.boat.stats.deep || 0) < 0.9 && Math.random() < 0.06) {
         P.boat.impulse((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, 0.6, 1);
         P.boat.damage(6, 'abyss');
         this.ui.toast('Something big just bumped the hull. You need lights out here.', 'bad');
@@ -1028,10 +1066,17 @@ export class Game {
     // world, sky, lights
     const reg = this.world.weights(P.pos.x, P.pos.z);
     const lights = (P.boat ? P.boat.stats.lights : 0) / 3;
-    const edge = clamp((Math.max(Math.abs(P.pos.x), Math.abs(P.pos.z)) - 1150) / 150, 0, 1);
+    const dh = distHome(P.pos.x, P.pos.z);
+    const edge = clamp((dh - (WORLD.edge - 450)) / 450, 0, 1);
     const mist = mistAt(P.pos.x, P.pos.z);
     this.mist = mist;
-    const env = { tod: this.tod, storm: this.world.storm, dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0), frost: reg.frost, underwater: P.underwater, lights, edge, mist };
+    // the weather that belongs to a place (Thunderpeak's storm, the Lost Shores' fog, the Abyss's dark)
+    const localStorm = stormAt(P.pos.x, P.pos.z), fog = fogAt(P.pos.x, P.pos.z), gloom = gloomAt(P.pos.x, P.pos.z);
+    this.localStorm = localStorm;
+    const sw = styleWeights(P.pos.x, P.pos.z);
+    const env = { tod: this.tod, storm: Math.max(this.world.storm, localStorm), dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0, gloom), frost: sw.frost || 0, underwater: P.underwater, lights, edge, mist: Math.max(mist, fog * 0.8) * (this.state.has('foglamp') ? 0.45 : 1) };
+    // how far out you have ever been (the map and the charts use it)
+    if (dh > (this.state.s.farthest || 0)) this.state.s.farthest = Math.round(dh);
     // the first time anyone reaches Vigil's End
     if (mist > 0.93 && !this.state.s.flags.vigil && this.isHost) {
       this.state.s.flags.vigil = this.state.s.day;
@@ -1052,7 +1097,8 @@ export class Game {
     const L = this.world.sky;
     this.vm.syncLights(L.sun.color, L.sun.intensity, L.hemi.color, L.hemi.groundColor, L.hemi.intensity);
     const vmState = { moving: P.speed > 0.5 && P.mode === 'walk', sprint: P.sprint, look: I.blocked ? { x: 0, y: 0 } : { x: I.mouse.dx * 0.0022, y: I.mouse.dy * 0.0022 }, fishing: this.fishing.hud(), busy: this.tools.busy, holding: !!P.held && P.mode !== 'swim', aim: false,
-      swim: P.mode === 'swim' ? { moving: P.speed > 0.4, exhausted: P.exhausted } : null, walkie: this.voice.walkie };
+      swim: P.mode === 'swim' ? { moving: P.speed > 0.4, exhausted: P.exhausted } : null, walkie: this.voice.walkie,
+      anchor: this.hauling && P.boat ? { hand: P.boat.anchorSpec.winch === 'hand', crank: P.boat.anchor.crank } : null };
     if (!this.vm.onStroke) this.vm.onStroke = () => this.audio.stroke();
     // a big fish on the line tugs the whole view, not just the rod
     if (this.fishing.state === 'fight') {
@@ -1197,7 +1243,11 @@ export class Game {
     const b = P.boat;
     if (P.mode === 'drive') opt.push({ label: 'Leave the helm', run: () => { this.act({ t: 'helm', boat: b.id, on: false }); P.mode = 'walk'; } });
     else if (P.mode === 'mount') opt.push({ label: 'Leave the harpoon gun', run: () => { P.mode = 'walk'; } });
-    else if (P.mode === 'swim') opt.push({ label: 'Climb out', run: () => { if (!P.tryClimb()) UI.toast('Nothing to climb onto here.', 'info'); } });
+    else if (P.mode === 'swim') {
+      // things you can only reach underwater: the wrecks of Ironwreck, the Crown
+      for (const X of this.world.settlement.interact) if (X.swim && X.pos.distanceTo(P.pos) < X.r) opt.push({ label: X.label, icon: 'diving', run: () => this._useX(X) });
+      opt.push({ label: 'Climb out', run: () => { if (!P.tryClimb()) UI.toast('Nothing to climb onto here.', 'info'); } });
+    }
     else {
       // a kraken arm over the rail comes before everything else
       const arm = this.great.armNear(P.pos);
@@ -1233,7 +1283,21 @@ export class Game {
       if (b && !P.inHold) {
         const L = P.local;
         if (Math.hypot(L.x - b.hull.helm[0], L.z - b.hull.helm[2]) < 1.5) opt.push({ label: b.driver && b.driver !== P.id ? 'Someone else is steering' : 'Take the helm', run: () => { if (!b.driver || b.driver === P.id) { this.act({ t: 'helm', boat: b.id, on: true }); P.mode = 'drive'; this.fishing.cancel(true); } } });
-        if (b.parts.mount && Math.hypot(L.x - b.hull.mount[0], L.z - b.hull.mount[2]) < 1.6) opt.push({ label: 'Man the harpoon gun', run: () => { P.mode = 'mount'; this.fishing.cancel(true); } });
+        const dM = b.parts.mount ? Math.hypot(L.x - b.hull.mount[0], L.z - b.hull.mount[2]) : 99, dA = Math.hypot(L.x - b.hull.anchor[0], L.z - b.hull.anchor[1]);
+        const gun = () => { if (dM < 1.6) opt.push({ label: 'Man the harpoon gun', run: () => { P.mode = 'mount'; this.fishing.cancel(true); } }); };
+        if (dM < dA) gun();
+        // the anchor: throw it in, hold E to haul it back up, G to let a hanging one drop again
+        if (dA < 1.45) {
+          const A = b.anchor, S = b.anchorSpec;
+          if (A.st === 'stow') opt.push({ label: b.docked ? 'The anchor (you are tied up at the dock)' : 'Throw the anchor over', icon: 'anchor', run: () => { if (!b.docked) this._throwAnchor(b); } });
+          else if (A.st !== 'fly') {
+            const what = A.st === 'set' ? (A.drag > 0 ? 'DRAGGING' : 'holding') : A.st === 'sink' ? 'sinking' : 'hanging';
+            const drop = A.st === 'hang' && A.len < S.rope - 0.5 ? `  <span class="key">G</span> let it drop` : '';
+            opt.push({ label: `Hold E to haul up the anchor (${what}, ${Math.round(A.len)} m of ${S.chain ? 'chain' : 'rope'} out)${drop}`, icon: 'anchor', html: true, run: () => {}, hold: dt => this._haulAnchor(b, dt) });
+            if (drop && I.pressed('KeyG')) this.act({ t: 'anchorDrop', boat: b.id });
+          }
+        }
+        if (dM >= dA) gun();
       }
       // npcs
       const n = this.npcs.nearest(P.pos, 3.2);
@@ -1268,6 +1332,37 @@ export class Game {
     const o = opt[0];
     UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : null);
     if (E && o) o.run();
+    this.hauling = !!(o && o.hold && I.held('KeyE'));
+    if (this.hauling) o.hold(this._dt || 1 / 60);
+  }
+
+  /** Pick the anchor up off the rail, swing it and throw it over the side. */
+  _throwAnchor(b) {
+    if (this._anchorT > this.world.time) return;
+    const P = this.player;
+    this._anchorT = this.world.time + 0.9;
+    this.fishing.cancel(true);
+    this.vm.play('anchorThrow');
+    this.vm.anchorLevel = b.stats.anchor || 0;
+    this.audio.swoosh();
+    setTimeout(() => {
+      if (!this.running || P.boat !== b) return;
+      const S = b.anchorSpec;
+      const f = P.flatForward(new THREE.Vector3()).clone();
+      // never at your own feet: always out over the nearer side if you are facing inboard
+      const L = b.toLocal(P.eye.clone().addScaledVector(f, 2.5));
+      if (b.over(L.x, L.z, -0.3)) { const side = Math.sign(P.local.x) || 1; f.set(Math.cos(b.heading) * side, 0, -Math.sin(b.heading) * side).multiplyScalar(0.7).addScaledVector(b.forward(), 0.7).normalize(); }
+      const p = P.eye.clone().addScaledVector(f, 0.8); p.y -= 0.35;
+      const v = f.multiplyScalar(S.throwV).add(new THREE.Vector3(b.vel.x, 3.4, b.vel.y));
+      this.act({ t: 'anchorThrow', boat: b.id, p: p.toArray(), v: v.toArray() });
+      this.audio.throw();
+    }, 430);
+  }
+  /** Held E at the windlass: tell the host to keep hauling. */
+  _haulAnchor(b, dt) {
+    this._reelSend = (this._reelSend || 0) - dt;
+    if (this._reelSend <= 0) { this._reelSend = this.isHost ? 0 : 0.12; this.act({ t: 'anchorReel', boat: b.id }); }
+    this.fishing.cancel(true);
   }
 
   _grabHolder(H) {
@@ -1296,6 +1391,7 @@ export class Game {
       else this.ui.toast(Object.keys(s.trophies.placed).length ? 'Look at a trophy to read about it. Earn more and they will join it here.' : 'Empty, for now. Catch rare fish, reach far islands and survive monsters - every trophy you earn goes here.', 'info');
     }
     else if (X.kind === 'map') this.ui.open('map');
+    else if (['lift', 'telescope', 'totem', 'spring', 'note', 'salvage', 'cache', 'crown'].includes(X.kind)) this.isles.use(X);
     else if (X.kind === 'bell') { this.audio.bell(); this.audio.tone(392, 3, 'sine', 0.12, 0.01, 1, 0.2); this.ui.subtitle('The bell rings out over the fog. Somewhere far off, something answers - or it is only the echo off the rocks.', 5); }
     else if (X.kind === 'cairns') this.ui.subtitle('Eli Wren. The Kettle brothers. Sarah Moore and the Bright Promise. Every stone is a boat that went looking for the great ones and did not come home.', 8);
     else if (X.kind === 'gate') {
@@ -1327,8 +1423,9 @@ export class Game {
     if (role === 'vigil') return this._vigilTalk(n);
     const line = this.npcs.talk(n);
     const opts = [];
-    if (role === 'tackle') opts.push({ label: 'Show me the bait and gear', icon: 'rod', cb: () => this.ui.open('tackle') });
-    if (role === 'boatyard') opts.push({ label: 'Let me see the boats', icon: 'boat', cb: () => this.ui.open('boatyard') });
+    if (role === 'tackle') opts.push({ label: 'Show me the bait and gear', icon: 'rod', cb: () => this.ui.open('tackle', { shop: 'home' }) });
+    if (role === 'outfitter') opts.push({ label: 'Show me what you sell', icon: 'chest', cb: () => this.ui.open('tackle', { shop: d.shop }) });
+    if (role === 'boatyard') opts.push({ label: 'Let me see the boats', icon: 'boat', cb: () => this.ui.open('boatyard', { yard: d.yard || 'home' }) });
     if (role === 'guild') opts.push({ label: 'The Guild Map, please', icon: 'crown', cb: () => { this.ui.open('guild'); if (this.state.s.tut === 4) this._tut(5); } });
     opts.push({ label: 'Tell me more', icon: 'ear', cb: () => this._talk(n) });
     opts.push({ label: 'Never mind', bye: true });
@@ -1418,7 +1515,8 @@ export class Game {
       { id: 'offshore', name: 'Offshore - the kraken zone', water: [60, 740] },
       { id: 'black', name: 'The Blackwater', water: [-600, 760] },
       { id: 'vigil', name: "Vigil's End", at: () => this._inst.world.settlement.anchors.vigilLanding },
-      { id: 'vigilsea', name: "Vigil's End - the rock field (boat)", water: [860, 850] },
+      { id: 'vigilsea', name: "Vigil's End - the rock field (boat)", water: [VIGIL.x - 155, VIGIL.z - 155] },
+      ...ISLAND_TELEPORTS.map(T => ({ ...T, at: T.anchor ? () => this._inst.world.settlement.anchors[T.anchor] && (this._inst.world.settlement.anchors[T.anchor].pos || this._inst.world.settlement.anchors[T.anchor]) : undefined })),
       { id: 'grotto', name: "Smuggler's Grotto - inside (boat)", water: () => this._inst.world.settlement.anchors.grottoWater, heading: Math.atan2(-Math.cos(GROTTO.door), -Math.sin(GROTTO.door)) },
       { id: 'grottoLedge', name: "Smuggler's Grotto - the ledge", at: () => this._inst.world.settlement.anchors.grottoLedge },
       { id: 'temple', name: 'Drowned Temple - above it (boat)', water: () => this._inst.world.settlement.anchors.templeWater },
@@ -1440,7 +1538,7 @@ export class Game {
     } else if (T.water) {
       const w = typeof T.water === 'function' ? T.water() : null;
       const [x, z] = w ? [w.x, w.z] : T.water;
-      if (this.isHost && b) { b.pos.set(x, 0, z); b.vel.set(0, 0); if (T.heading !== undefined) { b.heading = T.heading; b.yawRate = 0; } b.docked = false; b.stolen = false; b.autopilot = null; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); }
+      if (this.isHost && b) { b.stowAnchor(); b.pos.set(x, 0, z); b.vel.set(0, 0); if (T.heading !== undefined) { b.heading = T.heading; b.yawRate = 0; } b.docked = false; b.stolen = false; b.autopilot = null; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); }
       else P.place(new THREE.Vector3(x, 0, z), P.yaw);
     } else { const p = T.at(); if (p) P.place(p.clone().add(new THREE.Vector3(0, 0.1, 0)), P.yaw); }
     this.world.prebuild(P.pos.x, P.pos.z);
@@ -1512,6 +1610,10 @@ export class Game {
       case 'secretsAll': for (const D of SECRETS) this._discover(D.id, P.id); break;
       case 'secretsReset': s.secrets = {}; s.caches = {}; this._changed(); break;
       case 'refill': s.caches = {}; this._changed(); break;
+      // the chart and the islands
+      case 'chartAll': this.isles.chartAll(); break;
+      case 'islesAll': for (const I of ISLAND_INFO) this.isles._discover(I, P); break;
+      case 'chartReset': this.isles.chartReset(); s.found = {}; s.sighted = {}; break;
     }
     this._saveDirty = true;
   }
@@ -1562,6 +1664,12 @@ export class Game {
       if (this.player.boat === boat) { this.addShake(0.3 + force * 0.05); if (force > 6) this.knockPlayer(this.player, this.player.flatForward(new THREE.Vector3()).clone(), force * 0.6, 'crash'); }
     });
     Bus.on('boat:wave', ({ boat }) => { if (this.player.boat === boat) this.ui.toast('These waves are too big for this boat!', 'bad'); });
+    // the anchor talks to whoever is on the boat
+    const crew = (boat, text, kind = 'info') => { if (!this.isHost) return; for (const P of this.allPlayers()) if (P.boat === boat) this.tell(P.id, text, kind); };
+    Bus.on('anchor:set', ({ boat, depth, dry }) => crew(boat, dry ? 'The anchor thuds down on dry ground. That will hold.' : `The anchor bites into the bottom, ${Math.max(1, Math.round(depth || 0))} m down.`, 'good'));
+    Bus.on('anchor:short', ({ boat, rope }) => crew(boat, `The rope ran out at ${rope} m before the anchor found the bottom - it is just hanging there. Haul it up; a better anchor has more rope.`, 'warn'));
+    Bus.on('anchor:break', ({ boat }) => crew(boat, 'The anchor breaks free of the bottom. Keep hauling!', 'info'));
+    Bus.on('anchor:stowed', ({ boat }) => crew(boat, 'Anchor up and stowed.', 'good'));
     Bus.on('player:overboard', () => { this.state.s.stats.overboard++; this.ui.banner('OVERBOARD!', 'Swim back and press E at the hull to climb aboard.', 'wave', 2.5); this.audio.splash(1.5); });
     Bus.on('player:knocked', () => this.audio.ouch());
     Bus.on('player:swim', ({ p }) => {
@@ -1712,6 +1820,7 @@ export class Game {
         break;
       }
       case 'fade': this.ui.fade(e.on, e.text || ''); break;
+      case 'isle': this.isles?.onEvent(e); break;
     }
   }
 
@@ -1766,7 +1875,9 @@ export class Game {
       case 'talkMore': { const n = this.npcs.byId(arg); if (n) this._talk(n); break; }
       case 'favToggle': { const it = this.loot.get(arg); if (it) { const on = !it.fav; this.act({ t: 'fav', id: it.id, on }); it.fav = on; this.audio.tone(it.fav ? 1320 : 660, 0.12, 'triangle', 0.08); } break; }
       case 'adm': {
-        const [cmd, a] = String(arg).split(':');
+        // split on the first colon only: teleport ids like isle:whisper have one of their own
+        const str = String(arg), ci = str.indexOf(':');
+        const cmd = ci < 0 ? str : str.slice(0, ci), a = ci < 0 ? undefined : str.slice(ci + 1);
         const send = o => this.act({ t: 'admin', cmd, ...o });
         if (cmd === 'toggle') { this.admin[a] = !this.admin[a]; this.ui.toast(a + ': ' + (this.admin[a] ? 'ON' : 'off'), 'info'); }
         else if (cmd === 'tp') this.teleport(a);

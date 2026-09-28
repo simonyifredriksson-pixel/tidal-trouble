@@ -6,6 +6,7 @@
 import * as THREE from '../../lib/three.module.js';
 import { FISH_BY_ID, FISH } from '../data/FishData.js';
 import { heightAt } from '../world/Terrain.js';
+import { VIGIL } from '../world/MapData.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
 import { Bus } from '../core/Bus.js';
 let landedN = 0; Bus.on('catch', () => landedN++);
@@ -103,6 +104,97 @@ export async function runScripts(names, game) {
         release();
         ok(F.state !== 'fight', 'fight ended -> ' + F.state);
         step(2);
+      }
+      if (name === 'anchor') {
+        const { ANCHORS, HULL_BY_ID } = await import('../data/BoatData.js');
+        const mcap = HULL_BY_ID.motor.cap; HULL_BY_ID.motor.cap = 4;      // (the motorboat normally takes a level-3 anchor at most)
+        const { buildAnchor, buildWindlass } = await import('../art/AnchorArt.js');
+        for (let lv = 0; lv < 5; lv++) {
+          let tris = 0; buildAnchor(lv).traverse(o => { if (o.geometry) tris += o.geometry.attributes.position.count / 3; });
+          const W = buildWindlass(lv); let wt = 0; W.group.traverse(o => { if (o.geometry) wt += o.geometry.attributes.position.count / 3; });
+          ok(tris > 40 && wt > 20, `${ANCHORS[lv].name}: anchor ${tris} tris, windlass ${wt} tris${W.crank.children.length ? ', with a crank' : ', hauled by hand'}`);
+        }
+        const s = G.state.s, keep = { hull: s.boat.hull, parts: { ...s.boat.parts }, hulls: [...s.hulls] };
+        s.hulls = [...new Set([...s.hulls, 'motor'])]; s.boat.hull = 'motor'; s.boat.parts.anchor = 1;
+        const place = (x, z) => { b.docked = false; b.driver = null; b.autopilot = null; b.stowAnchor(); b.pos.set(x, 0, z); b.vel.set(0, 0); b.heading = 0.4; b.yawRate = 0; b._updateMatrix(); };
+        b.docked = false; G._boatChanged();
+        // pick deep-but-not-too-deep open water with a real current
+        let spot = null;
+        for (let r = 300; r < 700 && !spot; r += 25) for (let a = 0; a < 6.28 && !spot; a += 0.2) {
+          const x = Math.cos(a) * r, z = 80 + Math.sin(a) * r, h = heightAt(x, z);
+          if (h < -18 && h > -45 && heightAt(x + 40, z) < -12 && heightAt(x - 40, z) < -12 && heightAt(x, z + 40) < -12 && heightAt(x, z - 40) < -12 && G.world.current(x, z).s > 0.3) spot = [x, z, h];
+        }
+        ok(!!spot, 'found open water with a current: ' + (spot ? spot.map(v => v.toFixed(0)).join(', ') : '-'));
+        place(spot[0], spot[1]);
+        const c0 = { ...G.world.current(spot[0], spot[1]) };
+        P.attach(b, V(b.hull.anchor[0], b.deck, b.hull.anchor[1] - 0.7));
+        P.yaw = b.heading + Math.PI; P.mode = 'walk';
+        // 1. nobody at the helm, no anchor: the sea takes you
+        let p0 = b.pos.clone(); step(12);
+        const drift = V(b.pos.x - p0.x, 0, b.pos.z - p0.z), dd = drift.length();
+        const along = dd > 0 ? (drift.x * b.flow.x + drift.z * b.flow.y) / (dd * Math.hypot(b.flow.x, b.flow.y)) : 0;
+        ok(dd > 1.5 && along > 0.8, `drifted ${dd.toFixed(1)} m in 12 s with the current (${c0.s.toFixed(2)} m/s), direction match ${along.toFixed(2)}`);
+        ok(P.boat === b, 'still standing on the drifting boat');
+        // 2. the prompt at the windlass, and the throw
+        step(0.1);
+        ok(/Throw the anchor/.test(G.ui.el('.prompt').textContent), 'prompt at the windlass: ' + G.ui.el('.prompt').textContent.trim().slice(0, 40));
+        I.fake('KeyE', true); step(1 / 30); I.fake('KeyE', false);
+        ok(G.vm.action === 'anchorThrow', 'the throw animation plays');
+        step(0.25); ok(G.vm.anchorHeld.visible, 'the anchor is in your hands during the swing');
+        await new Promise(r => setTimeout(r, 500)); step(0.3);
+        ok(b.anchor.st === 'fly' || b.anchor.st === 'sink', 'the anchor left your hands -> ' + b.anchor.st);
+        ok(b.rope.mesh.visible && b.anchorMesh.visible && !b.anchorStowed.visible, 'rope and anchor drawn in the water, the rail is empty');
+        let t = 0; while (b.anchor.st !== 'set' && t < 30) { step(0.5); t += 0.5; }
+        ok(b.anchor.st === 'set', `it hit the bottom after ${t.toFixed(1)} s, ${b.anchor.len.toFixed(1)} m of rope out (depth ${(-heightAt(b.anchor.p.x, b.anchor.p.z)).toFixed(0)} m)`);
+        // 3. it holds: the boat swings round on its rope and stops
+        // let it drift back until the rope comes tight, then watch it hold
+        const taut = () => { const R = b.rollerWorld(), hd = Math.hypot(R.x - b.anchor.p.x, R.z - b.anchor.p.z), dy = R.y - b.anchor.p.y; return hd > Math.sqrt(Math.max(0, b.anchor.len ** 2 - dy ** 2)) - 0.4; };
+        t = 0; while (!taut() && t < 120) { step(1); t += 1; }
+        ok(taut(), `the boat drifted back until the rope came tight (${t} s)`);
+        step(8); p0 = b.pos.clone(); step(15);
+        const moved = Math.hypot(b.pos.x - p0.x, b.pos.z - p0.z);
+        const R = b.rollerWorld(), hd = Math.hypot(R.x - b.anchor.p.x, R.z - b.anchor.p.z), dy = R.y - b.anchor.p.y, rad = Math.sqrt(Math.max(0, b.anchor.len ** 2 - dy ** 2));
+        // a held boat still swings a little on its rope as the current wanders; dragging is the failure
+        ok(moved < 3 && hd < rad + 0.6 && b.anchor.drag === 0, `anchored: moved ${moved.toFixed(2)} m in 15 s, bow ${hd.toFixed(1)} m from the anchor (scope ${rad.toFixed(1)} m), not dragging`);
+        const bow = V(Math.sin(b.heading), 0, Math.cos(b.heading)), toA = V(b.anchor.p.x - b.pos.x, 0, b.anchor.p.z - b.pos.z).normalize();
+        ok(bow.dot(toA) > 0.6, 'the bow swung round to face the anchor: ' + bow.dot(toA).toFixed(2));
+        // 4. a current too strong for it: it drags along the bottom
+        const cur = G.world.current.bind(G.world);
+        G.world.current = () => ({ x: 6, z: 0, s: 6 });
+        const a0 = b.anchor.p.clone(); step(6);
+        ok(b.anchor.drag > 0 && b.anchor.p.distanceTo(a0) > 1, `a 6 m/s rip drags the Iron Fluke ${b.anchor.p.distanceTo(a0).toFixed(1)} m along the bottom`);
+        s.boat.parts.anchor = 4; G._boatChanged();
+        const a1 = b.anchor.p.clone(); step(6);
+        ok(b.anchor.st === 'set' && b.anchor.p.distanceTo(a1) < 0.5 && b.anchor.drag === 0, 'the Leviathan Hook holds in the same rip: moved ' + b.anchor.p.distanceTo(a1).toFixed(2) + ' m');
+        G.world.current = cur;
+        s.boat.parts.anchor = 1; G._boatChanged();
+        // 5. hauling it back up: hold E
+        const len0 = b.anchor.len, crank0 = b.anchor.crank;
+        I.keys.add('KeyE'); step(0.5);
+        ok(G.hauling && G.vm.left.visible, 'holding E at the windlass hauls (hands on the crank)');
+        t = 0; let broke = false; while (b.anchor.st !== 'stow' && t < 80) { step(0.5); t += 0.5; if (b.anchor.st === 'hang') broke = true; }
+        I.keys.delete('KeyE'); step(0.2);
+        ok(b.anchor.st === 'stow' && broke, `hauled ${len0.toFixed(0)} m back in ${t.toFixed(1)} s (it broke out of the bottom and came up) - stowed`);
+        ok(Math.abs(b.anchor.crank - crank0) > 5 && b.anchorStowed.visible && !b.rope.mesh.visible, 'the windlass turned ' + (b.anchor.crank - crank0).toFixed(0) + ' rad and the anchor is back on the rail');
+        // 6. too deep for the rope: it just hangs
+        s.boat.parts.anchor = 0; G._boatChanged();
+        let deep = null;
+        for (let x = -700; x > -1200 && !deep; x -= 20) for (let z = -400; z < 400 && !deep; z += 40) if (heightAt(x, z) < -45) deep = [x, z];
+        place(deep[0], deep[1]);
+        b.throwAnchor(b.rollerWorld().add(V(0, 0, 0)), V(2, 2, 2));
+        t = 0; while (b.anchor.st !== 'hang' && b.anchor.st !== 'set' && t < 40) { step(0.5); t += 0.5; }
+        ok(b.anchor.st === 'hang' && Math.abs(b.anchor.len - ANCHORS[0].rope) < 0.5, `in ${(-heightAt(deep[0], deep[1])).toFixed(0)} m of water the Stone & Rope runs out at ${b.anchor.len.toFixed(0)} m and just hangs`);
+        p0 = b.pos.clone(); step(8);
+        ok(Math.hypot(b.pos.x - p0.x, b.pos.z - p0.z) > 0.5, 'and a hanging anchor does not stop the drift');
+        // 7. co-op: the anchor travels in the boat snapshot
+        const snap = b.snapshot();
+        ok(Array.isArray(snap.an) && snap.an[0] === 3 && JSON.stringify(snap).length < 3000, 'snapshot carries the anchor: ' + JSON.stringify(snap.an));
+        b.stowAnchor(); ok(b.snapshot().an === 0, 'and a stowed anchor costs nothing');
+        // 8. no throwing it off the dock
+        b.respawn(false); ok(!b.throwAnchor(V(0, 5, 0), V(0, 0, 0)), 'you cannot throw the anchor while tied up');
+        HULL_BY_ID.motor.cap = mcap;
+        s.boat.hull = keep.hull; s.boat.parts = keep.parts; s.hulls = keep.hulls; G._boatChanged(); b.respawn(false);
+        P.detach(); P.place(G.world.settlement.anchors.spawn.clone());
       }
       if (name === 'boat') {
         const t0 = b.pos.clone();
@@ -575,7 +667,7 @@ export async function runScripts(names, game) {
       }
       if (name === 'journal') {
         const J = await import('../data/JournalData.js');
-        const { pickSpecies } = await import('../game/Fishing.js');
+        const { pickSpecies, speciesWeights } = await import('../game/Fishing.js');
         const { ZMIN, RARITY } = await import('../data/FishData.js');
         const pr = J.progress(G.state.s);
         ok(J.SECTIONS.length >= 8 && pr.of > 60, 'the field guide has ' + J.SECTIONS.length + ' places and ' + pr.of + ' entries: ' + J.SECTIONS.map(S => S.name + ' ' + pr.per[S.id].of).join(', '));
@@ -590,8 +682,8 @@ export async function runScripts(names, game) {
             const bait = Object.entries(f.bait).sort((a, b) => b[1] - a[1])[0][0];
             const region = S.id === 'kraken' ? f.where[0] : S.id;
             const water = f.water === 'any' ? 'sea' : f.water === 'fresh' ? (S.id === 'frost' ? 'ice' : 'lake') : f.water;
-            const ctx = { region, water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false, hotspot: f.hotspot || null, storm: f.weather === 'storm', site: f.site || null };
-            let hit = false; for (let i = 0; i < 4000 && !hit; i++) if (pickSpecies(ctx).id === f.id) hit = true;
+            const ctx = { region, water, bait, night: f.time === 'night', dusk: f.time === 'dusk', zone: S.id === 'kraken' ? 2 : Math.max(ZMIN[f.id] || 0, 0), meteor: false, hotspot: f.hotspot || null, storm: f.weather === 'storm', site: f.site || null, spots: f.spot ? [f.spot] : [] };
+            const hit = speciesWeights(ctx).some(q => q.f.id === f.id && q.w > 0);
             if (!hit) bad.push(S.id + ':' + f.id);
           }
         }
@@ -697,12 +789,13 @@ export async function runScripts(names, game) {
         ok(G.state.pendingTrophies().length >= 5, 'trophies earned wait to be placed: ' + G.state.pendingTrophies().join(', '));
         P.place(G.world.settlement.anchors.cabinInside.clone(), Math.PI); step(0.2);
         G._do({ t: 'placeTrophies' }, P.id); step(0.2);
-        ok(Object.keys(s.trophies.placed).length >= 5 && !G.state.pendingTrophies().length, 'pressing E at the bookcase puts them on the shelf');
+        ok(Object.keys(s.trophies.placed).length >= 5 && !G.cabin.pending().length, 'pressing E at the bookcase puts them on the shelf');
         ok(G.cabin.trophySpots.length >= 5, 'and they are real objects in the hut: ' + G.cabin.trophySpots.length);
         const L = ['kraken', 'great:hushwing'].every(id => s.trophies.placed[id] !== undefined && s.trophies.placed[id] < 7);
         ok(L, 'the kraken and the Hushwing take the big spaces');
-        const spot = G.cabin.trophySpots.find(t => t.id === 'sp:oarfish');
-        ok(spot && G.cabin.trophyNear(spot.pos)?.id === 'sp:oarfish', 'looking at a trophy tells you what it is');
+        // after a full journal (an earlier suite) the oarfish may be outranked off the shelf
+        const spot = G.cabin.trophySpots.find(t => t.id === 'sp:oarfish') || G.cabin.trophySpots[0];
+        ok(spot && G.cabin.trophyNear(spot.pos)?.id === spot.id, 'looking at a trophy tells you what it is');
         // more trophies than the shelf holds: the grand ones stay up, the rest go to storage, nothing is stuck pending
         for (const id in (await import('../data/TrophyData.js')).TROPHY_BY_ID) G.state.award(id);
         G._do({ t: 'placeTrophies' }, P.id); step(0.2);
@@ -733,7 +826,7 @@ export async function runScripts(names, game) {
         ok(hooks / n > 0.1 && hooks / n < 0.2, 'only about 15% of bites near it hook it: ' + (hooks / n * 100).toFixed(1) + '%');
         // a weak rod has no chance. (Fought from the Leviathan Hunter, out of the rocks.)
         G.state.s.boat.hull = 'expedition'; G._boatChanged();
-        const placeBoat = () => { const Lv = G.great.lev; const a = Math.atan2(Lv.z - 1005, Lv.x - 1015); b.pos.set(Lv.x + Math.cos(a) * 70, 0, Lv.z + Math.sin(a) * 70); b.hp = b.stats.hp; b.water = 0; b.leaks = []; b._updateMatrix(); P.attach(b, V(0, b.deck, 0)); };
+        const placeBoat = () => { const Lv = G.great.lev; const a = Math.atan2(Lv.z - VIGIL.z, Lv.x - VIGIL.x); b.pos.set(Lv.x + Math.cos(a) * 70, 0, Lv.z + Math.sin(a) * 70); b.hp = b.stats.hp; b.water = 0; b.leaks = []; b._updateMatrix(); P.attach(b, V(0, b.deck, 0)); };
         const fightIt = (rod) => {
           placeBoat();
           G.state.s.rod = rod; G.state.s.rods = [...new Set([...G.state.s.rods, rod])]; G.vm.setRod(G.fishing.rod);
@@ -858,7 +951,9 @@ export async function runScripts(names, game) {
         G.ui.closeTalk();
         ok(G.state.s.trophies.got.legend, 'hearing all six out earns The Legend');
         const { waveAmp } = await import('../world/MapData.js');
-        ok(waveAmp(900, 880) > 0.8, 'the swell out here (' + waveAmp(900, 880).toFixed(2) + ') is too much for the rowboat (0.75)');
+        const wa = waveAmp(VIGIL.x - 210, VIGIL.z - 215), wd = waveAmp(G.world.settlement.anchors.vigilLanding.x, G.world.settlement.anchors.vigilLanding.z);
+        ok(wa > 3, 'the swell out here (' + wa.toFixed(2) + ') is the biggest in the sea - far too much for the rowboat (0.75)');
+        ok(wd < 1.6, 'but the landing is in the lee of the cliffs (' + wd.toFixed(2) + '), so you can stand on the dock');
       }
       if (name === 'chat') {
         const C = G.chat;
@@ -912,6 +1007,20 @@ export async function runScripts(names, game) {
         const pts = [[20, 200], [-75, -30], [44, -520], [0, -700], [700, 90], [-820, -40], [-680, 800], [900, 100]];
         for (const [x, z] of pts) { P.place(V(x, Math.max(0, heightAt(x, z)) + 0.2, z), 0); step(2); }
         ok(true, 'visited every region');
+        // and every far island, by teleport, day and night
+        const far = ['whisper', 'sunscar', 'skywatch', 'crystal', 'frostfall', 'dread', 'ironwreck', 'lost', 'thunder', 'tide', 'crown', 'abyssal'];
+        const before = errs.length;
+        for (const id of far) {
+          const T = G.constructor.TELEPORTS.find(t => t.id === 'isle:' + id);
+          if (!T) { ok(false, 'a teleport to ' + id); continue; }
+          G.teleport(T.id); G.tod = 0.5; step(1.5); G.tod = 0.95; step(1.5);
+        }
+        ok(errs.length === before, 'every far island runs a day and a night without errors');
+        const missed = far.filter(id => !G.state.s.found[id]);
+        ok(!missed.length, 'landing on each island discovers it (' + (12 - missed.length) + ' of 12' + (missed.length ? ', missed ' + missed.join(', ') : '') + ')');
+        const ui = G.ui; ui.mapZoom = 0; ui.open('map', {}); ui.mapZoom = 2; ui.render(); ui.mapZoom = 1; ui.render();
+        ok(!!document.querySelector('canvas.worldmap') && ui._mapView?.span === 5000, 'the map zooms in on the region');
+        ui.close();
       }
     } catch (e) {
       fail++; fails.push(name + ' threw: ' + e.message); log('FAIL ' + name + ' threw: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 4).join('\n'));

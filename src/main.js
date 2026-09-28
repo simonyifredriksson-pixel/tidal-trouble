@@ -20,6 +20,7 @@ import { State } from './game/State.js';
 import { Net } from './net/Net.js';
 import { Remote } from './game/Remote.js';
 import { heightAt } from './world/Terrain.js';
+import { VIGIL, REGIONS } from './world/MapData.js';
 import { U } from './art/Materials.js';
 
 const Q = new URLSearchParams(location.search);
@@ -324,16 +325,74 @@ function stage(name) {
     else { P.attach(b, new THREE.Vector3(0.6, b.deck, -8.4)); P.yaw = b.heading + Math.PI + 0.08; P.pitch = 0.18; }
     advance(0.3);
   }
+  // any teleport, at a time of day: ?stage=tp:ID[@TOD[@YAW]]  (ids like isle:whisper keep their colon)
+  if (name.startsWith('tp:')) {
+    const [id, tod = '0.45', yaw] = name.slice(3).split('@');
+    G.teleport(id); G.tod = +tod;
+    const R = REGIONS[id.replace('isle:', '')];
+    if (yaw !== undefined) P.yaw = +yaw;
+    else if (R) P.yaw = Math.atan2(-(R.x - P.pos.x), -(R.z - P.pos.z));
+    P.pitch = 0.02;
+    advance(0.5);
+  }
+  // any hull, seen from off the side: ?stage=hull:ID
+  if (name.startsWith('hull:')) {
+    const id = name.slice(5);
+    G.tod = 0.45; G.state.s.boat = { hull: id, parts: { lights: 2, mount: 1, holders: 3, anchor: 2 }, paint: 'harbour', decor: [] }; G._boatChanged();
+    b.pos.set(392, 0, 348); b.heading = 0.6; b.docked = false; b._updateMatrix(); world.prebuild(b.pos.x, b.pos.z);
+    P.attach(b, new THREE.Vector3(0, b.deck, 0));
+    advance(0.5);
+    const L = b.hull.hl, side = new THREE.Vector3(Math.cos(b.heading), 0, -Math.sin(b.heading)), fwd = new THREE.Vector3(Math.sin(b.heading), 0, Math.cos(b.heading));
+    const eye = b.pos.clone().addScaledVector(side, 11 + L * 1.3).addScaledVector(fwd, L * 0.7); eye.y = 3 + L * 0.45;
+    camera.position.copy(eye); camera.lookAt(b.pos.x, 1.5, b.pos.z);
+    game.frozen = true;
+  }
+  // the fog-of-war map: ?stage=map:ZOOM[:charts] - a voyage out to Sunscar and Ironwreck charted
+  if (name.startsWith('map:')) {
+    const [, zm = '0', extra = ''] = name.split(':');
+    const I = G.isles;
+    for (let t = 0; t <= 1; t += 0.02) { I.reveal(600 + t * 1850, -200 - t * 500, 520); I.reveal(2450 + t * 600, -700 - t * 1900, 520); }
+    I.reveal(-2050, -1650, 560);
+    if (extra === 'charts') { G.state.s.gear.charts = 1; G.state.s.gear.compass = 1; }
+    P.place(new THREE.Vector3(2600, 0, -1500), 0.8);
+    setTimeout(() => { G.ui.mapZoom = +zm; G.ui.open('map', {}); }, 300);
+  }
+  // the anchor: ?stage=anchor:LEVEL:HULL[:haul|:side|:throw]
+  if (name.startsWith('anchor')) {
+    const [, lv = '2', hull = 'trawler', mode = ''] = name.split(':');
+    G.tod = 0.42; G.state.s.boat.hull = hull; G.state.s.boat.parts.anchor = +lv; G.state.s.boat.parts.lights = 1; G._boatChanged();
+    b.pos.set(392, 0, 348); b.heading = 0.6; b.docked = false; b._updateMatrix(); world.prebuild(b.pos.x, b.pos.z);
+    const [ax, az] = b.hull.anchor;
+    P.attach(b, new THREE.Vector3(ax - 0.1, b.deck, az - 0.75)); P.yaw = b.heading + Math.PI; P.pitch = -0.25;
+    if (mode === 'throw') { G._throwAnchor(b); for (let i = 0; i < 8; i++) G.update(1 / 30); }
+    else {
+      b.throwAnchor(b.rollerWorld().add(new THREE.Vector3(Math.sin(b.heading) * 0.5, 0, Math.cos(b.heading) * 0.5)), new THREE.Vector3(Math.sin(b.heading) * 5, 2, Math.cos(b.heading) * 5));
+      advance(14);
+      if (mode === 'haul') { G.input.keys.add('KeyE'); advance(1.2); }
+      if (mode === 'up') { G.input.keys.add('KeyE'); let t = 0; while (b.anchor.st !== 'hang' && t < 40) { advance(0.5); t += 0.5; } advance(1.6); G.input.keys.delete('KeyE'); }
+      if (mode !== 'haul') P.local.set(ax - 0.4, b.deck, az - 2.2);
+      if (mode === 'bow') { P.local.set(0.3, b.deck, b.hull.hl * 0.86 - 1.4); P.pitch = -0.9; }
+      P.yaw = b.heading + Math.PI + 0.12; P.pitch = mode === 'haul' ? -0.6 : mode === 'bow' ? -0.8 : -0.42;
+      if (mode === 'side' || mode === 'up') {
+        const R = b.rollerWorld();
+        const d = new THREE.Vector3(b.anchor.p.x - R.x, 0, b.anchor.p.z - R.z).normalize();
+        const from = R.clone().addScaledVector(new THREE.Vector3(-d.z, 0, d.x), 5.5).addScaledVector(d, 1.5); from.y = 0.4;
+        P.detach(); P.place(from, yawTo(from, R)); P.mode = 'swim'; P.pos.y = -1.2; P.pitch = mode === 'up' ? 0.05 : -0.18;
+      }
+    }
+    G.update(1 / 30); G.frozen = true;
+    if (window.__log) { const r = b.rope; const f = v => v.toArray().map(x => x.toFixed(1)).join(','); window.__log('rope vis ' + r.mesh.visible + ' w ' + r.w + ' p0 ' + f(r.pts[0]) + ' p1 ' + f(r.pts[1]) + ' pn ' + f(r.pts[r.pts.length - 1]) + ' A ' + b.anchor.st + ' ' + f(b.anchor.p) + ' boat ' + f(b.pos) + ' eye ' + f(P.eye) + ' am ' + b.anchorMesh.visible + ' nan ' + [...r.pos].some(isNaN)); }
+  }
   if (name === 'grotto') { G.tod = 0.5; G.teleport('grotto'); advance(0.5); P.local.set(0.5, b.deck, 3); P.yaw = yawTo(P.pos, world.settlement.anchors.grottoLedge); P.pitch = 0.1; advance(0.2); }
   if (name === 'grottoout') { G.tod = 0.45; const S = world.secrets, g = { x: 330, z: 470 }, d = world.settlement.anchors.grottoWater; const dx = d.x - g.x, dz = d.z - g.z, l = Math.hypot(dx, dz); b.pos.set(g.x + dx / l * 55, 0, g.z + dz / l * 55); b.docked = false; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); world.prebuild(b.pos.x, b.pos.z); advance(0.5); P.yaw = yawTo(P.pos, new THREE.Vector3(g.x, 4, g.z)); P.pitch = 0.08; void S; }
   if (name === 'temple' || name === 'wreck') { G.tod = 0.5; G.teleport(name === 'temple' ? 'templeDive' : 'promiseDive'); const S = world.secrets.byId[name === 'temple' ? 'temple' : 'promise']; const c = S.cache; P.place(c.clone().add(new THREE.Vector3(7, 3, 7)), 0); P.mode = 'swim'; P.yaw = yawTo(P.pos, c); P.pitch = -0.25; advance(0.05); P.pos.copy(c.clone().add(new THREE.Vector3(7, 3, 7))); }
   if (name === 'castaway') { G.tod = 0.4; const c = world.secrets.byId.castaway.cache; const from = new THREE.Vector3(430 + 9, 0, 650 + 9); from.y = heightAt(from.x, from.z); P.place(from, yawTo(from, new THREE.Vector3(430, 0, 650))); P.pitch = -0.12; void c; }
-  if (name === 'vigil') { G.tod = 0.4; G.teleport('vigil'); look(P.pos.clone(), new THREE.Vector3(1015, 14, 1005), 0.12); }
+  if (name === 'vigil') { G.tod = 0.4; G.teleport('vigil'); look(P.pos.clone(), new THREE.Vector3(VIGIL.x, 14, VIGIL.z), 0.12); }
   if (name === 'vigiltop') { G.tod = 0.42; const m = G.npcs.byId('mags'); look(m.pos.clone().add(new THREE.Vector3(-4, 0, -3)), m.pos.clone().add(new THREE.Vector3(0, 1, 0)), -0.05); }
   if (name === 'vigilsea' || name.startsWith('great:')) {
     G.tod = 0.42;
     G.state.s.boat.hull = 'motor'; G._boatChanged();
-    b.pos.set(815, 0, 800); b.heading = Math.atan2(1015 - 815, 1005 - 800); b.docked = false; b._updateMatrix();
+    b.pos.set(VIGIL.x - 200, 0, VIGIL.z - 205); b.heading = Math.atan2(200, 205); b.docked = false; b._updateMatrix();
     P.attach(b, new THREE.Vector3(0.3, b.deck, 1.6)); P.yaw = b.heading + Math.PI - 0.1; P.pitch = 0.06;
     world.prebuild(b.pos.x, b.pos.z);
     if (name.startsWith('great:')) {
@@ -457,7 +516,9 @@ function loop(now) {
   const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
   last = now;
   U.uTime.value += dt;
-  if (game && game.running) {
+  if (game && game.frozen) {
+    // a staged screenshot: hold the scene exactly as it was set up
+  } else if (game && game.running) {
     game.update(dt);
   } else if (game) {
     // the title camera drifts round the bay at golden hour

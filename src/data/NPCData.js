@@ -10,6 +10,8 @@
    they show you their rods. {n} {total} {fish} {rod} {price} are filled in.
    Every seller is a little different; none of them is a menu. */
 
+import { ISLAND_NPCS } from './NPCIslands.js';
+
 export const NPCS = [
   { id: 'gus', name: 'old gus', full: 'Old Gus', pr: 'he', role: 'lore', at: 'gusChair', pose: 'sit',
     look: { skin: 0xf1c9a5, shirt: 0x5a6a7a, pants: 0x6a2e2a, boots: 0x2a2a2a, hat: 'captain', hatCol: 0xf2f2ee, hair: 'short', hairCol: 0xdddddd, beard: 'full', beardCol: 0xeeeeee, nose: 1.3, belly: 0.4, vest: 0x5a3a2a },
@@ -61,11 +63,11 @@ export const NPCS = [
       broke: ['That is {price} coins, neighbour. Catch a few more first.'],
       bye: ['See you, neighbour.', 'Tight lines!', 'Mind the Bombfish.'],
     } },
-  { id: 'ingrid', name: 'ingrid', full: 'Ingrid of the Ice', pr: 'she', role: 'seller', shop: 'frost', at: 'iceHut', pose: 'stand', extra: { label: 'Buy augers and gear', act: 'open', arg: 'tackle', icon: 'auger' },
+  { id: 'ingrid', name: 'ingrid', full: 'Ingrid of the Ice', pr: 'she', role: 'seller', shop: 'frost', at: 'iceHut', pose: 'stand', extra: { label: 'Show me your ice gear', act: 'open', arg: 'tackle', icon: 'auger' },
     look: { skin: 0xf5d7bd, shirt: 0xc8452e, pants: 0x3a3a48, boots: 0x3a2a20, hat: 'fur', hatCol: 0xe8e0d0, hair: 'long', hairCol: 0xe8d8a0, nose: 1.0 },
     lines: ['Drill a hole. Drop a line. Do not stand on the singing ice.'],
     say: {
-      hello: ['You want to fish the lake? Drill a hole. Drop a line. Do not stand on the singing ice.', 'Cold, is it not? Good. Cold keeps the fish honest.', 'I buy fish. I sell rods that do not snap in the cold. That is all.'],
+      hello: ['You want to fish the lake? I drilled you some holes by my hut. Augers come from Frostfall, far to the north - my sister\'s island.', 'Cold, is it not? Good. Cold keeps the fish honest.', 'I buy fish. I sell rods that do not snap in the cold. That is all.'],
       sold: ['{n} fish. {total} coins. Do not spend it on anything warm.', '{total}. Fair price. I do not haggle.'],
       soldOne: ['One {fish}. {total} coins.'],
       nothing: ['You have nothing I want. Come back with fish.'],
@@ -194,6 +196,7 @@ export const NPCS = [
       'And once it is on, it pulls for minutes, not seconds. Keep the zone on it and do not you dare let go.',
     ] },
 ];
+NPCS.push(...ISLAND_NPCS);
 export const NPC_BY_ID = Object.fromEntries(NPCS.map(n => [n.id, n]));
 export const VIGIL_FISHERMEN = ['tobias', 'hesketh', 'ada', 'pell', 'ansel', 'mags'];
 

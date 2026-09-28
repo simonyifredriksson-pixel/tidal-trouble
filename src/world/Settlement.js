@@ -19,7 +19,8 @@ import { MAT } from '../art/Materials.js';
 import * as BA from '../art/BuildingArt.js';
 import { heightAt, groundAt, ICE_Y } from './Terrain.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
-import { ZONES, HOME_CENTRE } from './MapData.js';
+import { ZONES, HOME_CENTRE, VIGIL } from './MapData.js';
+import { buildIslands } from './Islands.js';
 import { rng, TAU } from '../core/Util.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -41,6 +42,7 @@ export class Settlement {
     this.moorings = [];
     this.animated = [];
     this.wrecks = [];
+    this.isle = {};
     this._build();
   }
 
@@ -119,6 +121,7 @@ export class Settlement {
     this._open();
     this._black();
     this._vigil();
+    buildIslands(this);
     this._clues();
     this._zoneBuoys();
   }
@@ -341,7 +344,11 @@ export class Settlement {
       b.color(0x2e3a2e); for (const px of [2.95, 3.2]) { b.box(0.13, 0.36, 0.14, px, 0.18, 2.55); b.box(0.13, 0.08, 0.26, px, 0.04, 2.49); }
       // --- the rod rack on the right wall ---
       b.color(0x4a3222); for (const y of [0.45, 1.95]) b.box(0.1, 0.1, 3.2, hw - 0.05, y, -0.95);
-      for (let i = 0; i < 9; i++) b.color(0x3a2a1a).box(0.14, 0.05, 0.05, hw - 0.1, 1.95, -2.45 + i * 0.37);
+      for (let i = 0; i < 10; i++) b.color(0x3a2a1a).box(0.14, 0.05, 0.05, hw - 0.1, 1.95, -2.45 + i * 0.3);
+      // a second, lower rack in front of it for the far-island rods
+      b.color(0x4a3222).box(0.1, 0.1, 3.2, hw - 0.4, 0.4, -0.95); b.box(0.1, 0.1, 3.2, hw - 0.4, 1.5, -0.95);
+      for (const z of [-2.55, 0.65]) b.box(0.08, 1.5, 0.08, hw - 0.4, 0.75, z);
+      for (let i = 0; i < 10; i++) b.color(0x3a2a1a).box(0.14, 0.05, 0.05, hw - 0.45, 1.5, -2.3 + i * 0.3);
       // a wall shelf for the strange things you find, above the rack
       b.color(0x5a3e28).box(0.3, 0.05, 3.1, hw - 0.14, 2.45, -0.95);
       // the hanging lantern and its chain
@@ -389,7 +396,7 @@ export class Settlement {
     this.cabin.photos = photos.map((s, i) => ({ i, pos: V(cx + s.p[0], fy + s.p[1], cz + s.p[2]), face: s.face }));
     for (let i = 0; i < 8; i++) this.cabin.shelf.push({ i, pos: V(cx + hw - 0.14, fy + 2.48, cz - 2.35 + i * 0.4) });
     // the rod rack: each rod you own stands in its own peg
-    this.cabin.rack = { pos: V(cx + hw - 0.12, fy, cz - 2.45), step: 0.37, face: -Math.PI / 2 };
+    this.cabin.rack = { pos: V(cx + hw - 0.12, fy, cz - 2.45), step: 0.3, face: -Math.PI / 2, row: 10, front: 0.3 };
 
     // --- outside: porch bench, woodpile, pots, a boat upside down on the grass ---
     const oy = heightAt(cx, cz + 5);
@@ -617,11 +624,11 @@ export class Settlement {
      old fishermen spaced round the cliff edge, lines hanging a hundred feet
      down into the fog. The water around it is full of rocks. */
   _vigil() {
-    const VX = 1015, VZ = 1005;
+    const VX = VIGIL.x, VZ = VIGIL.z;
     const r = rng(555);
     // --- the landing: bone arch, dock, mooring ---
     const dirx = -0.72, dirz = -0.69, rot = Math.atan2(dirx, dirz);
-    const [shx, shz] = this._shore(955, 950, dirx, dirz, 80);
+    const [shx, shz] = this._shore(VX - 60, VZ - 55, dirx, dirz, 80);
     const ox = shx - dirx * 5, oz = shz - dirz * 5;
     const dLen = 22;
     this.place(BA.buildPier(dLen, 2.8, 1.3, 71), ox, oz, rot, 0);
@@ -646,7 +653,7 @@ export class Settlement {
     const [vsx, vsz] = this._w(0, 1.3, ax, az, rot); vs.position.set(vsx, ay + 4.6, vsz); vs.rotation.y = rot; this.group.add(vs);
     for (const s of [-1, 1]) { const [cx2, cz2] = this._w(s * 2.2, 0, ax, az, rot); this.C.circle(cx2, cz2, 0.4, ay - 2, ay + 5); }
     // --- the path up: terrace, cairns for the lost, the hut on top ---
-    const [tx, tz] = [975, 968];
+    const [tx, tz] = [VX - 40, VZ - 37];
     this._props(b => {
       // memorial cairns: a stone for every boat that did not come back
       for (let k = 0; k < 4; k++) {
@@ -657,9 +664,9 @@ export class Settlement {
       BA.buildBench(b, 3, 0, 1, rot);
     }, tx, tz, 0);
     this.interact.push({ id: 'cairns', kind: 'cairns', pos: V(tx - 1, heightAt(tx, tz) + 1, tz - 3), r: 3.5, label: 'Read the names on the cairns' });
-    this._lamp(965, 958); this._lamp(986, 976); this._lamp(1003, 993);
+    this._lamp(VX - 50, VZ - 47); this._lamp(VX - 29, VZ - 29); this._lamp(VX - 12, VZ - 12);
     // Maud's hut: small, weathered, alone on the cliff top, door facing the landing
-    const hx = 996, hz = 985;
+    const hx = VX - 19, hz = VZ - 20;
     const hut = this._house({ w: 4.4, d: 3.8, h: 2.5, rise: 1.5, seed: 77, wall: 0x5a5048, roof: 0x3a3e42, trim: 0x2e2a28, doorX: -0.8, doorW: 1.0, doorOpen: false,
       windows: [{ side: 'front', x: 1.0 }, { side: 'left', x: 0 }], porch: true, floorH: 0.3, chimney: true }, hx, hz, rot, 'vigilHut');
     this.lights.push({ pos: V(hx, hut.y + 2, hz), color: 0xffb070, intensity: 1.4, dist: 10, night: true });
@@ -763,7 +770,7 @@ export class Settlement {
     const g = new MeshBuilder(rng(78));
     for (const Z of ZONES) {
       if (!Z.r) continue;
-      const n = Math.round(Z.r * Math.PI * 2 / 55);
+      const n = Math.round(Z.r * Math.PI * 2 / (55 + Math.max(0, Z.r - 1100) * 0.05));
       for (let i = 0; i < n; i++) {
         const a = i / n * TAU;
         const x = HOME_CENTRE.x + Math.cos(a) * Z.r, z = HOME_CENTRE.z + Math.sin(a) * Z.r;

@@ -18,6 +18,7 @@
 import * as THREE from '../../lib/three.module.js';
 import { clamp, damp, lerp, wrapAngle } from '../core/Util.js';
 import { Bus } from '../core/Bus.js';
+import { WORLD, HOME_CENTRE } from '../world/MapData.js';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -53,7 +54,7 @@ export class Player {
 
   get maxStamina() { return this.game.state.has('diving') ? 16 : 10; }
 
-  get maxBreath() { return this.game.state.has('diving') ? 90 : 20; }
+  get maxBreath() { return this.game.state.has('wreckdiver') ? 180 : this.game.state.has('diving') ? 90 : 20; }
 
   forward(out = _v) { return out.set(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)); }
   flatForward(out = _v) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
@@ -146,7 +147,7 @@ export class Player {
     }
     this.sprint = sprint;
     const heavy = this.held && G.loot.get(this.held)?.kg > 40;
-    let spd = this.mode === 'swim' ? (G.state.has('diving') ? 3.1 : 2.1) * (this.exhausted ? 0.22 : 1) : (sprint ? 6.2 : 3.7) * (1 - this.wade * 0.45);
+    let spd = this.mode === 'swim' ? (G.state.has('wreckdiver') ? 3.6 : G.state.has('diving') ? 3.1 : 2.1) * (this.exhausted ? 0.22 : 1) : (sprint ? 6.2 : 3.7) * (1 - this.wade * 0.45);
     if (heavy) spd = Math.min(spd, 1.8);
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
@@ -335,15 +336,15 @@ export class Player {
     const r = G.colliders.resolve(P.x, P.z, RADIUS, P.y + 0.3, HEIGHT - 0.3, V);
     P.x = r.x; P.z = r.z;
     // edge of the world
-    const E = 1285;
-    P.x = clamp(P.x, -E, E); P.z = clamp(P.z, -E, E);
+    const ex = P.x - HOME_CENTRE.x, ez = P.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.edge - 20;
+    if (ed > E) { P.x = HOME_CENTRE.x + ex / ed * E; P.z = HOME_CENTRE.z + ez / ed * E; }
     P.y += V.y * dt;
     let g = G.ground(P.x, P.z);
     const fl = G.colliders.floorAt(P.x, P.z, P.y, 0.6);
     if (fl > g) g = fl;
     if (P.y <= g + 0.001) {
       // steep ground slows you
-      if (this.onGround === false && V.y < -12) this.hurt((-V.y - 12) * 4, 'fall');
+      if (this.onGround === false && V.y < -12 && !this.game.state.has('harness')) this.hurt((-V.y - 12) * 4, 'fall');
       P.y = g; V.y = Math.max(0, V.y); this.onGround = true; this.coyote = 0.12;
     } else if (P.y - g < 0.35 && V.y <= 0 && this.onGround) {
       P.y = g;            // stick to the ground walking downhill
@@ -389,6 +390,8 @@ export class Player {
     else V.y = damp(V.y, (surf - P.y) * 3, 4, dt);
     // if you are under the surface and not diving you float up
     P.x += V.x * dt; P.y += V.y * dt; P.z += V.z * dt;
+    // the current carries you too
+    if (G.current) { const c = G.current(P.x, P.z); P.x += c.x * 0.7 * dt; P.z += c.z * 0.7 * dt; }
     if (P.y > surf + 0.1 && !up) P.y = damp(P.y, surf, 5, dt);
     if (P.y > surf + 0.6) P.y = surf + 0.6;
     const r = G.colliders.resolve(P.x, P.z, RADIUS, P.y, HEIGHT, V);

@@ -18,6 +18,11 @@
    Most of the population lives in FishMore.js, one block per water. */
 
 import { MORE_FISH, MORE_ZMIN } from './FishMore.js';
+import { FAR_ZMIN } from './FishKit.js';
+import { FAR1 } from './FishFar1.js';
+import { FAR2 } from './FishFar2.js';
+import { FAR3 } from './FishFar3.js';
+import { ZONES } from '../world/MapData.js';
 
 export const RARITY = {
   common:    { id: 'common',    name: 'Common',    css: '#c9c2a8', w: 60 },
@@ -284,7 +289,7 @@ export const GIANTS = [
     blurb: 'Its lure is the size of a lantern. So is each tooth.' },
 ];
 
-FISH.push(...MORE_FISH);
+FISH.push(...MORE_FISH, ...FAR1, ...FAR2, ...FAR3);
 
 // the deep-water regulars follow you all the way out to Vigil's End
 for (const f of FISH) if (['cod', 'mackerel', 'tuna', 'halibut', 'marlin', 'swordfish', 'oarfish', 'angler', 'viper', 'gulper', 'coelacanth', 'sharkfish', 'mimic', 'chest'].includes(f.id) && Array.isArray(f.where)) f.where.push('reach');
@@ -308,7 +313,7 @@ export const ZMIN = {
   inkfin: 2, suckerfish: 2, hatchling: 2,
   thundertuna: 2, squallray: 1, deepbubbler: 1, glowjelly: 1, artifact: 1, oldmap: 1,
   starfish: 0, birdbait: 0, cavefin: 1, crystaleel: 1, templekoi: 2, hullgrouper: 2, sandskipper: 2,
-  ...MORE_ZMIN,
+  ...MORE_ZMIN, ...FAR_ZMIN,
 };
 export const zoneOfSpecies = f => ZMIN[f.id] ?? 0;
 
@@ -323,19 +328,18 @@ export const VARIANTS = [
   { id: 'abyssal', name: 'Abyssal', mult: 7.5, size: 1.45, w: 0.45, zone: 4, fight: 0.45, css: '#c07af0' },
 ];
 export const VARIANT_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v]));
-const ZONE_VALUE = [1.0, 1.4, 1.9, 2.7, 4.0];
-const ZONE_SIZE = [0, 0.12, 0.25, 0.42, 0.65];
-const ZONE_VARIANT = [0.03, 0.06, 0.10, 0.16, 0.24];
-export const zoneValue = z => ZONE_VALUE[Math.max(0, Math.min(4, z | 0))];
+// the zone multipliers live with the zones themselves (MapData.ZONES)
+const ZI = z => Math.max(0, Math.min(ZONES.length - 1, z | 0));
+export const zoneValue = z => ZONES[ZI(z)].value;
 
 export function rollVariant(zone, r = Math.random) {
-  if (r() > ZONE_VARIANT[Math.max(0, Math.min(4, zone | 0))]) return null;
+  if (r() > ZONES[ZI(zone)].variant) return null;
   const pool = VARIANTS.filter(v => v.zone <= zone);
   let t = pool.reduce((a, v) => a + v.w, 0), x = r() * t;
   for (const v of pool) { x -= v.w; if (x <= 0) return v.id; }
   return pool[0].id;
 }
-export const zoneSizeBoost = z => ZONE_SIZE[Math.max(0, Math.min(4, z | 0))];
+export const zoneSizeBoost = z => ZONES[ZI(z)].size;
 
 /** How hard a fish fights on the bar (compared against a rod's rating).
     One rule everywhere: bigger, rarer, pricier and stranger fish fight harder. */
@@ -374,7 +378,7 @@ export function valueBreakdown(f, kg, zone = 0, variant = null) {
 /** Roll a size in 0..1 skewed toward small; big ones are rare. */
 export function rollSize(r, luck = 0) {
   const a = r(), b = r();
-  return Math.min(1, Math.pow(Math.min(a, b) * 0.6 + a * 0.4, 1.35 - luck * 0.3));
+  return Math.min(1, Math.pow(Math.min(a, b) * 0.6 + a * 0.4, Math.max(0.75, 1.35 - luck * 0.3)));
 }
 
 export const JOURNAL_ORDER = FISH.filter(f => f.rarity !== 'junk' || f.id === 'chest').concat(GIANTS);

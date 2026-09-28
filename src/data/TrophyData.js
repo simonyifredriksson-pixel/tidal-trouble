@@ -15,6 +15,7 @@ import { FISH, FISH_BY_ID } from './FishData.js';
 import { LEVIATHANS } from './LeviathanData.js';
 import { GREAT } from './GreatData.js';
 import { BEASTS } from './BeastData.js';
+import { ISLAND_INFO } from './IslandData.js';
 
 const T = [];
 // the milestones, each with its own object
@@ -39,12 +40,24 @@ for (const f of FISH) {
   T.push({ id: 'sp:' + f.id, name: f.name, size: 'S', tier: { epic: 2, legendary: 3 }[f.rarity], model: 'fish', sp: f.id, text: f.blurb });
 }
 // the eleven shard-bearers as skulls; the Tidemother as a statue
-for (const L of LEVIATHANS) T.push({ id: 'lev:' + L.id, name: L.name, size: L.final ? 'L' : 'S', tier: 4, model: L.final ? 'levstatue' : 'skull', lev: L.id, text: L.story });
+for (const L of LEVIATHANS) T.push({ id: 'lev:' + L.id, name: L.name, size: L.final ? 'L' : 'S', tier: 4, rank: 3, model: L.final ? 'levstatue' : 'skull', lev: L.id, text: L.story });
 // the creatures at the top of the food chain
 T.push({ id: 'strongbox', name: 'The X on the Chart', size: 'S', tier: 2, model: 'strongbox', text: 'You followed an old chart out to sea and pulled up what someone buried there.' });
 for (const b of BEASTS) T.push({ id: 'beast:' + b.id, name: b.name, size: 'L', tier: 4, model: 'beast', beast: b.id, text: b.blurb });
-T.push({ id: 'kraken', name: 'The Kraken', size: 'L', tier: 4, model: 'kraken', text: 'You fought it off your boat with an axe, and then you caught it.' });
-for (const g of GREAT) T.push({ id: 'great:' + g.id, name: g.name, size: 'L', tier: 4, model: 'great', great: g.id, text: g.blurb });
+T.push({ id: 'kraken', name: 'The Kraken', size: 'L', tier: 4, rank: 2, model: 'kraken', text: 'You fought it off your boat with an axe, and then you caught it.' });
+for (const g of GREAT) T.push({ id: 'great:' + g.id, name: g.name, size: 'L', tier: 4, rank: 2, model: 'great', great: g.id, text: g.blurb });
+
+// the far islands: a lantern for every one you set foot on, and the rest of the exploring
+for (const I of ISLAND_INFO) T.push({ id: 'isle:' + I.id, name: I.name, size: 'S', tier: 1, model: 'lantern', text: 'You found ' + I.name + ' out in the ' + I.ring + '. ' + I.feature });
+T.push(
+  { id: 'wayfinder', name: 'Wayfinder', size: 'L', tier: 4, model: 'hoard', text: 'Every one of the twelve far islands, found and charted. There is nowhere left on the map that you have not been.' },
+  { id: 'rim', name: "The World's Edge", size: 'S', tier: 3, model: 'lantern', text: 'You sailed to the rim of the world, where the sea stands up into a wall of fog, and came back.' },
+  { id: 'lostnotes', name: 'The Ashcombe Notes', size: 'S', tier: 3, model: 'logbook', text: 'Every note the people of the Lost Shores left behind, read. You know where they went.' },
+  { id: 'eye', name: 'The Eye in the Deep', size: 'S', tier: 3, model: 'orb', text: 'An eye as wide as a lighthouse opened in the water of the Abyssal Reach, and looked at you.' },
+  { id: 'salvage', name: 'Salvage Rights', size: 'S', tier: 2, model: 'strongbox', text: 'Ten wrecks of Ironwreck salvaged. Big Olga offered you a job.' },
+  { id: 'eruption', name: 'Under the Volcano', size: 'S', tier: 2, model: 'orb', text: 'A lump of Sunscar rock that landed next to your boat, still warm.' },
+  { id: 'struck', name: 'Struck by Lightning', size: 'S', tier: 2, model: 'jar', text: 'A jar of glass fused from sand the moment lightning hit the water beside you at Thunderpeak.' },
+);
 
 export const TROPHIES = T;
 export const TROPHY_BY_ID = Object.fromEntries(T.map(t => [t.id, t]));

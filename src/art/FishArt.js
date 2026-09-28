@@ -702,6 +702,54 @@ export function buildJunk(kind) {
     b.color(0x6a6a6a); for (let k = 0; k < 7; k++) b.beam([-0.5 + k * 0.16, 0.34, 0.35], [-0.42 + k * 0.16, 0.34, -0.35], 0.04, 0.04);
     b.color(0xb08a3a).box(0.16, 0.18, 0.05, 0, 0.05, 0.36);
     b.color(0x6a8a5a); for (let k = 0; k < 8; k++) b.lump(0.06, (Math.random() - 0.5) * 0.9, -0.25 + Math.random() * 0.5, 0.34, 0.4, 0.4);
+  } else if (kind === 'bell') {
+    // a ship's bell, green with age, with its clapper and a hanging ring
+    b.color(0x6a8a5a).lathe([[0.02, 0.5], [0.22, 0.42], [0.3, 0.1], [0.42, -0.3], [0.46, -0.42]], 10);
+    b.color(0x8aa870).cyl(0.47, 0.47, -0.46, -0.4, 10, false);
+    b.color(0x5a7a4a).cyl(0.08, 0.08, 0.5, 0.62, 6, true); b.color(0x3a3a3a).blob(0.08, 0.1, 0.08, 0, -0.38, 0, 6, 3);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'wheel') {
+    // a ship's wheel: rim, hub, eight spoked handles
+    b.color(0x6a4a2a);
+    for (let k = 0; k < 12; k++) { const a0 = k / 12 * Math.PI * 2, a1 = (k + 1) / 12 * Math.PI * 2; b.beam([Math.cos(a0) * 0.36, Math.sin(a0) * 0.36, 0], [Math.cos(a1) * 0.36, Math.sin(a1) * 0.36, 0], 0.06, 0.06); }
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.color(0x7a5a38).beam([0, 0, 0], [Math.cos(a) * 0.5, Math.sin(a) * 0.5, 0], 0.035, 0.035); }
+    b.color(0xb08a3a).cyl(0.09, 0.09, -0.05, 0.05, 8, true);
+    rotateBuilderZ(b, Math.PI / 2);
+  } else if (kind === 'porthole') {
+    b.color(0xb08a3a); for (let k = 0; k < 12; k++) { const a0 = k / 12 * Math.PI * 2, a1 = (k + 1) / 12 * Math.PI * 2; b.beam([0, Math.cos(a0) * 0.4, Math.sin(a0) * 0.4], [0, Math.cos(a1) * 0.4, Math.sin(a1) * 0.4], 0.12, 0.1); }
+    b.color(0x9ec0d2).cyl(0.34, 0.34, -0.02, 0.02, 12, true); b.color(0x8a6a2a); for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2; b.box(0.1, 0.08, 0.08, 0.04, Math.cos(a) * 0.46, Math.sin(a) * 0.46); }
+  } else if (kind === 'compass') {
+    b.color(0x5a3a22).box(0.8, 0.3, 0.8, 0, -0.1, 0); b.color(0xb08a3a).cyl(0.34, 0.34, 0.05, 0.12, 12, true);
+    b.color(0xf0e8d0).cyl(0.3, 0.3, 0.12, 0.13, 12, true); b.color(0xc83a2a).box(0.04, 0.02, 0.5, 0, 0.14, 0);
+  } else if (kind === 'crown') {
+    b.color(0xd8b048).cyl(0.4, 0.42, -0.2, 0.1, 12, false);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.push(Math.cos(a) * 0.4, 0.1, Math.sin(a) * 0.4).cone(0.09, 0, 0.35, 4).pop(); }
+    g.color(0xe03a4a); for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; g.blob(0.06, 0.06, 0.04, Math.cos(a) * 0.42, -0.05, Math.sin(a) * 0.42, 6, 3); }
+    g.color(0x4ae0a0); for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 1.2; g.blob(0.05, 0.05, 0.04, Math.cos(a) * 0.42, -0.05, Math.sin(a) * 0.42, 6, 3); }
+  } else if (kind === 'sceptre') {
+    b.color(0xd8b048).cyl(0.05, 0.05, -0.5, 0.35, 7, true); for (const y of [-0.3, 0, 0.3]) b.cyl(0.08, 0.08, y - 0.03, y + 0.03, 7, true);
+    b.color(0xc89830).cyl(0.1, 0.06, 0.35, 0.42, 7, true);
+    g.color(0x9af0f0).blob(0.14, 0.14, 0.14, 0, 0.56, 0, 8, 4);
+    rotateBuilderZ(b, -Math.PI / 2); rotateBuilderZ(g, -Math.PI / 2);
+  } else if (kind === 'chalice') {
+    b.color(0xd8b048).lathe([[0.3, -0.5], [0.3, -0.44], [0.06, -0.36], [0.05, -0.05], [0.1, 0], [0.3, 0.2], [0.36, 0.5]], 10);
+    g.color(0xe03a4a); for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; g.blob(0.04, 0.04, 0.03, Math.cos(a) * 0.3, 0.25, Math.sin(a) * 0.3, 5, 3); }
+    b.color(0x6a8a5a); for (let k = 0; k < 3; k++) b.lump(0.05, (k - 1) * 0.12, 0.35, 0.2, 0.4);
+  } else if (kind === 'seal') {
+    b.color(0xd8b048).cyl(0.45, 0.45, -0.1, 0.1, 14, true);
+    b.color(0xb08a2a); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.box(0.3, 0.04, 0.04, Math.cos(a) * 0.2, 0.11, Math.sin(a) * 0.2); }
+    b.color(0xe8c860).cyl(0.12, 0.12, 0.1, 0.13, 8, true);
+    b.color(0x3a6aa0); for (let k = 0; k < 3; k++) b.box(0.5 - k * 0.1, 0.03, 0.05, 0, 0.11, -0.25 + k * 0.06);
+  } else if (kind === 'mask') {
+    b.color(0xd8b048).blob(0.4, 0.5, 0.18, 0, 0, 0, 10, 5);
+    b.color(0x2a2a2a).box(0.18, 0.03, 0.05, -0.15, 0.1, 0.16); b.box(0.18, 0.03, 0.05, 0.15, 0.1, 0.16);
+    b.color(0xc89830).blob(0.06, 0.12, 0.06, 0, -0.02, 0.2, 5, 3); b.color(0xa87820).box(0.16, 0.03, 0.04, 0, -0.22, 0.17);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'coinjar') {
+    b.color(0x9a6a44).lathe([[0.2, -0.5], [0.4, -0.3], [0.42, 0.1], [0.24, 0.35], [0.18, 0.5]], 9);
+    b.color(0x6a8a5a); for (let k = 0; k < 6; k++) b.lump(0.06, (Math.cos(k) * 0.4), -0.2 + k * 0.08, Math.sin(k) * 0.4, 0.4);
+    g.color(0xf0c848); for (let k = 0; k < 6; k++) g.cyl(0.07, 0.07, 0.5 + k * 0.02, 0.51 + k * 0.02, 7, true, (k % 3 - 1) * 0.06, (k % 2) * 0.05);
+    rotateBuilderZ(b, -Math.PI / 2); rotateBuilderZ(g, -Math.PI / 2);
   }
   return { solid: b.build(), glow: g.tris ? g.build() : null };
 }
@@ -745,7 +793,7 @@ export function fishMesh(species, lengthM, opts = {}) {
   m.castShadow = !ghost; m.receiveShadow = true;
   grp.add(m);
   if (geos.glow) { const gm = new THREE.Mesh(geos.glow, MAT.glow); grp.add(gm); }
-  const junkScale = species.junk ? ({ chest: 0.75, strongbox: 0.7, duck: 0.12, planks: 1.2, page: 0.35, key: 0.22, idol: 0.35 }[species.junk] ?? 0.3) : 1;
+  const junkScale = species.junk ? ({ chest: 0.75, strongbox: 0.7, duck: 0.12, planks: 1.2, page: 0.35, key: 0.22, idol: 0.35, bell: 0.45, wheel: 0.9, porthole: 0.45, compass: 0.25, crown: 0.3, sceptre: 0.7, chalice: 0.25, seal: 0.15, mask: 0.3, coinjar: 0.35 }[species.junk] ?? 0.3) : 1;
   const s = species.junk ? junkScale / 1 : lengthM;
   grp.scale.setScalar(opts.forceScale || s);
   grp.userData.species = species.id;

@@ -280,6 +280,189 @@ const LOOKS = {
       if (i === 3) g.color(0xd8f0ff).box(0.004, segL * 0.4, 0.004, 0, segL * 0.5, r0 * 1.1);
     },
   }),
+
+  /* ---------------- the far islands' rods ---------------- */
+  // Whisperwillow: a living willow wand, leaves still sprouting, a wooden reel carved like a knot
+  willow: (r, d) => ({
+    L: 2.7, segs: 8, base: 0.42, radius: t => 0.02 - t * 0.015, sides: 6,
+    handle(hb, g) {
+      hb.color(0x6a5a3a).lathe([[0.03, -0.34], [0.036, -0.24], [0.03, -0.1], [0.034, 0.02], [0.026, 0.12]], 7);
+      hb.color(0x4a6a2e); for (let k = 0; k < 5; k++) { const a = k * 1.3; hb.beam([Math.cos(a) * 0.03, -0.3 + k * 0.08, Math.sin(a) * 0.03], [Math.cos(a + 1.2) * 0.03, -0.24 + k * 0.08, Math.sin(a + 1.2) * 0.03], 0.008, 0.008); }
+      hb.color(0x7a6a44).cyl(0.024, 0.02, 0.12, 0.42, 6, false);
+      hb.color(0x5a4a2e).blob(0.05, 0.05, 0.035, 0, 0.16, -0.13, 7, 4, 0.2);
+      hb.color(0x8a7a54).cyl(0.02, 0.02, 0.14, 0.18, 6, true, 0, -0.08);
+      g.color(0xc8f090).lump(0.006, 0.04, 0.2, -0.13, 0.3);
+    },
+    reel: { y: 0.16, z: -0.13, side: 0.045, arm: 0.08, knob: 0xa8c870 },
+    seg(sb, i, t, r0, r1, segL) {
+      sb.color(i % 2 ? 0x8a7a50 : 0x9a8a5a).cyl(r0, r1, 0, segL, 6, false);
+      // little leaves budding along the wand
+      if (i > 1) { sb.color(i % 2 ? 0x6ab04a : 0x8ac85a); for (let k = 0; k < 2; k++) { const a = i * 1.7 + k * 3.1; sb.card([Math.cos(a) * r0, segL * (0.3 + k * 0.4), Math.sin(a) * r0], [Math.cos(a) * r0 * 5, segL * (0.36 + k * 0.4), Math.sin(a) * r0 * 5 + 0.01], [Math.cos(a) * r0 * 2, segL * (0.5 + k * 0.4), Math.sin(a) * r0 * 2]); } }
+      if (i % 2 === 1 || i === 7) guide(sb, segL * 0.8, t, 0.9, 0xb8a878);
+    },
+  }),
+  // Magma Rod: black basalt blank with glowing cracks, a forged iron drum and an obsidian tip
+  magma: (r, d) => ({
+    L: 2.5, segs: 7, base: 0.46, radius: t => (0.019 - t * 0.012) * 1.5, sides: 6,
+    handle(hb, g) {
+      hb.color(0x2a2424).cyl(0.045, 0.04, -0.34, 0.12, 6, true);
+      hb.color(0x5a2a1e); for (let i = 0; i < 4; i++) hb.cyl(0.048, 0.048, -0.3 + i * 0.1, -0.27 + i * 0.1, 6, false);
+      hb.color(0x3a3434).cyl(0.036, 0.03, 0.12, 0.46, 6, false);
+      drumReel(hb, 1.5, 0x3a3434, 0xd8a060, 0.16, -0.17, 0.05, 5);
+      g.color(0xff7a2a); for (let k = 0; k < 5; k++) g.box(0.004, 0.05, 0.004, 0.046, -0.28 + k * 0.08, 0.01);
+      g.color(0xffa04a).lump(0.012, 0.08, 0.16, -0.17, 0.3);
+    },
+    reel: { y: 0.16, z: -0.17, side: 0.08, arm: 0.11, knob: 0xe0502a },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color(i % 2 ? 0x2a2626 : 0x342e2e).cyl(r0, r1, 0, segL, 6, false);
+      g.color(i % 2 ? 0xff6a2a : 0xffa03a).box(0.003, segL * 0.6, 0.003, r0 * 1.02, segL * 0.4, 0);
+      if (i % 3 === 1) g.color(0xff8a3a).box(0.003, segL * 0.3, 0.003, -r0 * 1.02, segL * 0.6, 0);
+      guide(sb, segL * 0.8, t, 1.2, 0x5a4a44);
+      if (i === 6) sb.color(0x1a1418).cone(r1 * 1.2, segL, segL + 0.12, 5);
+    },
+  }),
+  // Skyline: a very long, very thin white blank with a huge line-capacity reel and feather charms
+  skyline: (r, d) => ({
+    L: 3.1, segs: 9, base: 0.44, radius: t => 0.018 - t * 0.014, sides: 6,
+    handle(hb, g) {
+      hb.color(0xf2f2ee).cyl(0.03, 0.027, -0.34, 0.12, 7, true);
+      hb.color(0x3a5a7a); for (let i = 0; i < 3; i++) hb.cyl(0.032, 0.032, -0.28 + i * 0.12, -0.25 + i * 0.12, 7, false);
+      hb.color(0xd8d8d0).cyl(0.022, 0.018, 0.12, 0.44, 6, false);
+      drumReel(hb, 1.8, 0xd8d8d0, 0x5a8ab0, 0.16, -0.2, 0.08, 6);
+      hb.color(0xf2ead4); for (let k = 0; k < 3; k++) hb.card([0.02, 0.3, -0.02], [0.03 + k * 0.01, 0.2 - k * 0.02, -0.06], [0.01, 0.22, -0.08 + k * 0.01]);
+    },
+    reel: { y: 0.16, z: -0.2, side: 0.14, arm: 0.12, knob: 0x3a5a7a },
+    seg(sb, i, t, r0, r1, segL) {
+      sb.color(i % 3 === 1 ? 0x5a8ab0 : 0xf2f2ee).cyl(r0, r1, 0, segL, 6, false);
+      guide(sb, segL * 0.8, t, 0.9, 0x9aa0a8);
+    },
+  }),
+  // Prism Rod: a clear crystal blank faceted into prisms, glowing faintly at every joint
+  prism: (r, d) => ({
+    L: 2.6, segs: 8, base: 0.44, radius: t => (0.019 - t * 0.013) * 1.3, sides: 6, mat: MAT.shiny,
+    handle(hb, g) {
+      hb.color(0xe8f0f0).cyl(0.034, 0.032, -0.34, 0.12, 6, true);
+      hb.color(0x3a9aa8); for (let i = 0; i < 6; i++) hb.cyl(0.036, 0.036, -0.32 + i * 0.07, -0.31 + i * 0.07, 6, false);
+      hb.color(0xc8f0f0).cyl(0.026, 0.022, 0.12, 0.44, 6, false);
+      hb.color(0xb8e0f0).blob(0.05, 0.055, 0.05, 0, 0.16, -0.14, 6, 2);
+      g.color(0x9af0f0).lump(0.02, 0, 0.16, -0.14, 0.3);
+    },
+    reel: { y: 0.16, z: -0.14, side: 0.055, arm: 0.09, knob: 0xc8b0f8 },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color([0xc8f0f0, 0xd8c8f8, 0xf0d0e8][i % 3]).cyl(r0, r1, 0, segL, 6, false);
+      g.color([0x6af0f0, 0xb08af0, 0xf08ad0][i % 3]).cyl(r0 * 1.15, r0 * 1.15, 0, 0.01, 6, false);
+      guide(sb, segL * 0.8, t, 1, 0xe8f0f0);
+    },
+  }),
+  // Glacier Rod: blue-white, a fur grip, icicles on the guides, a reel in a block of clear ice
+  glacier: (r, d) => ({
+    L: 2.2, segs: 7, base: 0.5, radius: t => 0.028 - t * 0.017, sides: 7,
+    handle(hb, g) {
+      hb.color(0xe8e0d0).blob(0.055, 0.2, 0.055, 0, -0.14, 0, 7, 4, 0.2);
+      hb.color(0x8ab8d8).cyl(0.04, 0.036, 0.1, 0.5, 7, false);
+      hb.color(0xd8f0fa).box(0.13, 0.13, 0.11, 0, 0.18, -0.15);
+      hb.color(0x3a6a9a).box(0.08, 0.08, 0.06, 0, 0.18, -0.15);
+      g.color(0xd8fcff).lump(0.01, 0.06, 0.24, -0.15, 0.3);
+    },
+    reel: { y: 0.18, z: -0.15, side: 0.07, arm: 0.1, knob: 0xe8e0d0, tbar: true },
+    seg(sb, i, t, r0, r1, segL) {
+      sb.color(i % 2 ? 0xb8d8ec : 0xc8e4f4).cyl(r0, r1, 0, segL, 7, false);
+      guide(sb, segL * 0.8, t, 1.4, 0xe8f4fa);
+      sb.color(0xf4fcff).cone(r0 * 0.4, segL * 0.8 - 0.06, segL * 0.8 - 0.005, 4, 0, -0.03);
+    },
+  }),
+  // Bogwood: a twisted black root with moss, a gnarled knot for a reel, a tiny lantern at the tip
+  bogwood: (r, d) => ({
+    L: 2.45, segs: 7, base: 0.44, radius: t => (0.019 - t * 0.012) * 1.45, sides: 5,
+    handle(hb, g) {
+      hb.color(0x2e2a22).lathe([[0.034, -0.36], [0.046, -0.3], [0.036, -0.2], [0.048, -0.08], [0.034, 0.1]], 6);
+      hb.color(0x5a7a3a); for (let k = 0; k < 6; k++) hb.lump(0.014, Math.cos(k * 2) * 0.038, -0.3 + k * 0.07, Math.sin(k * 2) * 0.038, 0.3);
+      hb.color(0x3a3226).cyl(0.03, 0.026, 0.1, 0.44, 5, false);
+      hb.color(0x3a3226).blob(0.055, 0.05, 0.045, 0, 0.16, -0.14, 6, 3, 0.35);
+    },
+    reel: { y: 0.16, z: -0.14, side: 0.055, arm: 0.1, knob: 0x8a9a5a },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color(i % 2 ? 0x2e2a22 : 0x3a3428).cyl(r0, r1, 0, segL, 5, false, (r() - 0.5) * 0.005, 0, i);
+      if (i % 2 === 0) sb.color(0x5a7a3a).lump(r0 * 0.9, r0 * 0.6, segL * 0.4, 0, 0.3);
+      guide(sb, segL * 0.8, t, 1.1, 0x6a6a5a);
+      if (i === 6) { sb.color(0x2a2a2a).box(0.03, 0.04, 0.03, 0, segL + 0.02, -0.02); g.color(0xd8f080).box(0.02, 0.025, 0.02, 0, segL + 0.02, -0.02); }
+    },
+  }),
+  // Riptide: a stubby, very thick sea-green blank, a low-gear two-speed reel with a big lever, rope grip
+  riptide: (r, d) => ({
+    L: 2.2, segs: 6, base: 0.5, radius: t => (0.021 - t * 0.012) * 2, sides: 8,
+    handle(hb) {
+      hb.color(0xd8c89a).cyl(0.052, 0.048, -0.36, 0.12, 8, true);
+      for (let i = 0; i < 10; i++) hb.color(i % 2 ? 0xc8b88a : 0xe8d8aa).cyl(0.055, 0.055, -0.34 + i * 0.045, -0.325 + i * 0.045, 8, false);
+      hb.color(0x2a6a7a).cyl(0.052, 0.07, -0.5, -0.36, 8, true);
+      hb.color(0x2a6a7a).cyl(0.045, 0.04, 0.12, 0.5, 8, false);
+      drumReel(hb, 1.9, 0x2a4a5a, 0xd8d0b0, 0.16, -0.22, 0.075, 6);
+      hb.color(0xd8b048).box(0.012, 0.08, 0.012, 0.13, 0.22, -0.18); hb.color(0xe04a2a).blob(0.018, 0.018, 0.018, 0.13, 0.27, -0.18, 5, 3);
+    },
+    reel: { y: 0.16, z: -0.22, side: 0.15, arm: 0.13, knob: 0xd8b048, double: true },
+    seg(sb, i, t, r0, r1, segL) {
+      sb.color(i % 2 ? 0x3a8a8a : 0x2a7a7a).cyl(r0, r1, 0, segL, 8, false);
+      if (i % 2 === 0) sb.color(0xd8c89a).cyl(r0 * 1.1, r0 * 1.1, segL * 0.4, segL * 0.4 + 0.02, 8, false);
+      guide(sb, segL * 0.8, t, 1.6, 0xd8d8d8);
+    },
+  }),
+  // Thunderstruck: a black blank with a copper earthing strap down its length and a crackling ball on top
+  bolt: (r, d) => ({
+    L: 2.7, segs: 7, base: 0.48, radius: t => (0.019 - t * 0.012) * 1.6, sides: 7, mat: MAT.shiny,
+    handle(hb, g) {
+      hb.color(0x1a1a20).cyl(0.045, 0.04, -0.36, 0.12, 7, true);
+      hb.color(0xd8b048); for (let i = 0; i < 4; i++) hb.cyl(0.047, 0.047, -0.32 + i * 0.11, -0.3 + i * 0.11, 7, false);
+      hb.color(0xc87a3a).cyl(0.036, 0.03, 0.12, 0.48, 7, false);
+      drumReel(hb, 1.6, 0x2a2a30, 0xe0c870, 0.16, -0.19, 0.06, 4);
+      g.color(0xb8e8ff); for (let k = 0; k < 3; k++) g.box(0.004, 0.03, 0.004, 0.09, 0.14 + k * 0.02, -0.19 + (k - 1) * 0.02);
+    },
+    reel: { y: 0.16, z: -0.19, side: 0.09, arm: 0.11, knob: 0xd8b048 },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color(i % 2 ? 0x22222a : 0x2a2a32).cyl(r0, r1, 0, segL, 7, false);
+      sb.color(0xc87a3a).box(0.006, segL, 0.006, 0, segL / 2, r0 * 1.05);
+      guide(sb, segL * 0.8, t, 1.2, 0xc87a3a);
+      if (i === 6) { sb.color(0xc87a3a).cyl(r1, r1 * 0.8, segL, segL + 0.06, 6, true); g.color(0xd8f4ff).lump(0.026, 0, segL + 0.09, 0, 0.35); }
+    },
+  }),
+  // Crown Rod: ivory and gold, a ruby in the butt, a gilded crank shaped like a sceptre
+  crown: (r, d) => ({
+    L: 2.65, segs: 8, base: 0.48, radius: t => (0.019 - t * 0.012) * 1.55, sides: 8, mat: MAT.shiny,
+    handle(hb, g) {
+      hb.color(0xf0e8d0).cyl(0.042, 0.038, -0.34, 0.12, 8, true);
+      hb.color(0xd8b048); for (let i = 0; i < 5; i++) hb.cyl(0.044, 0.044, -0.32 + i * 0.09, -0.305 + i * 0.09, 8, false);
+      hb.color(0xd8b048).lathe([[0.04, -0.46], [0.05, -0.42], [0.04, -0.36]], 8);
+      hb.color(0xd8b048).cyl(0.034, 0.028, 0.12, 0.48, 8, false);
+      drumReel(hb, 1.55, 0xd8b048, 0xf0e8d0, 0.16, -0.18, 0.055, 8);
+      g.color(0xe03a4a).blob(0.022, 0.022, 0.022, 0, -0.48, 0, 6, 3);
+    },
+    reel: { y: 0.16, z: -0.18, side: 0.085, arm: 0.12, knob: 0xe03a4a },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color(i % 2 ? 0xf0e8d0 : 0xe8dcc0).cyl(r0, r1, 0, segL, 8, false);
+      sb.color(0xd8b048).cyl(r0 * 1.12, r0 * 1.12, segL * 0.85, segL * 0.9, 8, false);
+      guide(sb, segL * 0.8, t, 1.2, 0xd8b048);
+      if (i === 3) g.color(0x4ae0a0).blob(0.008, 0.008, 0.008, r0 * 1.1, segL * 0.5, 0, 5, 3);
+    },
+  }),
+  // Abyssal Rod: pressure-black, ribbed like a deep-sea cable, with a lantern lure that glows blue
+  abyssal: (r, d) => ({
+    L: 2.8, segs: 8, base: 0.5, radius: t => (0.02 - t * 0.012) * 1.75, sides: 8,
+    handle(hb, g) {
+      hb.color(0x14141c).cyl(0.052, 0.046, -0.36, 0.12, 8, true);
+      for (let i = 0; i < 7; i++) hb.color(0x2a2a3a).cyl(0.055, 0.055, -0.34 + i * 0.065, -0.325 + i * 0.065, 8, false);
+      hb.color(0x14141c).cyl(0.052, 0.08, -0.52, -0.36, 8, true);
+      hb.color(0x3a3a4a).cyl(0.042, 0.036, 0.12, 0.5, 8, false);
+      drumReel(hb, 1.85, 0x2a2a3a, 0x6a7af0, 0.16, -0.21, 0.07, 8);
+      g.color(0x6a7af0); for (let i = 0; i < 4; i++) g.box(0.006, 0.02, 0.02, 0.13, 0.12 + i * 0.03, -0.21);
+    },
+    reel: { y: 0.16, z: -0.21, side: 0.14, arm: 0.12, knob: 0x6a7af0, double: true },
+    seg(sb, i, t, r0, r1, segL, g) {
+      sb.color(i % 2 ? 0x1a1a24 : 0x22222e).cyl(r0, r1, 0, segL, 8, false);
+      for (let k = 0; k < 3; k++) sb.color(0x3a3a4a).cyl(r0 * 1.1, r0 * 1.1, segL * (0.2 + k * 0.3), segL * (0.2 + k * 0.3) + 0.012, 8, false);
+      guide(sb, segL * 0.8, t, 1.35, 0x4a4a5a);
+      if (i === 7) { sb.color(0x2a2a3a).beam([0, segL, 0], [0, segL + 0.02, -0.08], 0.004, 0.004); g.color(0x9aa8ff).blob(0.018, 0.018, 0.018, 0, segL + 0.02, -0.09, 6, 3); }
+      if (i === 2 || i === 5) g.color(0x6a7af0).box(0.004, segL * 0.4, 0.004, 0, segL * 0.5, r0 * 1.12);
+    },
+  }),
 };
 
 export function buildRod(def) {

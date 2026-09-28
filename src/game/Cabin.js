@@ -175,11 +175,13 @@ export class Cabin {
     const rack = S.cabin.rack;
     this.rackSpots = [];
     RODS.forEach((R, i) => {
-      const pos = new THREE.Vector3(rack.pos.x - 0.06, rack.pos.y + 0.25, rack.pos.z + i * rack.step);
+      // two rows: the home-water rods against the wall, the far-island rods in the rack in front
+      const row = rack.row ? Math.floor(i / rack.row) : 0, k = rack.row ? i % rack.row : i;
+      const pos = new THREE.Vector3(rack.pos.x - 0.06 - row * (rack.front || 0), rack.pos.y + 0.25, rack.pos.z + k * rack.step + row * rack.step * 0.5);
       this.rackSpots.push({ id: R.id, pos: pos.clone().add(new THREE.Vector3(0, 1.2, 0)), own: s.rods.includes(R.id), held: R.id === s.rod });
       if (!s.rods.includes(R.id) || R.id === s.rod) return;
       const rod = buildRod(R);
-      rod.group.scale.setScalar(0.95);
+      rod.group.scale.setScalar(Math.min(0.95, 2.35 / rod.length));
       rod.group.position.copy(pos);
       rod.group.rotation.set(0, rack.face, -0.04);
       this.group.add(rod.group);

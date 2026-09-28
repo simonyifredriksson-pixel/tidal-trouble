@@ -13,6 +13,7 @@ import * as THREE from '../../lib/three.module.js';
 import { MeshBuilder, shadeHex } from '../art/Geo.js';
 import { MAT } from '../art/Materials.js';
 import { buildRod } from '../art/RodArt.js';
+import { buildAnchor } from '../art/AnchorArt.js';
 import { damp, clamp, rng, TAU } from '../core/Util.js';
 
 function handMesh(skin, sleeve, side) {
@@ -236,6 +237,36 @@ export class ViewModel {
       Lh = { x: -0.26, y: -0.46, z: -0.45, rx: -0.3, ry: 0, rz: 0, show: s.holding };
     }
     if (s.holding) { R = { x: 0.2, y: -0.4, z: -0.5, rx: -0.4, ry: -0.3, rz: 0.4 }; Lh = { x: -0.2, y: -0.4, z: -0.5, rx: -0.4, ry: 0.3, rz: -0.4, show: true }; }
+    // the anchor: lift it off the rail in both hands, swing it back, heave it over
+    const throwing = this.action === 'anchorThrow' && this.actT < 0.9;
+    if (throwing) {
+      const k = this.actT;
+      const back = k < 0.3 ? k / 0.3 : k < 0.43 ? 1 - (k - 0.3) / 0.13 * 1.6 : -0.6 + Math.min(1, (k - 0.43) / 0.4) * 0.6;
+      const y = -0.42 - back * 0.12 + (k > 0.3 && k < 0.55 ? 0.12 : 0), z = -0.48 + back * 0.12;
+      R = { x: 0.12 + back * 0.08, y, z, rx: -0.3 + back * 0.8, ry: -0.2, rz: 0.3 };
+      Lh = { x: -0.04 + back * 0.08, y, z, rx: -0.3 + back * 0.8, ry: 0.2, rz: -0.3, show: true };
+    } else if (s.anchor) {
+      const c = s.anchor.crank || 0;
+      if (s.anchor.hand) {
+        // hand over hand on the rope
+        const a = this.t * 7;
+        R = { x: 0.12, y: -0.36 + Math.sin(a) * 0.12, z: -0.5 - Math.cos(a) * 0.05, rx: -0.6 + Math.sin(a) * 0.4, ry: -0.2, rz: 0.2 };
+        Lh = { x: -0.1, y: -0.36 - Math.sin(a) * 0.12, z: -0.5 + Math.cos(a) * 0.05, rx: -0.6 - Math.sin(a) * 0.4, ry: 0.2, rz: -0.2, show: true };
+      } else {
+        // turning the windlass crank: the right hand goes round, the left braces on the drum
+        R = { x: 0.16 + Math.cos(c) * 0.09, y: -0.4 + Math.sin(c) * 0.09, z: -0.52, rx: -0.5 + Math.sin(c) * 0.3, ry: -0.3, rz: 0.2 };
+        Lh = { x: -0.18, y: -0.46, z: -0.5, rx: -0.4, ry: 0.2, rz: -0.3, show: true };
+      }
+    }
+    if (!this.anchorHeld || this.anchorHeldLv !== (this.anchorLevel || 0)) {
+      if (this.anchorHeld) this.root.remove(this.anchorHeld);
+      this.anchorHeld = buildAnchor(this.anchorLevel || 0, 0.34);
+      this.anchorHeldLv = this.anchorLevel || 0;
+      this.root.add(this.anchorHeld);
+    }
+    const heldA = throwing && this.actT < 0.43;
+    this.anchorHeld.visible = heldA && this.visible;
+    this.toolHolder.visible = !heldA && !s.anchor;
     // swimming: a breaststroke - reach forward, sweep out, pull back, recover
     this.swimW = damp(this.swimW || 0, s.swim ? 1 : 0, 6, dt);
     if (s.swim) {
@@ -250,7 +281,7 @@ export class ViewModel {
       if (s.swim.moving && p < this.lastP) this.onStroke && this.onStroke();
       this.lastP = p;
     }
-    this.toolHolder.visible = this.swimW < 0.5;
+    this.toolHolder.visible = this.toolHolder.visible && this.swimW < 0.5;
     // the walkie-talkie: held up to your mouth in the left hand while C is down
     if (!this.walkieMesh) {
       const wb = new MeshBuilder(rng(8));
@@ -276,6 +307,11 @@ export class ViewModel {
     };
     apply(this.right, R, 1);
     apply(this.left, Lh, 0.8);
+    if (this.anchorHeld.visible) {
+      // it hangs from both fists by its ring
+      this.anchorHeld.position.set((this.right.position.x + this.left.position.x) / 2, (this.right.position.y + this.left.position.y) / 2 + 0.03, (this.right.position.z + this.left.position.z) / 2);
+      this.anchorHeld.rotation.set(this.right.rotation.x * 0.5 + 0.3, 0, 0.1);
+    }
     this.left.visible = !!Lh.show && this.visible;
     this.right.visible = this.visible;
     // rod bend and reel

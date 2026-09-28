@@ -15,12 +15,14 @@ import { MAT } from './Materials.js';
 import { rng, TAU } from '../core/Util.js';
 import { HULL_BY_ID, PAINT_BY_ID, boatStats } from '../data/BoatData.js';
 
-const RAIL = { dinghy: 0.42, motor: 0.55, trawler: 0.85, expedition: 0.95, wayfarer: 1.0 };
-const BOW = { dinghy: 0.25, motor: 0.55, trawler: 0.9, expedition: 1.2, wayfarer: 1.6 };
+const RAIL = { dinghy: 0.42, motor: 0.55, trawler: 0.85, expedition: 0.95, wayfarer: 1.0,
+  seafarer: 0.62, swiftfin: 0.4, salvager: 0.8, ironclad: 0.92, deeprunner: 0.8, stormbreaker: 0.95, abyss: 0.9 };
+const BOW = { dinghy: 0.25, motor: 0.55, trawler: 0.9, expedition: 1.2, wayfarer: 1.6,
+  seafarer: 0.7, swiftfin: 0.45, salvager: 0.7, ironclad: 1.0, deeprunner: 1.1, stormbreaker: 2.1, abyss: 1.3 };
 
 function sections(H) {
   const n = 12, out = [];
-  const rail = RAIL[H.id];
+  const rail = RAIL[H.id] ?? 0.8;
   for (let i = 0; i <= n; i++) {
     const t = i / n;
     const z = -H.hl + t * H.hl * 2;
@@ -29,7 +31,7 @@ function sections(H) {
     else w = H.hw * Math.pow(Math.cos((t - 0.55) / 0.45 * Math.PI / 2), 0.75);
     if (i === n) w = 0.0;
     const keel = -H.draft * (t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25 * 0.8);
-    const g = H.deck + rail + BOW[H.id] * Math.pow(Math.max(0, (t - 0.55) / 0.45), 2);
+    const g = H.deck + rail + (BOW[H.id] ?? 1) * Math.pow(Math.max(0, (t - 0.55) / 0.45), 2);
     out.push({ z, w, keel, g, t });
   }
   return out;
@@ -44,7 +46,7 @@ export function buildBoat(cfg) {
   const group = new THREE.Group();
   group.name = 'boat';
   const S = sections(H);
-  const rail = RAIL[H.id];
+  const rail = RAIL[H.id] ?? 0.8;
   const hullCol = paint.hull, trim = paint.trim;
   const wood = 0x8a6848, woodIn = 0x9a7a56;
 
@@ -364,6 +366,102 @@ export function buildBoat(cfg) {
     for (let k = 0; k < 16; k++) { glow.color(k % 2 ? 0xe8f0ff : 0xa8b8d8); }
     glow.color(0xd8e8ff).blob(0.22, 0.22, 0.22, -S[4].w * 0.6, y + 0.1, S[4].z, 8, 5, 0.08);
   }
+  /* ---------------- what makes each hull itself ---------------- */
+  const sec = z => S[Math.max(0, Math.min(12, Math.round((z + H.hl) / (H.hl * 2) * 12)))];
+  if (H.flybridge && H.cabin) {
+    // a flybridge: rails round the wheelhouse roof, a second wheel up top, a ladder at the back
+    const C = H.cabin, y = D + C.h + 0.14;
+    b.color(0xd8dce0);
+    for (const sx of [-1, 1]) { b.box(0.04, 0.8, C.hl * 2, sx * (C.hw - 0.05), y + 0.4, C.z); for (let k = -1; k <= 1; k++) b.box(0.04, 0.8, 0.04, sx * (C.hw - 0.05), y + 0.4, C.z + k * C.hl * 0.9); }
+    b.box(C.hw * 2, 0.04, 0.04, 0, y + 0.8, C.z + C.hl); b.box(C.hw * 2, 0.04, 0.04, 0, y + 0.8, C.z - C.hl);
+    b.color(0x3a3a40).box(0.6, 0.7, 0.4, 0, y + 0.35, C.z + C.hl * 0.5);
+    b.color(0x6a4a30); for (let k = 0; k < 6; k++) b.box(0.6, 0.05, 0.05, 0, D + 0.3 + k * 0.4, C.z - C.hl - 0.1);
+  }
+  if (H.platform) {
+    // a swim platform off the transom
+    b.color(0xe8e0cc).box(S[0].w * 1.8, 0.1, 0.7, 0, D * 0.4, S[0].z - 0.35);
+    b.color(0xc8ccd0); for (const sx of [-0.4, 0.4]) b.box(0.04, 0.6, 0.04, sx, D * 0.4 + 0.3, S[0].z - 0.1);
+  }
+  if (H.foils) {
+    // hydrofoils: struts down from the hull to wings under the water, and a spoiler on the stern
+    b.color(0x3a3a40);
+    for (const z of [H.hl * 0.55, -H.hl * 0.6]) {
+      const s = sec(z), w = s.w;
+      for (const sx of [-1, 1]) b.beam([sx * w * 0.7, s.keel * 0.3, z], [sx * w * 0.9, -H.draft - 0.8, z], 0.08, 0.2);
+      b.color(0x5a5e64).box(w * 2.3, 0.05, 0.45, 0, -H.draft - 0.82, z);
+      b.color(0x3a3a40);
+    }
+    b.color(0xe03a2a); for (const sx of [-1, 1]) for (let i = 0; i < S.length - 1; i++) b.quad([sx * (S[i].w + 0.006), S[i].g - 0.3, S[i].z], [sx * (S[i].w + 0.006), S[i].g - 0.22, S[i].z], [sx * (S[i + 1].w + 0.006), S[i + 1].g - 0.22, S[i + 1].z], [sx * (S[i + 1].w + 0.006), S[i + 1].g - 0.3, S[i + 1].z], [sx, 0, 0]);
+    b.color(0x2a2a2e).box(S[0].w * 1.6, 0.05, 0.4, 0, S[0].g + 0.5, S[0].z + 0.3);
+    for (const sx of [-0.6, 0.6]) b.box(0.05, 0.5, 0.1, sx * S[0].w, S[0].g + 0.25, S[0].z + 0.3);
+  }
+  if (H.outriggers) {
+    // outrigger booms off a short mast, nets hanging from them, a net drum on the stern
+    const mz = -H.hl * 0.2;
+    b.color(0x5a5e64).cyl(0.12, 0.1, D, D + 4.5, 6, true, 0, mz);
+    for (const sx of [-1, 1]) {
+      b.color(0x6a6e74).beam([0, D + 3.8, mz], [sx * (H.hw + 3.2), D + 1.8, mz - 0.4], 0.1, 0.1);
+      b.color(0x2a2a2a).beam([sx * (H.hw + 3.2), D + 1.8, mz - 0.4], [sx * (H.hw + 3.0), 0.2, mz - 1.6], 0.02, 0.02);
+      b.color(0x6a8a6a).card([sx * (H.hw + 2.6), 1.2, mz - 1.2], [sx * (H.hw + 3.4), 1.2, mz - 1.4], [sx * (H.hw + 3.0), -0.6, mz - 2.4]);
+    }
+    b.color(0x3a6aa0).push(0, D + 0.7, S[1].z, 0, 0, Math.PI / 2).cyl(0.55, 0.55, -1.2, 1.2, 10, true).pop();
+    b.color(0x6a8a6a).push(0, D + 0.7, S[1].z, 0, 0, Math.PI / 2).cyl(0.58, 0.58, -1, 1, 10, false).pop();
+    for (const sx of [-1.35, 1.35]) b.color(0x5a5e64).box(0.1, 1.3, 0.1, sx, D + 0.65, S[1].z);
+  }
+  if (H.aframe) {
+    // the A-frame on the stern, a winch, a cable and a salvage grab hanging from it
+    const z = S[0].z + 0.4;
+    b.color(0xe0a830);
+    for (const sx of [-1, 1]) b.beam([sx * S[0].w * 0.85, D, z + 0.6], [sx * 0.5, D + 4.6, z - 0.6], 0.2, 0.2);
+    b.box(1.2, 0.24, 0.24, 0, D + 4.6, z - 0.6);
+    b.color(0x3a3a3a).beam([0, D + 4.5, z - 0.6], [0, D + 1.6, z - 1.1], 0.03, 0.03);
+    b.color(0x5a5e64); for (let k = 0; k < 4; k++) { const a = k / 4 * TAU; b.beam([0, D + 1.6, z - 1.1], [Math.cos(a) * 0.5, D + 0.9, z - 1.1 + Math.sin(a) * 0.5], 0.06, 0.06); }
+    b.color(0x4a4e54).push(0, D + 0.55, z + 1.8, 0, 0, Math.PI / 2).cyl(0.4, 0.4, -0.8, 0.8, 10, true).pop();
+    b.color(0xf05a2a); for (const sx of [-1, 1]) b.blob(0.25, 0.25, 0.25, sx * (sec(1).w + 0.2), sec(1).g - 0.6, 1, 6, 3);
+  }
+  if (H.plates) {
+    // riveted armour plate down both sides, and a ram on the bow
+    for (let i = 1; i < S.length - 2; i++) for (const sx of [-1, 1]) {
+      const s = S[i], s2 = S[i + 1];
+      for (const [ya, yb] of [[0.1, 0.5], [0.55, 0.95]]) {
+        const y0 = D * ya + (s.g - D) * 0.1, y1 = D * yb + (s.g - D) * 0.3;
+        b.color(shadeHex(0x5a5e64, 0.85 + ((i + (ya > 0.3 ? 1 : 0)) % 2) * 0.12));
+        b.quad([sx * (s.w + 0.02), y0, s.z + 0.05], [sx * (s.w + 0.02), y1, s.z + 0.05], [sx * (s2.w + 0.02), y1, s2.z - 0.05], [sx * (s2.w + 0.02), y0, s2.z - 0.05], [sx, 0, 0]);
+      }
+      b.color(0x8a8e94); for (let k = 0; k < 3; k++) b.box(0.06, 0.06, 0.06, sx * (s.w + 0.04), D * (0.2 + k * 0.3), s.z + 0.15);
+    }
+    b.color(0x3a3e44).push(0, -H.draft * 0.3, H.hl - 0.2, Math.PI / 2 - 0.1, 0, 0).cone(0.45, 0, 2.4, 6).pop();
+    if (H.cabin) { const C = H.cabin; b.color(0x2a2e34).box(C.hw * 2 + 0.06, 0.3, 0.08, 0, D + C.h - 0.7, C.z + C.hl + 0.02); }
+  }
+  if (H.keel) {
+    // a deep fin keel, and its bulb
+    b.color(0x2a2e34).box(0.18, 1.4, H.hl * 0.9, 0, -H.draft - 0.2, -H.hl * 0.1);
+    b.color(0x3a3e44).blob(0.35, 0.3, 1.4, 0, -H.draft - 0.95, -H.hl * 0.1, 7, 3);
+  }
+  if (H.sonarDome) {
+    b.color(0xd8dce0).blob(0.5, 0.35, 0.9, 0, -H.draft * 0.8, H.hl * 0.55, 7, 3);
+    if (H.cabin) { const C = H.cabin; b.color(0xf2f2f2).blob(0.45, 0.32, 0.45, H.cabin.hw * 0.5, D + C.h + 0.45, C.z, 8, 3); }
+  }
+  if (H.lightningRod || st.rod) {
+    // a lightning rod on its own mast: copper coil, a spike, a cable down to the water
+    const z = H.cabin ? H.cabin.z - H.cabin.hl - 0.4 : 0, top = D + (H.cabin ? H.cabin.h : 0) + 5.5;
+    b.color(0x5a5e64).cyl(0.1, 0.06, D, top, 6, true, -H.hw * 0.4, z);
+    b.color(0xc87a3a); for (let k = 0; k < 10; k++) b.cyl(0.13, 0.13, top - 3 + k * 0.28, top - 2.9 + k * 0.28, 6, false, -H.hw * 0.4, z);
+    b.color(0xd8d8d8).cone(0.08, top, top + 1.1, 5, -H.hw * 0.4, z);
+    b.color(0xc87a3a).beam([-H.hw * 0.4, D + 0.3, z], [-sec(z).w, 0.1, z - 0.6], 0.03, 0.03);
+  }
+  if (H.highBow) {
+    // storm shutters over the wheelhouse windows, and a spray rail
+    if (H.cabin) { const C = H.cabin; b.color(0x3a3e44); for (const sx of [-1, 1]) b.box(0.05, 0.9, C.hl * 1.6, sx * (C.hw + 0.02), D + C.h - 0.6, C.z); }
+    for (const sx of [-1, 1]) for (let i = 6; i < 11; i++) b.color(0xe8e0cc).beam([sx * (S[i].w + 0.03), S[i].g - 0.5, S[i].z], [sx * (S[i + 1].w + 0.03), S[i + 1].g - 0.5, S[i + 1].z], 0.1, 0.06);
+  }
+  if (H.glowStrips) {
+    // blue light strips along the black hull, and searchlight domes on the wheelhouse
+    for (const sx of [-1, 1]) for (let i = 0; i < S.length - 1; i++) glow.color(0x5a8aff).quad([sx * (S[i].w + 0.012), S[i].g - 0.45, S[i].z], [sx * (S[i].w + 0.012), S[i].g - 0.38, S[i].z], [sx * (S[i + 1].w + 0.012), S[i + 1].g - 0.38, S[i + 1].z], [sx * (S[i + 1].w + 0.012), S[i + 1].g - 0.45, S[i + 1].z], [sx, 0, 0]);
+    if (H.cabin) { const C = H.cabin; for (const sx of [-1, 1]) { b.color(0x1a1a24).cyl(0.22, 0.2, D + C.h, D + C.h + 0.4, 8, true, sx * C.hw * 0.7, C.z + C.hl * 0.6); glow.color(0xd8e8ff).cyl(0.16, 0.16, D + C.h + 0.3, D + C.h + 0.42, 8, true, sx * C.hw * 0.7, C.z + C.hl * 0.6 + 0.05); } }
+    b.color(0x1a1a24).box(1.2, 1.6, 1.4, 0, D + (H.cabin ? H.cabin.h : 0) + 0.8, (H.cabin ? H.cabin.z : 0) - 0.3);
+  }
+
   const hullMesh = new THREE.Mesh(b.build(), MAT.solid);
   hullMesh.castShadow = true;
   hullMesh.receiveShadow = true;

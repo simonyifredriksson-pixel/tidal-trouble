@@ -200,6 +200,11 @@ export class Effects {
     this.glow.add(x, y, z, 0, 0.4, 0, 0.5, 0.09, col, 0, 1);
   }
 
+  /** A fleck of foam riding the current, so you can see which way the water runs. */
+  foam(x, y, z, vx, vz) {
+    this.lit.add(x, y, z, vx, 0, vz, 2.5 + Math.random() * 2, 0.05 + Math.random() * 0.05, 0xeef6f8, 0, 0);
+  }
+
   water(x, y, z, dx, dy, dz) {
     for (let i = 0; i < 26; i++) {
       this.lit.add(x, y, z, dx * (5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5, dy * 5 + 1.5 + Math.random() * 1.5, dz * (5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5, 0.7 + Math.random() * 0.4, 0.06 + Math.random() * 0.06, 0xa8d8e8, -9.8, 0.3);

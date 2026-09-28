@@ -17,15 +17,18 @@
 
 import * as THREE from '../../lib/three.module.js';
 import { buildBoat } from '../art/BoatArt.js';
-import { boatStats, HULL_BY_ID } from '../data/BoatData.js';
+import { boatStats, HULL_BY_ID, ANCHORS, anchorLoad } from '../data/BoatData.js';
+import { buildAnchor, buildWindlass, Rope } from '../art/AnchorArt.js';
 import { heightAt, iceAt, ICE_Y } from '../world/Terrain.js';
-import { waveAmp } from '../world/MapData.js';
-import { clamp, damp, wrapAngle, lerp, rng } from '../core/Util.js';
+import { waveAmp, WORLD, HOME_CENTRE, stormAt } from '../world/MapData.js';
+import { clamp, damp, wrapAngle, lerp, rng, smoothstep } from '../core/Util.js';
 import { MeshBuilder } from '../art/Geo.js';
 import { MAT } from '../art/Materials.js';
 import { Bus } from '../core/Bus.js';
 
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
+const ST_CODE = ['stow', 'fly', 'sink', 'hang', 'set'];
+const UP = new THREE.Vector3(0, 1, 0);
 const MAT_HOLE = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
 let _holeGeo = null;
 /** A ragged hole punched through planks: a dark gap ringed with splinters. */
@@ -78,6 +81,7 @@ export class Boat {
     this.bumpT = 0;
     this.stolen = false;
     this.group = null;
+    this.anchor = { st: 'stow', p: new THREE.Vector3(), v: new THREE.Vector3(), len: 0, reelT: 0, drag: 0, crank: 0 };
     this.setConfig(cfg);
     this.hp = this.stats.hp;
   }
@@ -136,6 +140,30 @@ export class Boat {
     }
     this.breaks = this.breaks || [];
     if (H.fuel) this.obstacles.push({ x: H.fuel[0], z: H.fuel[2], hw: 0.28, hd: 0.2 });
+    // the anchor gear: a windlass on the foredeck, a roller on the stem, the
+    // anchor hung on the rail beside it, and the rope for when it is out
+    const alv = this.stats.anchor || 0, asc = clamp(0.45 + H.hl * 0.09, 0.55, 1.3);
+    const [ax, az] = H.anchor;
+    const wl = buildWindlass(alv, clamp(0.7 + H.hl * 0.05, 0.75, 1.2));
+    wl.group.position.set(ax, H.deck, az);
+    this.group.add(wl.group);
+    this.windlass = wl; this.windlassR = wl.drumR;
+    this.obstacles.push({ x: ax, z: az, hw: 0.3, hd: 0.2 });
+    const rb = new MeshBuilder(rng(5)), rz = H.hl * 0.86, ry = this.railY(rz);
+    rb.color(0x3a3a40).box(0.2, 0.06, 0.3, 0, ry - 0.02, rz);
+    for (const s of [-1, 1]) rb.box(0.03, 0.14, 0.2, s * 0.09, ry + 0.04, rz);
+    rb.color(0x9aa0a8).push(0, ry + 0.05, rz, 0, 0, Math.PI / 2); rb.cyl(0.04, 0.04, -0.07, 0.07, 6, true); rb.pop();
+    this.group.add(new THREE.Mesh(rb.build(), MAT.solid));
+    const sz = az - 0.1, side = ax > 0.05 ? 1 : ax < -0.05 ? -1 : 1;
+    this.anchorStowed = buildAnchor(alv, asc);
+    this.anchorStowed.position.set(side * (this.halfWidth(sz) / 0.9 + 0.05), this.railY(sz) - 0.02, sz);
+    this.group.add(this.anchorStowed);
+    if (this.anchorMesh) { this.game.scene.remove(this.anchorMesh); this.anchorMesh.traverse(o => o.geometry && o.geometry.dispose()); }
+    this.anchorMesh = buildAnchor(alv, asc);
+    this.anchorMesh.visible = false;
+    this.game.scene.add(this.anchorMesh);
+    if (!this.rope) this.rope = new Rope(this.game.scene, 20);
+    this.rope.set(ANCHORS[alv].rope2, (ANCHORS[alv].chain ? 0.075 : 0.055) * asc);
     this._updateMatrix();
   }
 
@@ -187,8 +215,22 @@ export class Boat {
     const sh = Math.sin(this.heading), ch = Math.cos(this.heading);
     let vf = this.vel.x * sh + this.vel.y * ch;
     let vr = this.vel.x * ch - this.vel.y * sh;
+    // THE SEA MOVES: the current and the wind set a drift, and the engine and
+    // the drag work in the water's frame, so a boat nobody drives goes where
+    // the water goes and a driven one is set sideways as it crosses
+    const cur = world.current ? world.current(this.pos.x, this.pos.z) : { x: 0, z: 0 };
+    const wind = world.wind || { x: 0, z: 0 };
+    const wk = 0.03 * (H.windage || 1) / Math.sqrt(H.mass / 900);
+    // a keel, or a hull built for deep water, bites into it and is carried off far less
+    const far = smoothstep(2500, 4000, Math.hypot(this.pos.x - HOME_CENTRE.x, this.pos.z - HOME_CENTRE.z));
+    const grip = 1 - (st.keel || 0) * 0.22 - (st.deep || 0) * 0.3 * far;
+    const fx = (cur.x + wind.x * wk) * grip, fz = (cur.z + wind.z * wk) * grip;
+    this.flow = this.flow || new THREE.Vector2();
+    this.flow.set(fx, fz);
+    vf = (this.vel.x - fx) * sh + (this.vel.y - fz) * ch;
+    vr = (this.vel.x - fx) * ch - (this.vel.y - fz) * sh;
     const hurt = (this.hp < st.hp * 0.25 ? 0.6 : 1) * (this.broken('engine') ? 0.45 : 1);
-    const maxSp = st.speed * hurt * (1 - over * 0.45) * (1 - this.water * 0.6);
+    const maxSp = st.speed * hurt * (1 - over * 0.45) * (1 - this.water * 0.6) * (1 + (st.deep || 0) * 0.08 * far);
     const acc = st.accel * hurt;
     const thr = this.driver || this.autopilot ? this.throttle : 0;
     const drag = acc / Math.max(1, maxSp);
@@ -200,14 +242,13 @@ export class Boat {
     // a flooded boat is heavy and slow to answer the helm
     this.yawRate = damp(this.yawRate, steer * st.turn * turnF * (1 - over * 0.3) * (1 - this.water * 0.6) * (this.broken('wheel') ? 0.3 : 1), 3.5 * (1 - this.water * 0.5), dt);
     this.heading = wrapAngle(this.heading + this.yawRate * dt);
-    this.vel.set(vf * sh + vr * ch, vf * ch - vr * sh);
+    this.vel.set(vf * sh + vr * ch + fx, vf * ch - vr * sh + fz);
     // external pulls: towing fish, whirlpools, thieves
     this.vel.x += this.tow.x * dt; this.vel.y += this.tow.y * dt;
     this.tow.set(0, 0);
-    // anchored when nobody is driving: kill drift
-    if (!this.driver && !this.autopilot) this.vel.multiplyScalar(Math.exp(-0.8 * dt));
     const nx = this.pos.x + this.vel.x * dt, nz = this.pos.z + this.vel.y * dt;
     this.pos.x = nx; this.pos.z = nz;
+    this._anchorStep(dt, world);
     this._collide(dt, world);
     // docking
     if (!this.driver && !this.autopilot && this.mooring && this.docked) {
@@ -227,6 +268,117 @@ export class Boat {
     return { x: m.pos.x + side * (this.hull.hw - 0.85), z: m.pos.z, h: m.heading };
   }
 
+  /* ---------------- the anchor ----------------
+     stow   on the bow rail
+     fly    thrown: a projectile trailing its rope
+     sink   dropping through the water, the rope paying out
+     set    on the bottom. The boat may swing round it on `len` metres of
+            rope; push harder than the anchor holds and it drags
+     hang   off the bottom, swinging under the bow roller: it was hauled
+            free, or the rope ran out before it found the bottom
+     Hauling (reelT > 0) shortens the rope: first the boat is dragged up to
+     the anchor, then it breaks out of the sea bed and comes up. */
+  get anchorSpec() { return ANCHORS[this.stats.anchor || 0]; }
+  get anchorOut() { return this.anchor.st !== 'stow'; }
+  /** The bow roller the rope runs over, in world space. */
+  rollerWorld(out = new THREE.Vector3()) { const z = this.hull.hl * 0.86; return this.toWorld(out.set(0, this.railY(z) + 0.05, z), out); }
+
+  throwAnchor(p, v) {
+    const A = this.anchor;
+    if (A.st !== 'stow' || this.docked) return false;
+    A.st = 'fly'; A.p.copy(p); A.v.copy(v); A.len = 0.5; A.drag = 0; A.reelT = 0;
+    Bus.emit('anchor:throw', { boat: this });
+    return true;
+  }
+  /** Let a hanging anchor drop again. */
+  dropAnchor() { const A = this.anchor; if (A.st === 'hang' && A.len < this.anchorSpec.rope - 0.5) { A.st = 'sink'; A.v.set(0, 0, 0); return true; } return false; }
+  haulAnchor(t = 0.3) { if (this.anchor.st !== 'stow') this.anchor.reelT = t; }
+  stowAnchor() { const A = this.anchor; A.st = 'stow'; A.len = 0; A.reelT = 0; A.drag = 0; A.v.set(0, 0, 0); }
+
+  _anchorStep(dt, world) {
+    const A = this.anchor;
+    if (A.st === 'stow') return;
+    const S = this.anchorSpec, H = this.hull;
+    const R = this.rollerWorld(_a);
+    const was = A.len;
+    A.reelT -= dt;
+    const reeling = A.reelT > 0;
+    const floorAt = (x, z) => heightAt(x, z) + 0.12;
+    const flow = this.flow || { x: 0, y: 0 };
+    if (A.st === 'fly') {
+      A.v.y -= 9.8 * dt;
+      A.p.addScaledVector(A.v, dt);
+      const f = floorAt(A.p.x, A.p.z);
+      if (A.p.y <= f) { A.p.y = f; A.st = 'set'; A.len = Math.min(S.rope, R.distanceTo(A.p) + 1); Bus.emit('anchor:set', { boat: this, dry: f > 0 }); }
+      else if (A.p.y < world.sea(A.p.x, A.p.z)) { A.st = 'sink'; A.v.set(A.v.x * 0.15, 0, A.v.z * 0.15); Bus.emit('anchor:splash', { boat: this }); }
+      A.len = Math.max(A.len, R.distanceTo(A.p));
+      if (A.len > S.rope) { A.len = S.rope; A.st = 'hang'; }
+    } else if (A.st === 'sink') {
+      A.v.multiplyScalar(Math.exp(-1.5 * dt));
+      A.p.x += (A.v.x + flow.x * 0.3) * dt; A.p.z += (A.v.z + flow.y * 0.3) * dt;
+      A.p.y -= S.sink * dt;
+      const f = floorAt(A.p.x, A.p.z);
+      const d = R.distanceTo(A.p);
+      if (A.p.y <= f) {
+        // on the bottom: pay out a little scope so it can dig in
+        A.p.y = f; A.st = 'set';
+        A.len = Math.min(S.rope, d + 1 + Math.max(0, R.y - f) * 0.15);
+        Bus.emit('anchor:set', { boat: this, depth: R.y - f });
+      } else if (d >= S.rope) {
+        A.len = S.rope; A.st = 'hang';
+        Bus.emit('anchor:short', { boat: this, rope: S.rope });
+      } else A.len = d;
+      if (reeling && A.st === 'sink') { A.st = 'hang'; A.len = d; }
+    } else if (A.st === 'hang') {
+      if (reeling) A.len -= S.reel * dt;
+      if (A.len <= 0.4) { this.stowAnchor(); Bus.emit('anchor:stowed', { boat: this }); A.crank += was / Math.max(0.05, this.windlassR || 0.1); return; }
+      // it swings under the roller, trailing back from the way the boat moves through the water
+      const rx = this.vel.x - flow.x, rz = this.vel.y - flow.y;
+      const trail = Math.min(0.8, Math.hypot(rx, rz) * 0.25);
+      const tx = -rx, tz = -rz, tl = Math.hypot(tx, tz) || 1;
+      const hx = tx / tl * trail, hz = tz / tl * trail, hy = -Math.sqrt(Math.max(0.05, 1 - trail * trail));
+      const k = 1 - Math.exp(-3 * dt);
+      A.p.x += (R.x + hx * A.len - A.p.x) * k; A.p.y += (R.y + hy * A.len - A.p.y) * k; A.p.z += (R.z + hz * A.len - A.p.z) * k;
+      const f = floorAt(A.p.x, A.p.z);
+      if (A.p.y < f) {
+        A.p.y = f;
+        // drifting into shallower water with the anchor down: it catches
+        if (!reeling) { A.st = 'set'; A.len = Math.min(S.rope, A.len + 1); Bus.emit('anchor:set', { boat: this, depth: R.y - f }); }
+      }
+    } else if (A.st === 'set') {
+      if (reeling) A.len -= S.reel * dt;
+      const dy = R.y - A.p.y, hx = R.x - A.p.x, hz = R.z - A.p.z, hd = Math.hypot(hx, hz) || 0.001;
+      // hauled short: the anchor breaks out of the bottom and comes up
+      if (A.len < dy + 0.5) { A.len = Math.max(0.5, Math.min(A.len, Math.hypot(dy, hd))); A.st = 'hang'; Bus.emit('anchor:break', { boat: this }); }
+      else {
+        const rad = Math.sqrt(Math.max(0.01, A.len * A.len - dy * dy));
+        A.drag = Math.max(0, A.drag - dt);
+        if (hd > rad) {
+          const nx = hx / hd, nz = hz / hd;
+          // how hard the boat leans on it: the drift, plus the engine if someone is driving against it
+          const eng = (this.driver || this.autopilot) ? Math.abs(this.throttle) * this.stats.speed * 0.3 : 0;
+          const load = (Math.hypot(flow.x, flow.y) + eng) * anchorLoad(H.mass);
+          // too much for it: the boat drags the anchor along the bottom, but no faster than slipV
+          const slipV = load > S.hold && !reeling ? Math.min(3, (load - S.hold) * 0.45) : 0;
+          let over = hd - rad;
+          if (slipV > 0) {
+            const m = Math.min(over, slipV * dt);
+            A.p.x += nx * m; A.p.z += nz * m; A.p.y = floorAt(A.p.x, A.p.z);
+            over -= m; A.drag = 0.6;
+          }
+          this.pos.x -= nx * over; this.pos.z -= nz * over;
+          const vn = this.vel.x * nx + this.vel.y * nz;
+          if (vn > slipV) { this.vel.x -= nx * (vn - slipV); this.vel.y -= nz * (vn - slipV); }
+          // it swings round to face the anchor, bow first
+          const want = Math.atan2(-nx, -nz);
+          this.yawRate += wrapAngle(want - this.heading) * 1.1 * dt / (1 + H.mass / 8000);
+          this.yawRate *= Math.exp(-0.8 * dt);
+        }
+      }
+    }
+    A.crank += (was - A.len) / Math.max(0.05, this.windlassR || 0.1);
+  }
+
   _float(dt, world, load) {
     const H = this.hull;
     const f = this.forward();
@@ -239,8 +391,10 @@ export class Boat {
     const hsb = world.sea(px - lx * W, pz - lz * W);
     const sink = this.water * H.deck * 0.9 + clamp(load, 0, 2) * 0.12 + (this.hp <= 0 ? 0.3 : 0);
     const ty = (hb + hs + hp + hsb) / 4 - sink;
-    const tp = -Math.atan2(hb - hs, 2 * L) * 0.9;
-    const tr = Math.atan2(hp - hsb, 2 * W) * 0.9;
+    // a stable hull rides the swell flatter
+    const calm = 1 - (this.stats.stability ?? 0.5) * 0.45;
+    const tp = -Math.atan2(hb - hs, 2 * L) * 0.9 * calm;
+    const tr = Math.atan2(hp - hsb, 2 * W) * 0.9 * calm;
     // spring toward the targets; heavier boats respond slower
     const k = 40 / Math.sqrt(H.mass / 250), c = 7;
     this.vy += ((ty - this.y) * k - this.vy * c) * dt;
@@ -285,9 +439,9 @@ export class Boat {
       if (r.hit) { px += r.x - cx; pz += r.z - cz; n++; }
     }
     // world edge
-    const E = 1290;
-    if (Math.abs(this.pos.x) > E) { px -= Math.sign(this.pos.x) * (Math.abs(this.pos.x) - E); n++; }
-    if (Math.abs(this.pos.z) > E) { pz -= Math.sign(this.pos.z) * (Math.abs(this.pos.z) - E); n++; }
+    // the rim of the world: the sea stands up in a wall and will not let you through
+    const ex = this.pos.x - HOME_CENTRE.x, ez = this.pos.z - HOME_CENTRE.z, ed = Math.hypot(ex, ez), E = WORLD.edge - 15;
+    if (ed > E) { px -= ex / ed * (ed - E); pz -= ez / ed * (ed - E); n++; }
     if (n) {
       this.pos.x += px; this.pos.z += pz;
       const l = Math.hypot(px, pz) || 1;
@@ -365,14 +519,15 @@ export class Boat {
   _hazards(dt, world) {
     const st = this.stats;
     // heavy seas
-    const amp = waveAmp(this.pos.x, this.pos.z) * (1 + world.storm * 1.6);
+    // (a place that is always stormy counts as a storm, a little)
+    const amp = waveAmp(this.pos.x, this.pos.z) * (1 + Math.max(world.storm, stormAt(this.pos.x, this.pos.z) * 0.5) * 1.6);
     const excess = amp - st.waves;
     if (excess > 0) {
       this.water += excess * 0.02 * dt;
       this.seaT = (this.seaT || 0) - dt;
       if (this.seaT <= 0) {
         this.seaT = 3 + Math.random() * 3;
-        this.damage(excess * 9, 'waves');
+        this.damage(excess * 9 * (1.3 - (st.stability ?? 0.5) * 0.6), 'waves');
         Bus.emit('boat:wave', { boat: this, excess });
       }
     }
@@ -424,6 +579,7 @@ export class Boat {
     this.sinking = 0; this.water = 0; this.fires = []; this.leaks = []; this.breaks = [];
     this.hp = Math.max(this.hp, Math.round(this.stats.hp * (towed ? 0.6 : 1)));
     this.docked = true; this.driver = null; this.stolen = false; this.autopilot = null;
+    this.stowAnchor();
     this._updateMatrix();
     if (towed) Bus.emit('boat:towed', { boat: this });
   }
@@ -436,7 +592,62 @@ export class Boat {
   }
 
   /** Visual per-frame work, run on every peer. */
+  _anchorVisuals(dt, fx, world) {
+    const A = this.anchor, S = this.anchorSpec, au = this.game.audio;
+    if (!this.game.isHost && world.current) {
+      // a client does not simulate, but its HUD still wants to know which way the water runs
+      const c = world.current(this.pos.x, this.pos.z), w = world.wind || { x: 0, z: 0 }, wk = 0.03 * (this.hull.windage || 1) / Math.sqrt(this.hull.mass / 900);
+      (this.flow = this.flow || new THREE.Vector2()).set(c.x + w.x * wk, c.z + w.z * wk);
+    }
+    const prev = this._aSt || 'stow'; this._aSt = A.st;
+    const out = A.st !== 'stow';
+    this.anchorStowed.visible = !out;
+    this.anchorMesh.visible = out;
+    const W = this.windlass;
+    if (W.crank) W.crank.rotation.x = -A.crank;
+    if (W.drum) W.drum.rotation.x = -A.crank;
+    // the rope rattles out and clanks in, link by link
+    const L = au && au.listener, near = !L || Math.hypot(L.x - this.pos.x, L.z - this.pos.z) < 45;
+    const dl = Math.abs(A.len - (this._aLen ?? A.len)); this._aLen = A.len;
+    this._clink = (this._clink || 0) + dl;
+    if (this._clink > (S.chain ? 0.3 : 0.7)) { this._clink = 0; if (near && au) { au.chain(S.chain, A.st === 'sink' || A.st === 'fly' ? 1 : 0.7); if (A.reelT > 0 && S.winch !== 'hand') au.ratchet(); } }
+    if (!out) { this.rope.hide(); if (prev !== 'stow' && near && au) au.clunk(); return; }
+    const m = this.anchorMesh;
+    m.position.copy(A.p);
+    const R = this.rollerWorld(_b);
+    if (A.st === 'fly') { m.rotation.x += dt * 6; m.rotation.z += dt * 3.5; }
+    else if (A.st === 'set') { if (prev !== 'set') { this._aYaw = Math.random() * 6.28; } m.rotation.set(0, this._aYaw || 0, 1.3, 'YXZ'); }
+    else { _c.subVectors(R, A.p); if (_c.lengthSq() > 1e-4) { _c.normalize(); m.quaternion.setFromUnitVectors(UP, _c); } }
+    const sea = world.sea(A.p.x, A.p.z);
+    if (prev === 'fly' && A.st === 'sink') { fx.splash(A.p.x, sea, A.p.z, 0.9 + S.sink * 0.1); if (near && au) au.splash(1.1, A.p); }
+    if (A.st === 'sink' && Math.random() < 0.6) fx.bubbles(A.p.x, A.p.y + 0.2, A.p.z, 2);
+    const mud = n => { for (let i = 0; i < n; i++) fx.smoke(A.p.x + (Math.random() - 0.5), A.p.y + 0.1, A.p.z + (Math.random() - 0.5), 0x7a6a4a); };
+    if (A.st === 'set' && prev !== 'set') { mud(6); if (near && au) au.anchorSet(); }
+    if (prev === 'set' && A.st === 'hang') mud(5);
+    if (A.drag > 0 && Math.random() < 0.3) { mud(1); if (near && au && Math.random() < 0.08) au.scrape(); }
+    // coming up: water pouring off it as it breaks the surface
+    if (A.st === 'hang' && A.p.y > sea - 0.3 && A.p.y < sea + 3 && Math.random() < 0.5) fx.wake(A.p.x, A.p.y - 0.3, A.p.z, 0, 0, 1);
+    if (A.st === 'hang' && this._aWet && A.p.y > sea) { fx.splash(A.p.x, sea, A.p.z, 0.5); }
+    this._aWet = A.p.y < sea;
+    // the rope: off the drum, over the roller, then down to the anchor with a sag when it is slack
+    const P = this.rope.pts, n = P.length - 1;
+    this.toWorld(P[0].set(this.hull.anchor[0], this.deck + (W.top || 0.3) * 0.62 + W.drumR, this.hull.anchor[1]), P[0]);
+    P[1].copy(R);
+    const dist = R.distanceTo(A.p);
+    let sag = A.st === 'fly' ? dist * 0.12 : A.st === 'set' ? Math.max(0, A.len - dist) * 0.45 : 0;
+    sag = Math.min(sag, dist * 0.5);
+    for (let i = 2; i <= n; i++) {
+      const t = (i - 1) / (n - 1);
+      P[i].lerpVectors(R, A.p, t);
+      P[i].y -= sag * 4 * t * (1 - t);
+      const f = heightAt(P[i].x, P[i].z) + 0.05;
+      if (P[i].y < f) P[i].y = f;
+    }
+    this.rope.draw();
+  }
+
   visuals(dt, fx, world, night) {
+    this._anchorVisuals(dt, fx, world);
     const sp = this.speed();
     // propeller
     if (this.parts.prop) this.parts.prop.rotation.z += dt * (4 + Math.abs(this.throttle) * 40);
@@ -519,6 +730,7 @@ export class Boat {
       hp: Math.round(this.hp), w: +this.water.toFixed(3), sk: +this.sinking.toFixed(2), th: +this.throttle.toFixed(2), st: +this.steer.toFixed(2),
       dr: this.driver, f: this.fires.map(F => [+F.x.toFixed(2), +F.z.toFixed(2), +F.i.toFixed(2)]), l: this.leaks.map(L => [+L.x.toFixed(2), +L.z.toFixed(2), +L.size.toFixed(2), +L.fix.toFixed(2)]),
       dk: this.docked ? 1 : 0, cfg: this.cfgKey(), bk: this.breaks.map(B => [B.kind, +B.x.toFixed(2), +B.z.toFixed(2), +B.fix.toFixed(2)]),
+      an: this.anchor.st === 'stow' ? 0 : [ST_CODE.indexOf(this.anchor.st), +this.anchor.p.x.toFixed(2), +this.anchor.p.y.toFixed(2), +this.anchor.p.z.toFixed(2), +this.anchor.len.toFixed(2), this.anchor.drag > 0 ? 1 : 0, this.anchor.reelT > 0 ? 1 : 0],
     };
   }
   cfgKey() { return JSON.stringify(this.cfg); }
@@ -536,6 +748,16 @@ export class Boat {
     this.fires = s.f.map(a => ({ x: a[0], z: a[1], i: a[2], t: 0 }));
     this.leaks = s.l.map(a => ({ x: a[0], y: this.deck + 0.05, z: a[1], size: a[2], fix: a[3] }));
     this.breaks = (s.bk || []).map(a => ({ kind: a[0], x: a[1], z: a[2], fix: a[3] }));
+    const A = this.anchor;
+    if (!s.an) { if (A.st !== 'stow') A.crank += A.len / Math.max(0.05, this.windlassR || 0.1); A.st = 'stow'; A.len = 0; }
+    else {
+      const st = ST_CODE[s.an[0]] || 'hang';
+      if (A.st === 'stow') A.p.set(s.an[1], s.an[2], s.an[3]);
+      A.st = st;
+      A.p.x += (s.an[1] - A.p.x) * k; A.p.y += (s.an[2] - A.p.y) * k; A.p.z += (s.an[3] - A.p.z) * k;
+      A.crank += (A.len - s.an[4]) / Math.max(0.05, this.windlassR || 0.1);
+      A.len = s.an[4]; A.drag = s.an[5] ? 0.3 : 0; A.reelT = s.an[6] ? 0.3 : 0;
+    }
     this._updateMatrix();
   }
 }

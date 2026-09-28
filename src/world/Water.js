@@ -17,10 +17,47 @@
 
 import * as THREE from '../../lib/three.module.js';
 import { heightAt } from './Terrain.js';
-import { LAKES, WORLD } from './MapData.js';
+import { LAKES, WORLD, WAVE_SPOTS, REGIONS, SHELTERS } from './MapData.js';
 
-const TEX_N = 768;
-const TEX_HALF = WORLD.half + 200;
+/* The depth texture no longer covers the whole world (15 km would be 20 m a
+   pixel): it is a 1.6 km square that follows the camera, rebuilt a few rows
+   a frame in the background whenever you have sailed far enough. */
+const TEX_N = 512;
+const TEX_HALF = 800;
+/** A JS number as an exact GLSL float literal (the wave field must match to the digit). */
+const f1 = v => { const s = String(+v); return /[.e]/.test(s) ? s : s + '.0'; };
+
+/* Water colour per region: [deep rgb, shallow rgb]. */
+const TINTS = {
+  frost: [[0.030, 0.100, 0.140], [0.200, 0.420, 0.470]],
+  tropic: [[0.004, 0.170, 0.260], [0.120, 0.700, 0.620]],
+  black: [[0.002, 0.004, 0.008], [0.012, 0.030, 0.040]],
+  whisper: [[0.020, 0.090, 0.090], [0.080, 0.300, 0.220]],
+  sunscar: [[0.030, 0.070, 0.090], [0.200, 0.300, 0.270]],
+  skywatch: [[0.010, 0.120, 0.200], [0.100, 0.450, 0.500]],
+  crystal: [[0.010, 0.250, 0.350], [0.250, 0.850, 0.850]],
+  frostfall: [[0.030, 0.100, 0.140], [0.220, 0.460, 0.520]],
+  dread: [[0.020, 0.035, 0.018], [0.100, 0.130, 0.060]],
+  ironwreck: [[0.030, 0.065, 0.075], [0.180, 0.220, 0.180]],
+  lost: [[0.030, 0.055, 0.065], [0.140, 0.200, 0.200]],
+  thunder: [[0.010, 0.030, 0.060], [0.080, 0.140, 0.200]],
+  tide: [[0.000, 0.120, 0.220], [0.100, 0.550, 0.600]],
+  crown: [[0.010, 0.140, 0.180], [0.200, 0.550, 0.450]],
+  abyssal: [[0.000, 0.000, 0.010], [0.030, 0.020, 0.060]],
+};
+function tintGLSL() {
+  let s = '';
+  for (const k in TINTS) {
+    const R = REGIONS[k], [d, sh] = TINTS[k];
+    const r0 = k === 'black' ? 240 : R.r * 0.55;
+    s += `{ float w = 1.0 - sstep(${f1(r0)}, ${f1(R.r)}, length(p - vec2(${f1(R.x)}, ${f1(R.z)})));
+      deep = mix(deep, vec3(${d.join(', ')}), w); shal = mix(shal, vec3(${sh.join(', ')}), w); }\n`;
+  }
+  return s;
+}
+function spotGLSL() {
+  return WAVE_SPOTS.map(S => `a += ${f1(S.a)} * (1.0 - sstep(${f1(S.r0)}, ${f1(S.r1)}, length(p - vec2(${f1(S.x)}, ${f1(S.z)}))));`).join('\n  ');
+}
 
 function axisList() {
   const out = [];
@@ -33,7 +70,7 @@ function axisList() {
 function lakeGLSL() {
   let s = '';
   for (const L of LAKES) {
-    const lo = L.ice ? '0.0' : '0.3';
+    const lo = L.ice ? '0.0' : L.sea ? '0.55' : '0.3';
     s += `{ float d = length(p - vec2(${L.x.toFixed(1)}, ${L.z.toFixed(1)}));
       a *= ${lo} + (1.0 - ${lo}) * sstep(${(L.r * 0.8).toFixed(2)}, ${(L.r * 1.5).toFixed(2)}, d); }\n`;
   }
@@ -48,12 +85,11 @@ float sstep(float a, float b, float v) { float t = clamp((v - a) / (b - a), 0.0,
 float waveAmp(vec2 p) {
   float dHome = length(p - vec2(0.0, 60.0));
   float a = 0.16 + 0.22 * sstep(230.0, 700.0, dHome);
-  a += 1.15 * sstep(-380.0, -820.0, p.x) * (1.0 - sstep(560.0, 760.0, length(p - vec2(-680.0, 820.0))) * 0.4);
-  a += 0.45 * (1.0 - sstep(250.0, 440.0, length(p - vec2(-680.0, 820.0))));
-  a += 0.12 * (1.0 - sstep(200.0, 420.0, length(p - vec2(800.0, 120.0))));
-  a += 0.5 * (1.0 - sstep(170.0, 540.0, length(p - vec2(1015.0, 1005.0))));
-  float edge = max(abs(p.x), abs(p.y));
-  a += 1.4 * sstep(${(WORLD.half - 250).toFixed(1)}, ${WORLD.half.toFixed(1)}, edge);
+  a += 1.15 * sstep(-380.0, -820.0, p.x) * (1.0 - sstep(560.0, 760.0, length(p - vec2(-680.0, 820.0))) * 0.4) * (1.0 - sstep(1600.0, 2600.0, dHome));
+  a += 0.55 * sstep(1500.0, 3000.0, dHome) + 0.5 * sstep(3000.0, 4600.0, dHome) + 0.55 * sstep(4600.0, 6500.0, dHome);
+  ${spotGLSL()}
+  a += 2.4 * sstep(${f1(WORLD.edge - 500)}, ${f1(WORLD.edge)}, dHome);
+  ${SHELTERS.map(S => `a *= 0.32 + 0.68 * sstep(${f1(S.r0)}, ${f1(S.r1)}, length(p - vec2(${f1(S.x)}, ${f1(S.z)})));`).join('\n  ')}
   ${lakeGLSL()}
   return a;
 }
@@ -99,6 +135,7 @@ uniform vec3 uAmb;
 uniform vec3 uSky;
 uniform sampler2D uHeight;
 uniform float uTexHalf;
+uniform vec2 uTexCentre;
 uniform vec4 uGlow;
 uniform float uNight;
 varying vec3 vW;
@@ -109,24 +146,25 @@ float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 void main() {
   vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
   if (n.y < 0.0) n = -n;
-  vec2 uv = (vW.xz + uTexHalf) / (2.0 * uTexHalf);
-  float ground = texture2D(uHeight, uv).r * 60.0 - 45.0;
+  vec2 uv = (vW.xz - uTexCentre + uTexHalf) / (2.0 * uTexHalf);
+  float inTex = step(0.001, uv.x) * step(uv.x, 0.999) * step(0.001, uv.y) * step(uv.y, 0.999);
+  float ground = mix(-60.0, texture2D(uHeight, uv).r * 60.0 - 45.0, inTex);
   float depth = vW.y - ground;
   vec2 p = vW.xz;
+  float dHome = length(p - vec2(0.0, 80.0));
 
-  // region tint (same centres as MapData.REGIONS)
-  float wFrost = 1.0 - sstep(236.0, 430.0, length(p - vec2(0.0, -780.0)));
-  float wTrop = 1.0 - sstep(220.0, 400.0, length(p - vec2(800.0, 120.0)));
+  // region tint (same centres as MapData.REGIONS), and the sea darkens the farther out you go
   float wBlack = 1.0 - sstep(240.0, 440.0, length(p - vec2(-680.0, 820.0)));
-  float wOpen = sstep(-360.0, -760.0, p.x) * (1.0 - wBlack);
+  float wOpen = sstep(-360.0, -760.0, p.x) * (1.0 - wBlack) * (1.0 - sstep(1500.0, 2500.0, dHome));
   vec3 deep = vec3(0.020, 0.140, 0.190);
   vec3 shal = vec3(0.090, 0.420, 0.400);
-  deep = mix(deep, vec3(0.030, 0.100, 0.140), wFrost);  shal = mix(shal, vec3(0.200, 0.420, 0.470), wFrost);
-  deep = mix(deep, vec3(0.004, 0.170, 0.260), wTrop);   shal = mix(shal, vec3(0.120, 0.700, 0.620), wTrop);
   deep = mix(deep, vec3(0.008, 0.060, 0.120), wOpen);   shal = mix(shal, vec3(0.040, 0.230, 0.320), wOpen);
-  deep = mix(deep, vec3(0.002, 0.004, 0.008), wBlack);  shal = mix(shal, vec3(0.012, 0.030, 0.040), wBlack);
-  float wReach = 1.0 - sstep(260.0, 720.0, length(p - vec2(1015.0, 1005.0)));
+  deep = mix(deep, vec3(0.012, 0.075, 0.130), sstep(1500.0, 3000.0, dHome));
+  deep = mix(deep, vec3(0.006, 0.030, 0.060), sstep(3000.0, 6500.0, dHome));
+  ${tintGLSL()}
+  float wReach = 1.0 - sstep(260.0, 720.0, length(p - vec2(${f1(REGIONS.reach.x)}, ${f1(REGIONS.reach.z)})));
   deep = mix(deep, vec3(0.018, 0.032, 0.040), wReach);  shal = mix(shal, vec3(0.080, 0.130, 0.135), wReach);
+  float wCrys = 1.0 - sstep(120.0, 210.0, length(p - vec2(700.0, 2650.0)));
 
   float shallow = 1.0 - sstep(0.0, 9.0, depth);
   vec3 col = mix(deep, shal, shallow);
@@ -149,6 +187,8 @@ void main() {
   float foam = clamp(shore * (0.55 + 0.45 * speck) + crest * speck * 0.8, 0.0, 1.0);
   col = mix(col, vec3(0.85, 0.92, 0.95) * (uAmb + uSunCol * 0.5), foam * 0.75);
 
+  // the Crystal Lagoon glows at night: light from the spires down in the water
+  if (wCrys > 0.0) col += vec3(0.10, 0.55, 0.65) * wCrys * uNight * (0.35 + 0.25 * sin(uTime * 0.7 + p.x * 0.05) * sin(p.y * 0.07 + uTime * 0.4)) * (1.0 - sstep(0.0, 8.0, depth) * 0.4);
   // whirlpool streaks
   if (uWp.w > 0.0) {
     vec2 dv = p - uWp.xy; float d = length(dv);
@@ -189,6 +229,7 @@ export class Water {
         uSky: { value: new THREE.Color(0.6, 0.75, 0.9) },
         uHeight: { value: null },
         uTexHalf: { value: TEX_HALF },
+        uTexCentre: { value: new THREE.Vector2(0, 0) },
         uGlow: { value: new THREE.Vector4(0, 0, 0, 0) },
         uNight: { value: 0 },
       },
@@ -238,21 +279,50 @@ export class Water {
   }
 
   _heightTex() {
-    const data = new Uint8Array(TEX_N * TEX_N);
-    for (let j = 0; j < TEX_N; j++) for (let i = 0; i < TEX_N; i++) {
-      const x = -TEX_HALF + (i + 0.5) / TEX_N * 2 * TEX_HALF;
-      const z = -TEX_HALF + (j + 0.5) / TEX_N * 2 * TEX_HALF;
-      const h = heightAt(x, z);
-      data[j * TEX_N + i] = Math.max(0, Math.min(255, Math.round((h + 45) / 60 * 255)));
-    }
-    const t = new THREE.DataTexture(data, TEX_N, TEX_N, THREE.RedFormat, THREE.UnsignedByteType);
+    this.texData = new Uint8Array(TEX_N * TEX_N);
+    const t = new THREE.DataTexture(this.texData, TEX_N, TEX_N, THREE.RedFormat, THREE.UnsignedByteType);
     t.magFilter = THREE.LinearFilter;
     t.minFilter = THREE.LinearFilter;
-    t.needsUpdate = true;
+    this.tex = t;
+    this.job = null;
+    this.rebuild(0, 0, true);
     return t;
   }
 
+  /** Re-centre the depth texture on (cx, cz): all at once, or a few rows a frame. */
+  rebuild(cx, cz, now = false) {
+    // snap the centre to whole texels so the depth colours do not crawl as it moves
+    const px = 2 * TEX_HALF / TEX_N;
+    cx = Math.round(cx / px) * px; cz = Math.round(cz / px) * px;
+    this.job = { cx, cz, row: 0, data: now ? this.texData : new Uint8Array(TEX_N * TEX_N) };
+    if (now) this._work(1e9);
+  }
+  _work(budgetMs) {
+    const J = this.job;
+    if (!J) return;
+    const t0 = performance.now();
+    while (J.row < TEX_N) {
+      const j = J.row++;
+      const z = J.cz - TEX_HALF + (j + 0.5) / TEX_N * 2 * TEX_HALF;
+      for (let i = 0; i < TEX_N; i++) {
+        const x = J.cx - TEX_HALF + (i + 0.5) / TEX_N * 2 * TEX_HALF;
+        J.data[j * TEX_N + i] = Math.max(0, Math.min(255, Math.round((heightAt(x, z) + 45) / 60 * 255)));
+      }
+      if (performance.now() - t0 > budgetMs) break;
+    }
+    if (J.row >= TEX_N) {
+      this.texData.set(J.data);
+      this.tex.needsUpdate = true;
+      this.uniforms.uTexCentre.value.set(J.cx, J.cz);
+      this.centre = { x: J.cx, z: J.cz };
+      this.job = null;
+    }
+  }
+
   update(dt, camPos, time, storm, wp, glow, light) {
+    // keep the depth map under the camera
+    if (this.job) this._work(2.5);
+    else if (Math.hypot(camPos.x - this.centre.x, camPos.z - this.centre.z) > TEX_HALF * 0.35) this.rebuild(camPos.x, camPos.z);
     const s = 16;
     this.mesh.position.set(Math.round(camPos.x / s) * s, 0, Math.round(camPos.z / s) * s);
     this.far.position.x = camPos.x; this.far.position.z = camPos.z;

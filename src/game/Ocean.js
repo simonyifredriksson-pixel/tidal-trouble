@@ -24,9 +24,27 @@ import { buildBoat } from '../art/BoatArt.js';
 import { buildBarrel, buildCrate } from '../art/BuildingArt.js';
 import { BEASTS } from '../data/BeastData.js';
 import { clamp, uid, rng } from '../core/Util.js';
+import { WORLD, distHome } from '../world/MapData.js';
 
 const _v = new THREE.Vector3();
-const HOT_R = { birds: 26, boil: 22, bubbles: 16, glow: 28, debris: 20 };
+const HOT_R = { birds: 26, boil: 22, bubbles: 16, glow: 28, debris: 20, school: 45, wreck: 24, rogue: 60 };
+
+/** A ship on the bottom with its masts still standing out of the water. */
+function sunkGeo(seed) {
+  const r = rng(seed), b = new MeshBuilder(r);
+  const lean = (r() - 0.5) * 0.5;
+  for (const [z, h] of [[-4, 7 + r() * 3], [4, 9 + r() * 4]]) {
+    b.push(0, -6, z, lean, 0, lean * 0.6);
+    b.color(0x3a2e24).cyl(0.22, 0.14, 0, h + 6, 6, true);
+    b.color(0x4a3a2a).box(3.2, 0.14, 0.14, 0, h + 1.5, 0);
+    b.color(0xb8ae94).card([-1.4, h + 1.3, 0.05], [1.3, h + 1.2, 0.08], [0.2, h - 1.6, 0.4]);        // a rag of sail
+    b.color(0x2a2a2a).beam([0, h + 6, 0], [1.6, 4.5, 3], 0.03, 0.03);
+    b.pop();
+  }
+  b.color(0x4a3a2c).box(3, 1.2, 14, 0, -1.2, 0);           // the rail, just breaking the surface
+  b.color(0x6a8a5a).box(3.1, 0.2, 12, 0, -0.55, 0.3);       // weed on it
+  return b.build();
+}
 
 function birdGeo() {
   const b = new MeshBuilder();
@@ -92,9 +110,11 @@ export class Ocean {
         const a = Math.random() * 6.28, d = 70 + Math.random() * 300;
         const x = P.pos.x + Math.cos(a) * d, z = P.pos.z + Math.sin(a) * d;
         const depth = -G.world.height(x, z);
-        if (depth < 4 || G.isLake(x, z) || G.world.onIce(x, z) || Math.abs(x) > 1250 || Math.abs(z) > 1250) continue;
-        const night = G.isNight();
-        const pool = [['boil', 3], ['debris', 1.4], ['bubbles', depth > 18 ? 2 : 0], ['birds', night ? 0 : 3], ['glow', night ? 2.2 : 0]];
+        if (depth < 4 || G.isLake(x, z) || G.world.onIce(x, z) || distHome(x, z) > WORLD.edge - 150) continue;
+        const night = G.isNight(), out = distHome(x, z);
+        // the farther out, the more there is to find: schools, sunken ships, rogue waves
+        const pool = [['boil', 3], ['debris', 1.4], ['bubbles', depth > 18 ? 2 : 0], ['birds', night ? 0 : 3], ['glow', night ? 2.2 : 0],
+          ['school', out > 1400 ? 2.2 : 0], ['wreck', out > 1500 ? 1.1 : 0], ['rogue', out > 2500 ? 0.9 : 0]];
         let tot = pool.reduce((s, q) => s + q[1], 0), r = Math.random() * tot, kind = 'boil';
         for (const [k2, w] of pool) { r -= w; if (r <= 0) { kind = k2; break; } }
         this.addHotspot(kind, x, z, 140 + Math.random() * 140);
@@ -109,10 +129,12 @@ export class Ocean {
   newMystery() {
     const G = this.game, s = G.state.s;
     s.mysteries = s.mysteries || [];
+    // the X is somewhere out there, and the farther you have sailed, the farther out it can be
+    const reach = Math.min(6400, Math.max(1100, (s.farthest || 0) + 400));
     for (let k = 0; k < 80; k++) {
-      const a = Math.random() * 6.28, d = 320 + Math.random() * 700;
+      const a = Math.random() * 6.28, d = 320 + Math.random() * (reach - 320);
       const x = Math.cos(a) * d, z = 80 + Math.sin(a) * d;
-      if (G.world.height(x, z) > -8 || Math.abs(x) > 1200 || Math.abs(z) > 1200) continue;
+      if (G.world.height(x, z) > -8 || distHome(x, z) > WORLD.edge - 300) continue;
       const m = { id: uid('m'), x: Math.round(x), z: Math.round(z), stage: 0, day: s.day };
       s.mysteries.push(m);
       return m;
@@ -134,7 +156,7 @@ export class Ocean {
     if (host) this._host(dt);
     const G = this.game, P = G.player, t = G.world.time;
     // birds: over a hotspot they wheel and dive; near the coast they just loaf about
-    const birdHot = this.hot.filter(h => h.kind === 'birds' && Math.hypot(h.x - P.pos.x, h.z - P.pos.z) < 500);
+    const birdHot = this.hot.filter(h => (h.kind === 'birds' || h.kind === 'school') && Math.hypot(h.x - P.pos.x, h.z - P.pos.z) < 500);
     this.birds.forEach((B, i) => {
       const hot = birdHot[i % Math.max(1, birdHot.length)];
       if (hot) { B.cx = hot.x; B.cz = hot.z; B.on = true; }
@@ -166,6 +188,26 @@ export class Ocean {
       if (h.kind === 'bubbles' && Math.random() < dt * 9) { const x = h.x + (Math.random() - 0.5) * 8, z = h.z + (Math.random() - 0.5) * 8; G.fx.bubbles(x, G.world.sea(x, z) - 0.2, z, 3); if (Math.random() < 0.2) G.fx.ripple(x, G.world.sea(x, z), z, 2.5, 1.5); }
       if (h.kind === 'glow' && Math.random() < dt * 14) { const x = rx(), z = rz(); G.fx.glint(x, G.world.sea(x, z) + 0.05, z, 0x7af0e0); }
       if (h.kind === 'debris') this._debris(h, dt);
+      // a school: the water heaves with them and they keep breaking the surface
+      if (h.kind === 'school' && Math.random() < dt * 9) { const x = rx(), z = rz(); G.fx.splash(x, G.world.sea(x, z), z, 0.25); if (Math.random() < 0.5) this._jump(x, z); }
+      // a sunken ship, masts out of the water, birds on the yards
+      if (h.kind === 'wreck') {
+        let W = this.debris.get(h.id);
+        if (!W) { const m = new THREE.Mesh(sunkGeo(h.x | 0), MAT.solid); m.castShadow = true; m.rotation.y = (h.x * 0.37) % 6.28; G.scene.add(m); W = { g: m }; this.debris.set(h.id, W); }
+        W.g.position.set(h.x, 0, h.z);
+        if (Math.random() < dt * 0.6) G.fx.bubbles(h.x + (Math.random() - 0.5) * 6, G.world.sea(h.x, h.z) - 0.3, h.z + (Math.random() - 0.5) * 6, 4);
+      }
+      // a rogue wave: every so often a ring of water goes racing out and throws boats about
+      if (h.kind === 'rogue') {
+        h.pulse = (h.pulse ?? 6) - dt;
+        if (h.pulse <= 0) {
+          h.pulse = 14 + Math.random() * 10;
+          G.fx.ripple(h.x, G.world.sea(h.x, h.z), h.z, 70, 4); G.fx.ripple(h.x, G.world.sea(h.x, h.z), h.z, 45, 3);
+          for (let k = 0; k < 18; k++) { const a = k / 18 * 6.28; G.fx.splash(h.x + Math.cos(a) * 20, G.world.sea(h.x, h.z), h.z + Math.sin(a) * 20, 0.8); }
+          if (d < 160) G.audio.crash();
+          if (host) for (const b of G.boats) { const bd = Math.hypot(b.pos.x - h.x, b.pos.z - h.z); if (bd < 75) { const k = (1 - bd / 75); b.impulse((b.pos.x - h.x) / (bd || 1) * 5 * k, (b.pos.z - h.z) / (bd || 1) * 5 * k, 0.9 * k, 2.2 * k); if (b.hull.hl < 3) b.water = Math.min(1, b.water + 0.12 * k); } }
+        }
+      }
     }
     for (const [id, D] of this.debris) if (!this.hot.some(h => h.id === id)) { G.scene.remove(D.g); this.debris.delete(id); }
     // jumping fish, anywhere with water
