@@ -1030,8 +1030,18 @@ export async function runScripts(names, game) {
         step(1);
         ok(!!G.ui.talkEl, 'and he talks to you straight away');
         ok(P.tool === toolBefore && G.state.s.flags.intro, 'normal play from here');
-        const hasLeave = !!G.ui.talkEl && [...G.ui.talkEl.querySelectorAll('.dopt span')].some(s => /leave this ocean/.test(s.textContent));
-        ok(hasLeave, 'you can ask him why nobody takes a boat and leaves');
+        // one thing to say at each step, all the way through; the three men come just before 'what now'
+        const asked = []; let single = true;
+        for (let i = 0; i < 40 && G.ui.talkEl && G.ui._talkOpts?.length; i++) {
+          const o = G.ui._talkOpts;
+          if (o.length !== 1) single = false;
+          if (o[0].label !== '...') asked.push(o[0].label);
+          G.ui._choose(G.ui.talkNpc, o[0]);
+        }
+        const qs = asked.filter(q => !/^Thanks/.test(q));
+        const iLeave = qs.findIndex(q => /leave this ocean/.test(q)), iNow = qs.findIndex(q => /supposed to do now/.test(q));
+        ok(single, 'on the beach you only ever have one thing to say (' + asked.length + ' lines)');
+        ok(iLeave >= 0 && iNow === qs.length - 1 && qs.slice(iLeave, iNow).length >= 1 && iNow > iLeave, 'the three men come before the last question, what do I do now: ' + qs.map(q => q.slice(0, 18)).join(' / '));
         G.ui.closeTalk();
         step(0.5);
         ok(G.renderer.domElement.style.filter === '', 'the blur is gone');

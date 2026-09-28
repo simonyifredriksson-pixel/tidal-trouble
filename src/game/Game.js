@@ -1609,7 +1609,23 @@ export class Game {
     if (!this.running) return;
     n.talking = 8;
     if (this.state.s.tut === 0) this._tut(1);
-    this._gusTopics(n, GUS_INTRO.wake);
+    // the first time it is one conversation, in order: one thing to say at each step
+    const order = ['where', 'thing', 'others', 'leave', 'now'].map(id => GUS_INTRO.topics.find(T => T.id === id));
+    const bye = [{ label: 'Thanks, Gus.', bye: true, line: GUS_INTRO.bye }];
+    const topic = k => {
+      const T = order[k];
+      if (!T) return this.ui.dialogue(n, GUS_INTRO.bye, bye.map(o => ({ ...o, bye: false, cb: () => this.ui.closeTalk() })));
+      // the last question is the last thing you say: its follow-up is folded into his answer
+      const last = k === order.length - 1;
+      return [{ label: T.q, icon: 'ear', cb: () => say(last && T.more ? [...T.say, ...T.more.say] : T.say, last ? null : T.more, k) }];
+    };
+    const say = (lines, more, k) => {
+      n.talking = 6;
+      if (lines.length > 1) return this.ui.dialogue(n, lines[0], [{ label: '...', icon: 'ear', cb: () => say(lines.slice(1), more, k) }]);
+      const next = more ? [{ label: more.q, icon: 'ear', cb: () => say(more.say, more.more, k) }] : k + 1 < order.length ? topic(k + 1) : bye;
+      this.ui.dialogue(n, lines[0], next);
+    };
+    this.ui.dialogue(n, GUS_INTRO.wake, topic(0));
   }
   /** Everything you can ask him about that night. */
   _gusTopics(n, line) {
