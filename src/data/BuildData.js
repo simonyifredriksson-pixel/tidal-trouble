@@ -166,6 +166,38 @@ function beacon() {
   return P;
 }
 
+function wormfarm() {
+  // a plank box of wet earth under a fibre cover
+  const P = [{ m: 'stone', k: 'stone', t: 0, x: -0.5, y: 0.06, z: -0.3, w: 0.16 }, { m: 'stone', k: 'stone', t: 0, x: 0.5, y: 0.06, z: 0.3, w: 0.16 }];
+  P.push({ m: 'wood', k: 'plank', t: 1, x: 0, y: 0.14, z: 0, w: 1.3, h: 0.08, d: 0.8, solid: true });
+  for (const [x, z, w, d] of [[0, -0.38, 1.3, 0.05], [0, 0.38, 1.3, 0.05], [-0.63, 0, 0.05, 0.72], [0.63, 0, 0.05, 0.72]]) P.push({ m: 'wood', k: 'plank', t: 2, x, y: 0.36, z, w, h: 0.38, d });
+  P.push({ m: 'wood', k: 'plank', t: 3, x: 0, y: 0.5, z: 0, w: 1.22, h: 0.04, d: 0.7, soil: true });
+  for (let i = 0; i < 4; i++) P.push({ m: 'fibre', k: 'thatch', t: 4, x: -0.45 + i * 0.3, y: 0.68, z: -0.3, w: 0.3, h: 0.3, d: 0.04 });
+  return P;
+}
+function workbench() {
+  const P = [];
+  for (const [x, z] of [[-0.9, -0.4], [0.9, -0.4], [-0.9, 0.4], [0.9, 0.4]]) P.push({ m: 'wood', k: 'post', t: 0, x, y: 0, z, w: 0.08, h: 0.88, solid: true });
+  for (let i = 0; i < 3; i++) P.push({ m: 'wood', k: 'plank', t: 1, x: 0, y: 0.92, z: -0.32 + i * 0.32, w: 2.0, h: 0.08, d: 0.3, solid: true });
+  P.push({ m: 'stone', k: 'stone', t: 2, x: 0.7, y: 1.02, z: 0.1, w: 0.14 });
+  P.push({ m: 'stone', k: 'stone', t: 2, x: 0.45, y: 1.0, z: -0.2, w: 0.1 });
+  P.push({ m: 'iron', k: 'plank', t: 3, x: -0.55, y: 1.03, z: 0, w: 0.44, h: 0.14, d: 0.2 });
+  P.push({ m: 'iron', k: 'plank', t: 3, x: -0.55, y: 1.16, z: 0, w: 0.26, h: 0.1, d: 0.14 });
+  P.push({ m: 'wood', k: 'plank', t: 4, x: 0, y: 1.5, z: -0.42, w: 2.0, h: 0.9, d: 0.05 });
+  return P;
+}
+
+/* What the workbench makes. `give` is a bait (bait:id, n), or an upgrade (up:key). */
+export const RECIPES = [
+  { id: 'ironaxe', name: 'Iron Axe', icon: 'axe', cost: { iron: 6, wood: 4 }, up: 'axe', blurb: 'An iron head on an ash haft. Every swing does twice the work.' },
+  { id: 'ironpick', name: 'Iron Pickaxe', icon: 'pick', cost: { iron: 6, wood: 4 }, up: 'pick', blurb: 'Tempered iron. Rock comes apart in half the blows.' },
+  { id: 'crystallure', name: 'Crystal Lures (x3)', icon: 'glow', cost: { crystal: 2, fibre: 2 }, bait: 'glow', n: 3, blurb: 'A chip of reef crystal tied into a fibre fly. It glows like Glow Bait - because it is.' },
+  { id: 'fibrefly', name: 'Fibre Flies (x6)', icon: 'worm', cost: { fibre: 3 }, bait: 'worm', n: 6, blurb: 'Twisted fibre and a hook. The fish do not know they are not worms.' },
+];
+export const RECIPE_BY_ID = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+/** Worms a full worm farm holds, and the game seconds each one takes. */
+export const WORMS = { max: 20, every: 45 };
+
 export const BLUEPRINTS = [
   { id: 'campfire', name: 'Campfire', icon: 'fire', foot: 1.3, parts: campfire(),
     blurb: 'A ring of stones and a few logs. Warmth on a cold night, light to see by, and a place to rest until morning.', use: 'Rest by it (E) to heal and wait for dawn. Keeps the Frostfall cold off you.' },
@@ -181,6 +213,10 @@ export const BLUEPRINTS = [
     blurb: 'A pole between two A-frames, with fibre lines to hang fish from. The wind does the rest.', use: 'Hang up to four fish (hold one, press E). After a few minutes they are dried, and dried fish sells for half as much again.' },
   { id: 'beacon', name: 'Signal Beacon', icon: 'fire', foot: 1.2, parts: beacon(),
     blurb: 'A stone tower with an iron fire basket on top. Every beacon you light is one more thing in the dark that is yours.', use: 'Burns every night, bright enough to see from far out at sea, and marks your map.' },
+  { id: 'wormfarm', name: 'Worm Farm', icon: 'worm', foot: 1.0, parts: wormfarm(),
+    blurb: 'A plank box of wet earth and scraps under a fibre cover. Worms breed in it whether you watch or not.', use: 'Breeds a worm every so often, up to twenty. Press E to empty it into your bait tin.' },
+  { id: 'workbench', name: 'Workbench', icon: 'hammer', foot: 1.3, parts: workbench(),
+    blurb: 'A heavy plank bench with an iron anvil block and a tool board. Where the islands\' raw stuff becomes something better.', use: 'Craft iron tools that chop and break twice as fast, and lures from crystal and fibre (E).' },
   { id: 'palisade', name: 'Palisade Wall', icon: 'shield', foot: 1.9, parts: palisade(),
     blurb: 'Eight sharpened stakes between two footing stones. Keeps the wind off a camp - and anything else.', use: 'A solid wall. Build several round a camp.' },
   { id: 'jetty', name: 'Fishing Jetty', icon: 'dock', foot: 1.3, shore: true, parts: jetty(),

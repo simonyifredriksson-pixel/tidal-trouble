@@ -256,7 +256,22 @@ function netProbe(role) {
     if (role === 'host' && n === 11) { const l = game.chat.lines.filter(x => !x.system).pop(); log('host chat got: ' + (l ? '<' + l.name + '> ' + l.text : 'nothing')); }
     if (role === 'host' && n === 10) { game.events.start('storm', game.player.pos); }
     if (role === 'client' && n === 12) log('client sees storm=' + game.world.storm.toFixed(2) + ' events=' + game.events.list.map(e => e.k).join(','));
-    if (n > 13) clearInterval(iv);
+    // building together: the host lays out a campfire, the guest puts pieces into it, both see the same thing
+    if (role === 'host' && n === 5) {
+      game.state.s.mats = { wood: 10, stone: 10 };
+      const B = game.build, A = world.settlement.anchors;
+      let done = false;
+      for (let r = 10; r < 80 && !done; r += 3) for (let a = 0; a < 6.28 && !done; a += 0.4) { const x = A.spawn.x + Math.cos(a) * r, z = A.spawn.z + Math.sin(a) * r, y = world.ground(x, z); if (!B._why(BP_BY_ID.campfire, x, z, y, 0)) { game.act({ t: 'bnew', bp: 'campfire', x, y, z, r: 0 }); done = true; } }
+      log('host laid out a campfire: ' + done);
+    }
+    if (role === 'client' && n === 10) {
+      const site = [...game.build.sites.values()][0];
+      log('client sees the blueprint: ' + (site ? site.bp.id + ' ' + site.S.p : 'none') + ', pack wood=' + (state.s.mats?.wood || 0) + ' stone=' + (state.s.mats?.stone || 0));
+      if (site) for (let i = 0; i < 3; i++) game.act({ t: 'bput', id: site.S.id, i });
+    }
+    if (role === 'host' && n === 19) { const S = (game.state.s.builds || [])[0]; log('host blueprint after the guest: ' + (S ? S.p : 'none') + ', stone left ' + game.state.s.mats.stone); }
+    if (role === 'client' && n === 13) { const site = [...game.build.sites.values()][0]; log('client sees ' + (site ? site.parts.filter(p => p.done).length : 0) + ' pieces built'); }
+    if (n > 19) clearInterval(iv);
   }, 1500);
 }
 

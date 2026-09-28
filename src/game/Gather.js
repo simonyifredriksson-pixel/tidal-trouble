@@ -132,7 +132,8 @@ export class Gather {
     const G = this.game, s = G.state.s;
     const n = this.node(c.id);
     if (!n || this.gone.has(c.id) || n.def.tool !== c.tool) return;
-    const hp = (this.hp.get(c.id) ?? n.def.hp) - 1;
+    // an iron tool does twice the work
+    const hp = (this.hp.get(c.id) ?? n.def.hp) - (s.upg?.[c.tool] ? 2 : 1);
     this.hp.set(c.id, hp);
     const dir = c.dir || [0, 1];
     const at = new THREE.Vector3(n.it[0], n.it[1] + Math.min(1.2, 0.5 * n.it[3] + 0.4), n.it[2]);

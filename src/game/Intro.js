@@ -116,8 +116,9 @@ export class Intro {
   /** The storm, the creature and the end of the boat. */
   _sea(dt, t) {
     const G = this.game, W = G.world, A = INTRO_SEA;
-    // the sky is the storm
+    // the sky is the storm, and it is dusk - for a guest too, whatever the host's clock says
     W.storm = 1;
+    G.tod = 0.77;
     this.black = t < 2.5 ? 1 - t / 2.5 : 0;
     if (t > T.smash + 1.1) this.black = clamp((t - T.smash - 1.1) / 0.5, 0, 1);
     // lightning every few seconds, closer and brighter as it goes on

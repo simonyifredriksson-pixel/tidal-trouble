@@ -25,7 +25,7 @@ import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js'
 import { REGIONS, PLACES, WORLD, ZONES, MAX_ZONE, HOME_CENTRE, currentAt } from '../world/MapData.js';
 import { CHART_N, CHART_CELL } from '../game/IslandLife.js';
 import { ISLAND_INFO } from '../data/IslandData.js';
-import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost } from '../data/BuildData.js';
+import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost, RECIPES } from '../data/BuildData.js';
 import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
@@ -228,7 +228,7 @@ export class UI {
     const bait = BAIT_BY_ID[s.bait];
     this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(bait.icon || s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
     this.el('.baitchip').classList.toggle('hide', P.tool !== 'rod');
-    this.el('.hand-label').textContent = P.held ? (FISH_BY_ID[G.loot.get(P.held)?.sp]?.name || '') : TOOL_BY_ID[P.tool]?.name || '';
+    this.el('.hand-label').textContent = P.held ? (FISH_BY_ID[G.loot.get(P.held)?.sp]?.name || '') : s.upg?.[P.tool] ? (P.tool === 'axe' ? 'Iron Axe' : 'Iron Pickaxe') : TOOL_BY_ID[P.tool]?.name || '';
     // boat
     const b = P.boat;
     const bp = this.el('.boatpanel');
@@ -1295,6 +1295,18 @@ export class UI {
     return this._wrap(`${this._head('plans', 'The Blueprint Book', 'Lay a plan out on the ground, then build it piece by piece: hold a material (G), walk up to a blue piece, press E.', false)}
       <div class="sbody"><p class="packline"><b>In the pack:</b> ${pack}</p><div class="grid">${cards}</div>
       <p class="note">${MATS.map(M => `<b>${esc(M.name)}:</b> ${esc(M.from)}`).join('<br>')}</p></div>`);
+  }
+
+  /* ---------- the workbench ---------- */
+  _craft() {
+    const s = this.game.state.s, m = s.mats || {};
+    const cards = RECIPES.map(R => {
+      const can = Object.entries(R.cost).every(([k, n]) => (m[k] || 0) >= n), owned = R.up && s.upg?.[R.up];
+      const need = Object.entries(R.cost).map(([k, n]) => `<span class="cost ${(m[k] || 0) >= n ? 'ok' : ''}">${ic(MAT_BY_ID[k].icon)}${n} ${esc(MAT_BY_ID[k].name)}</span>`).join('');
+      return `<div class="card bp"><h3>${ic(R.icon)}${esc(R.name)}</h3><p>${esc(R.blurb)}</p><div class="costs">${need}</div>
+        <div class="row">${owned ? '<span class="price">Yours</span>' : `<button class="btn gold" data-act="craft" data-arg="${R.id}" ${can ? '' : 'disabled'}>${ic('hammer')} Make it</button>`}</div></div>`;
+    }).join('');
+    return this._wrap(`${this._head('hammer', 'The Workbench', 'Iron from the black rock, crystal from the reef, fibre from the bush.', false)}<div class="sbody"><div class="grid">${cards}</div></div>`);
   }
 
   /* ---------- a storage chest ---------- */

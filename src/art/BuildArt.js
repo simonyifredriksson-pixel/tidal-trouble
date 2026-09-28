@@ -31,7 +31,7 @@ function partBuilder(p, seed = 1) {
       break;
     }
     case 'plank': {
-      const c = p.m === 'iron' ? 0x4a4644 : PLANK;
+      const c = p.soil ? 0x3a2a1c : p.m === 'iron' ? 0x4a4644 : PLANK;
       b.color(c, 0.08).box(w, h, d, 0, 0, 0);
       b.color(shadeHex(c, p.m === 'iron' ? 1.4 : 0.8)).box(w * 1.001, h * 0.2, d * 0.04, 0, h * 0.5, 0);
       break;
@@ -62,7 +62,7 @@ function partBuilder(p, seed = 1) {
 
 const geoCache = new Map();
 export function partGeo(p) {
-  const key = [p.k, p.w, p.h, p.d, p.m === 'iron' ? 'i' : ''].join(':');
+  const key = [p.k, p.w, p.h, p.d, p.m === 'iron' ? 'i' : '', p.soil ? 's' : ''].join(':');
   if (!geoCache.has(key)) geoCache.set(key, partBuilder(p, key.length).build());
   return geoCache.get(key);
 }
@@ -108,14 +108,14 @@ export function pieceMesh(k) {
 }
 
 /** The pickaxe, for the first-person hands. */
-export function pickMeshBuilder(b) {
-  b.color(0x7a5836).cyl(0.021, 0.025, -0.22, 0.58, 6, true);
+export function pickMeshBuilder(b, iron = false) {
+  b.color(iron ? 0x4a3222 : 0x7a5836).cyl(0.021, 0.025, -0.22, 0.58, 6, true);
   b.color(0x4a3222).cyl(0.03, 0.03, -0.22, -0.1, 6, true);
   b.color(0x6a6e74).box(0.05, 0.07, 0.07, 0, 0.54, 0);
   // the head: a pick one way, a flat chisel the other
-  b.color(0x8a9098).beam([0, 0.54, 0.02], [0, 0.48, 0.3], 0.035, 0.035);
+  b.color(iron ? 0x3e4246 : 0x8a9098).beam([0, 0.54, 0.02], [0, 0.48, 0.3], iron ? 0.042 : 0.035, iron ? 0.042 : 0.035);
   b.push(0, 0.47, 0.31, 1.9, 0, 0); b.color(0xc8ccd0).cone(0.026, 0, 0.09, 4); b.pop();
-  b.color(0x8a9098).beam([0, 0.54, -0.02], [0, 0.5, -0.24], 0.045, 0.03);
+  b.color(iron ? 0x3e4246 : 0x8a9098).beam([0, 0.54, -0.02], [0, 0.5, -0.24], 0.045, 0.03);
   b.color(0xc8ccd0).box(0.06, 0.02, 0.04, 0, 0.5, -0.25);
 }
 /** The blueprint book: a fat, dog-eared ledger of plans, open in your hand. */

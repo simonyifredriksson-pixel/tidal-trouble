@@ -51,7 +51,7 @@ import { Intro } from './Intro.js';
 import { Edge } from './Edge.js';
 import { Gather } from './Gather.js';
 import { Build } from './Build.js';
-import { MAT_BY_ID, BP_BY_ID } from '../data/BuildData.js';
+import { MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID } from '../data/BuildData.js';
 import { GUS_INTRO } from '../data/NPCData.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
 import { mistAt, VIGIL, WORLD, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
@@ -101,6 +101,7 @@ export class Game {
     const S = this.state;
     const look = PLAYER_LOOKS[S.settings.look % 4];
     this.vm = new ViewModel(look);
+    this.vm.upg = S.s.upg || {};
     this.fishing = new Fishing(this, this.player);
     this.tools = new Tools(this);
     this.creatures = new Creatures(this);
@@ -432,6 +433,31 @@ export class Game {
         const x = S.store.splice(i, 1)[0];
         this.loot.spawn({ ...x, mult: (x.mult || 1) * 1.5, dried: true, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), vel: new THREE.Vector3(0, 1.5, 0), flop: 0 });
         this.tell(from, `Dried ${FISH_BY_ID[x.sp].name}: worth half as much again.`, 'good');
+        this._saveDirty = true;
+        break;
+      }
+      case 'craft': {
+        const R = RECIPE_BY_ID[c.id];
+        if (!R) break;
+        s.mats = s.mats || {};
+        const short = Object.entries(R.cost).filter(([k, n]) => (s.mats[k] || 0) < n);
+        if (short.length) { this.tell(from, 'Not enough ' + short.map(([k]) => MAT_BY_ID[k].name.toLowerCase()).join(' or ') + '.', 'warn'); break; }
+        if (R.up && s.upg?.[R.up]) { this.tell(from, 'You already have one.', 'info'); break; }
+        for (const [k, n] of Object.entries(R.cost)) s.mats[k] -= n;
+        if (R.up) { (s.upg = s.upg || {})[R.up] = 1; this._everyone({ t: 'toolUp' }); }
+        if (R.bait) S.addBait(R.bait, R.n);
+        this.tell(from, R.name + ' - made.', 'good');
+        this._saveDirty = true;
+        break;
+      }
+      case 'worms': {
+        const S2 = (s.builds || []).find(b => b.id === c.site);
+        if (!S2) break;
+        const n = this.build.worms(S2);
+        if (!n) { this.tell(from, 'Nothing wriggling in there yet.', 'info'); break; }
+        S2.t0 = Math.round(this.build.clock());
+        S.addBait('worm', n);
+        this.tell(from, `${n} worm${n > 1 ? 's' : ''} into the bait tin.`, 'good');
         this._saveDirty = true;
         break;
       }
@@ -1414,6 +1440,8 @@ export class Game {
           if (it) opt.push({ label: `Hang it up to dry (${st.length} of 4)`, icon: 'fish', run: () => this.act({ t: 'rackPut', site: site.S.id, id: it.id }) });
           else if (st.length) opt.push({ label: ready ? `Take down a dried fish (${ready} ready)` : `Drying: ${st.length} fish, not ready yet`, icon: 'fish', run: () => this.act({ t: 'rackTake', site: site.S.id }) });
         }
+        if (id === 'wormfarm') { const n = this.build.worms(site.S); opt.push({ label: n ? `Empty the worm farm (${n} worm${n > 1 ? 's' : ''})` : 'The worm farm (nothing yet - come back later)', icon: 'worm', run: () => this.act({ t: 'worms', site: site.S.id }) }); }
+        if (id === 'workbench') opt.push({ label: 'Work at the bench', icon: 'hammer', run: () => this.ui.open('craft', {}) });
         if (id === 'beacon') opt.push({ label: this._night() > 0.15 ? 'Your beacon is burning' : 'Your beacon (it lights itself at dusk)', icon: 'fire', run: () => {} });
         if (id === 'baitstation' && it) opt.push({ label: 'Cut it up for bait', icon: 'pieces', run: () => { this.act({ t: 'baitMake', id: it.id }); this.audio.chopWood(); } });
         if (id === 'shelter') opt.push({ label: this.tod > 0.72 || this.tod < 0.2 ? 'Sleep in your shelter' : 'Your shelter (you will wake up here)', icon: 'bed', run: () => this.act({ t: 'sleepShelter', site: site.S.id }) });
@@ -2026,6 +2054,7 @@ export class Game {
       case 'fade': this.ui.fade(e.on, e.text || ''); break;
       case 'isle': this.isles?.onEvent(e); break;
       case 'gather': this.gather?.onEvent(e); break;
+      case 'toolUp': this.vm?.retool(this.state.s.upg || {}); this.ui.hotbar(); break;
       case 'build': this.build?.onEvent(e); break;
       case 'edge': this.edge?.onEvent(e); break;
       case 'edgeWake': this._edgeWake(); break;
@@ -2060,6 +2089,7 @@ export class Game {
     switch (act) {
       case 'open': this.ui.open(arg, {}); if (arg === 'guild' && this.state.s.tut === 4) this._tut(5); break;
       case 'bpPick': this.ui.close(); this.build.choose(arg); break;
+      case 'craft': this.act({ t: 'craft', id: arg }); break;
       case 'chestTake': { const [site, i] = String(arg).split(':'); this.act({ t: 'chestTake', site, i: +i }); break; }
       case 'buyRod': buy('rod', arg); break;
       case 'equipRod': buy('equipRod', arg); break;

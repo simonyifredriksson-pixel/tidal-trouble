@@ -1124,7 +1124,7 @@ export async function runScripts(names, game) {
             ok((rack.S.store || []).length === 1 && rack.hung && rack.hung.length === 1, 'the bass hangs on the rack');
             G.act({ t: 'rackTake', site: rack.S.id }); step(0.1);
             ok(rack.S.store.length === 1, 'you cannot take it down before it is dry');
-            G.tod += 200 / 1080; step(0.7);
+            s.day += 1; step(0.7);
             G.act({ t: 'rackTake', site: rack.S.id }); step(0.2);
             const dried = [...G.loot.items.values()].find(x => x.sp === 'bass' && x.dried);
             ok(dried && Math.abs(G.loot.value(dried) / v0 - 1.5) < 0.05, 'dried, it is worth 1.5x (' + (dried ? (G.loot.value(dried) / v0).toFixed(2) : '-') + ')');
@@ -1148,7 +1148,31 @@ export async function runScripts(names, game) {
             ok(snap.mp && snap.mp.some(m => m[1] === 'stone'), 'loose materials are sent to the crew in the world snapshot');
             G.act({ t: 'bdel', id: bench.S.id }); step(0.3);
           } else ok(false, 'a bench for the co-op test');
-          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 11, 'the blueprint book lists eleven buildings'); G.ui.close();
+          // the resource stations: a worm farm breeds bait, a workbench makes iron tools
+          const lay = (id) => { let q = null; for (let r = 4; r < 50 && !q; r += 1.5) for (let a = 0; a < 6.28 && !q; a += 0.4) { const x = spot.x + Math.cos(a) * r, z = spot.z + Math.sin(a) * r, y = G.world.ground(x, z); if (!B._why(BP_BY_ID[id], x, z, y, 0)) q = { x, y, z }; } if (!q) return null; G.act({ t: 'bnew', bp: id, x: q.x, y: q.y, z: q.z, r: 0 }); step(0.6); const st = [...B.sites.values()].find(S => S.bp.id === id); if (st) { st.S.p = '1'.repeat(st.bp.parts.length); st.S.t0 = Math.round(B.clock()); B._sync(); step(0.6); } return st; };
+          const farm = lay('wormfarm');
+          if (farm) {
+            const w0 = s.baits.worm || 0;
+            ok(B.worms(farm.S) === 0, 'a new worm farm is empty');
+            s.day += 1; step(0.2);
+            ok(B.worms(farm.S) === 20, 'after a day it is full of worms: ' + B.worms(farm.S));
+            G.act({ t: 'worms', site: farm.S.id }); step(0.2);
+            ok((s.baits.worm || 0) - w0 === 20 && B.worms(farm.S) === 0, 'emptied into the bait tin: +' + ((s.baits.worm || 0) - w0) + ' worms');
+            G.act({ t: 'bdel', id: farm.S.id }); step(0.3);
+          } else ok(false, 'room for a worm farm');
+          const bench2 = lay('workbench');
+          if (bench2) {
+            s.mats.iron = 6; s.mats.wood = Math.max(4, s.mats.wood);
+            G.ui.open('craft', {}); ok(document.querySelectorAll('[data-act="craft"]').length >= 3, 'the workbench offers things to make'); G.ui.close();
+            G.act({ t: 'craft', id: 'ironaxe' }); step(0.2);
+            ok(s.upg?.axe && s.mats.iron === 0, 'an iron axe, for six iron ore');
+            let tree = null;
+            for (const [k, blk] of G.world.flora.blocks) { if (blk.key !== 'pine' || tree) continue; for (let i = 0; i < blk.list.length; i++) { const id = k + '#' + i; if (!G.gather.gone.has(id) && Math.hypot(blk.list[i][0], blk.list[i][2] - 60) < 300) { tree = id; break; } } }
+            let blows = 0; for (; blows < 12 && tree && !G.gather.gone.has(tree); blows++) { G.act({ t: 'hit', id: tree, tool: 'axe', dir: [1, 0] }); step(0.1); }
+            ok(tree && blows <= 3, 'it fells a pine in ' + blows + ' blows instead of six');
+            G.act({ t: 'bdel', id: bench2.S.id }); step(0.3);
+          } else ok(false, 'room for a workbench');
+          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 13, 'the blueprint book lists thirteen buildings'); G.ui.close();
         }
       }
       if (name === 'edge') {

@@ -31,7 +31,7 @@ function handMesh(skin, sleeve, side) {
   return m;
 }
 
-function toolMesh(id) {
+function toolMesh(id, iron = false) {
   const b = new MeshBuilder(rng(id.length));
   const g = new MeshBuilder(rng(2));
   if (id === 'harpoon') {
@@ -71,13 +71,13 @@ function toolMesh(id) {
     b.color(0x9aa0a8).cyl(0.02, 0.02, -0.4, 0.5, 6, true);
     for (let k = 0; k < 8; k++) b.color(0xb8bec4).beam([Math.cos(k) * 0.05, -0.35 + k * 0.08, Math.sin(k) * 0.05], [Math.cos(k + 1) * 0.05, -0.31 + k * 0.08, Math.sin(k + 1) * 0.05], 0.03, 0.01);
   } else if (id === 'axe') {
-    b.color(0x7a5836).cyl(0.022, 0.027, -0.22, 0.56, 6, true);
-    b.color(0x5a3e28).cyl(0.03, 0.03, -0.22, -0.12, 6, true);
-    b.color(0x8a9098).box(0.03, 0.13, 0.2, 0, 0.5, 0.09);
-    b.color(0xd8dce0).box(0.034, 0.17, 0.035, 0, 0.5, 0.2);
+    b.color(iron ? 0x4a3222 : 0x7a5836).cyl(0.022, 0.027, -0.22, 0.56, 6, true);
+    b.color(iron ? 0x2a1e16 : 0x5a3e28).cyl(0.03, 0.03, -0.22, -0.12, 6, true);
+    b.color(iron ? 0x3e4246 : 0x8a9098).box(0.03, iron ? 0.16 : 0.13, 0.22, 0, 0.5, 0.09);
+    b.color(iron ? 0xf4f8fc : 0xd8dce0).box(0.034, iron ? 0.21 : 0.17, 0.035, 0, 0.5, 0.21);
     b.color(0x5a5e64).box(0.052, 0.08, 0.08, 0, 0.5, -0.02);
   } else if (id === 'pick') {
-    pickMeshBuilder(b);
+    pickMeshBuilder(b, iron);
   } else if (id === 'plans') {
     plansMeshBuilder(b);
   } else if (id === 'trap') {
@@ -152,13 +152,20 @@ export class ViewModel {
     for (const k in this.tools) this.tools[k].visible = false;
     if (this.rod) this.rod.group.visible = id === 'rod';
     if (id !== 'rod' && id) {
-      if (!this.tools[id]) { this.tools[id] = toolMesh(id); this.toolHolder.add(this.tools[id]); }
+      if (!this.tools[id]) { this.tools[id] = toolMesh(id, !!this.upg?.[id]); this.toolHolder.add(this.tools[id]); }
       this.tools[id].visible = true;
     }
     this.switchT = 0.35;
   }
 
   play(action) { this.action = action; this.actT = 0; }
+
+  /** An iron axe or pickaxe from the workbench: build them again. */
+  retool(upg = this.upg) {
+    this.upg = upg;
+    for (const k of ['axe', 'pick']) if (this.tools[k]) { this.toolHolder.remove(this.tools[k]); delete this.tools[k]; }
+    this.setTool(this.tool, true);
+  }
 
   resize(aspect, fov) { this.cam.aspect = aspect; this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
 

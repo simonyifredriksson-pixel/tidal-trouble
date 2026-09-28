@@ -20,7 +20,7 @@
    A finished building does something - see BLUEPRINTS in BuildData.js. */
 
 import * as THREE from '../../lib/three.module.js';
-import { BLUEPRINTS, BP_BY_ID, MATS, MAT_BY_ID, bpCost } from '../data/BuildData.js';
+import { BLUEPRINTS, BP_BY_ID, MATS, MAT_BY_ID, bpCost, WORMS } from '../data/BuildData.js';
 import { partGeo, GHOST, pieceMesh } from '../art/BuildArt.js';
 import { MAT } from '../art/Materials.js';
 import { MeshBuilder } from '../art/Geo.js';
@@ -272,6 +272,7 @@ export class Build {
     const done = !S.p.includes('0');
     G._everyone({ t: 'build', k: 'put', id: S.id, i: c.i, by: from, done });
     if (done) {
+      S.t0 = Math.round(this.clock());
       s.stats.built = (s.stats.built || 0) + 1;
       G.award('builder', from);
       if (s.stats.built >= 6) G.award('settler', from);
@@ -419,6 +420,12 @@ export class Build {
     G.world.extraLights.push(...out);
   }
 
+  /** Worms waiting in a worm farm right now. */
+  worms(S) {
+    if (!S || S.p.includes('0')) return 0;
+    if (S.t0 === undefined) S.t0 = Math.round(this.clock());
+    return Math.max(0, Math.min(WORMS.max, Math.floor((this.clock() - S.t0) / WORMS.every)));
+  }
   /** The game clock in seconds (days and time of day, so it survives saving). */
   clock() { const s = this.game.state.s; return (s.day + this.game.tod) * 1080; }
   /** Dried yet? */
