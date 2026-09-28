@@ -411,11 +411,14 @@ function stage(name) {
     for (const [k, blk] of world.flora.blocks) { if (blk.key !== 'pine' || tree) continue; for (let i = 0; i < blk.list.length; i++) { const it = blk.list[i]; if (Math.hypot(it[0] - 60, it[2] - 60) < 260 && it[3] > 0.95 && it[1] > 2) { tree = { id: k + '#' + i, it }; break; } } }
     if (tree) {
       const [x, y, z] = tree.it;
-      P.place(new THREE.Vector3(x - 6, world.ground(x - 6, z + 4) + 0.1, z + 4), 0);
-      P.yaw = Math.atan2(-(x - P.pos.x), -(z - P.pos.z)); P.pitch = 0.25;
-      P.tool = 'axe'; G.vm.setTool('axe'); G.tod = 0.42;
+      const close = Q.has('cuts');
+      P.place(new THREE.Vector3(x - (close ? 2.1 : 6), world.ground(x - (close ? 2.1 : 6), z + (close ? 1 : 4)) + 0.1, z + (close ? 1 : 4)), 0);
+      P.yaw = Math.atan2(-(x - P.pos.x), -(z - P.pos.z)); P.pitch = close ? -0.2 : 0.25;
+      P.tool = 'axe'; G.vm.setTool('axe'); G.tod = 0.5;
       const f = [(x - P.pos.x), (z - P.pos.z)], l = Math.hypot(...f);
-      for (let h = 0; h < 12 && !G.gather.gone.has(tree.id); h++) G._do({ t: 'hit', id: tree.id, tool: 'axe', dir: [+(f[1] / l).toFixed(2), +(-f[0] / l).toFixed(2)] }, P.id);
+      // ?cuts=N: cut N sides and stop (the notches), otherwise all the way round (it falls)
+      const nc = Q.has('cuts') ? +Q.get('cuts') : 6;
+      for (let h = 0; h < nc && !G.gather.gone.has(tree.id); h++) { const a = Math.atan2(P.pos.x - x, P.pos.z - z) + (h - (nc - 1) / 2) * 0.9; G._do({ t: 'hit', id: tree.id, tool: 'axe', dir: [-Math.sin(a), -Math.cos(a)], at: [x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5] }, P.id); }
       advance(sec);
       game.frozen = true;
     }

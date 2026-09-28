@@ -18,11 +18,43 @@
 import * as THREE from '../../lib/three.module.js';
 import { HARVEST, MAT_BY_ID, REGROW_DAYS } from '../data/BuildData.js';
 import { pieceMesh } from '../art/BuildArt.js';
-import { uid, clamp } from '../core/Util.js';
+import { uid, clamp, rng } from '../core/Util.js';
+import { MeshBuilder, shadeHex } from '../art/Geo.js';
+import { MAT } from '../art/Materials.js';
 
 const BLOCK = 200;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _ax = new THREE.Vector3();
 const CHIP = { axe: 0xc8985a, pick: 0x9a9a92 };
+/* How thick each trunk is where you chop it (x the tree's scale), how high that is, and how many sides it has to be cut from. */
+const TRUNK = { pine: 0.4, snowpine: 0.4, broad: 0.33, birch: 0.33, palm: 0.26, dead: 0.21, deaddark: 0.21, ash: 0.21, giant: 1.55, mangrove: 0.29 };
+const CHOPY = { giant: 1.4, mangrove: 1.9 };
+const sidesOf = key => key === 'giant' ? 10 : 6;
+const WOODFACE = 0xe8c890, WOODRIM = 0xb88a58, BARKC = 0x4a3526;
+/* A notch: pale fresh wood where the bark was, darker at the rims. depth 1 or 2. */
+const notchCache = {};
+function notchGeo(depth) {
+  if (notchCache[depth]) return notchCache[depth];
+  const b = new MeshBuilder(rng(depth + 3));
+  const h = 0.22 + depth * 0.08;
+  // fresh wood where the bark came off: an upper face lit from above, a lower face in shade, a dark crease where they meet
+  b.color(WOODFACE).box(1.0, h * 0.5, 0.03, 0, h * 0.25, 0.012);
+  b.color(shadeHex(WOODFACE, 0.8)).box(1.0, h * 0.5, 0.03, 0, -h * 0.25, 0.012);
+  b.color(0x7a5230).box(1.01, 0.018 + depth * 0.012, 0.035, 0, 0, 0.015);
+  // splinters and the torn bark lip round it
+  b.color(WOODRIM).box(1.02, 0.025, 0.045, 0, h / 2, 0.01).box(1.02, 0.025, 0.045, 0, -h / 2, 0.01);
+  b.color(0xf4dcae); for (let i = 0; i < 3 + depth; i++) b.box(0.05, 0.014, 0.05, -0.35 + i * 0.25, h * (0.18 + (i % 2) * 0.12), 0.03);
+  return (notchCache[depth] = b.build());
+}
+/* A chunk of bark and wood, or a lump of rock, knocked off by a swing. */
+const chunkCache = {};
+function chunkGeo(kind) {
+  if (chunkCache[kind]) return chunkCache[kind];
+  const b = new MeshBuilder(rng(kind.length));
+  if (kind === 'wood') { b.color(BARKC).box(0.16, 0.1, 0.05, 0, 0, 0.02); b.color(WOODFACE).box(0.15, 0.09, 0.05, 0, 0, -0.025); }
+  else if (kind === 'crystal') { b.color(0x9ae8f0).cyl(0.03, 0.06, -0.05, 0.03, 5, true); b.color(0xd8fcff).cone(0.06, 0.03, 0.12, 5); }
+  else { b.color(kind === 'dark' ? 0x3a3434 : 0x8e8e88, 0.15).lump(0.11, 0, 0, 0, 0.35, 0.8); }
+  return (chunkCache[kind] = b.build());
+}
 const LEAF = { pine: 0x2e5a2e, snowpine: 0xe8f0f4, broad: 0x4a8a3a, birch: 0x8ab84a, palm: 0x5a9a3a, giant: 0x2a4a2a, mangrove: 0x3a5a2a };
 
 export class Gather {
@@ -33,6 +65,9 @@ export class Gather {
     for (const [k, blk] of this.flora.blocks) blk.k = k;
     for (const m of this.flora.meshes) this.mesh.set(m.userData.blk.k, m);
     this.hp = new Map();           // host: node id -> hits left
+    this.cuts = new Map();         // host: tree id -> depth cut on each side of the trunk
+    this.notches = new Map();      // everyone: tree id -> the notch meshes
+    this.debris = [];              // chunks flying off
     this.gone = new Set();         // node ids hidden on this screen
     this.cols = new Map();         // node id -> colliders taken away
     this.stumps = new Map();       // node id -> stump mesh
@@ -123,7 +158,7 @@ export class Gather {
         return;
       }
       const f = P.flatForward(new THREE.Vector3());
-      G.act({ t: 'hit', id: T.id, tool, dir: [+f.x.toFixed(2), +f.z.toFixed(2)] });
+      G.act({ t: 'hit', id: T.id, tool, dir: [+f.x.toFixed(2), +f.z.toFixed(2)], at: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)] });
     }, 190);
   }
 
@@ -132,19 +167,49 @@ export class Gather {
     const G = this.game, s = G.state.s;
     const n = this.node(c.id);
     if (!n || this.gone.has(c.id) || n.def.tool !== c.tool) return;
+    const dir = c.dir || [0, 1];
+    if (n.def.fall) return this._hostCut(c, n, dir, from);
     // an iron tool does twice the work
     const hp = (this.hp.get(c.id) ?? n.def.hp) - (s.upg?.[c.tool] ? 2 : 1);
     this.hp.set(c.id, hp);
-    const dir = c.dir || [0, 1];
     const at = new THREE.Vector3(n.it[0], n.it[1] + Math.min(1.2, 0.5 * n.it[3] + 0.4), n.it[2]);
     if (n.def.chip && hp > 0) this.spawn(n.def.chip[0], at.clone().addScaledVector(new THREE.Vector3(-dir[0], 0, -dir[1]), 0.8), new THREE.Vector3(-dir[0] * 2, 3, -dir[1] * 2));
     if (hp > 0) { G._everyone({ t: 'gather', k: 'hit', id: c.id, hp, max: n.def.hp, dir }); return; }
+    this._give(c, n, dir, from);
+  }
+
+  /* A tree is cut round its trunk: the swing takes a notch out of the side
+     facing you, and it only comes down once the notches go all the way
+     round. Hitting the same notch again only deepens it. */
+  _hostCut(c, n, dir, from) {
+    const G = this.game, s = G.state.s;
+    const N = sidesOf(n.key);
+    const cut = this.cuts.get(c.id) || new Array(N).fill(0);
+    this.cuts.set(c.id, cut);
+    // which side of the trunk you are standing on
+    const px = c.at ? c.at[0] : n.it[0] - dir[0], pz = c.at ? c.at[1] : n.it[2] - dir[1];
+    const a = Math.atan2(px - n.it[0], pz - n.it[2]);
+    const k = ((Math.round(a / (Math.PI * 2 / N)) % N) + N) % N;
+    const iron = !!s.upg?.axe;
+    const before = cut.filter(x => x > 0).length;
+    cut[k] = Math.min(2, cut[k] + (iron ? 2 : 1));
+    if (iron) { cut[(k + 1) % N] = Math.max(cut[(k + 1) % N], 1); cut[(k + N - 1) % N] = Math.max(cut[(k + N - 1) % N], 1); }
+    const done = cut.every(x => x > 0);
+    // it falls away from the last cut
+    if (done) { this.cuts.delete(c.id); this._give(c, n, [-Math.sin(a), -Math.cos(a)], from, cut); return; }
+    const open = cut.filter(x => x > 0).length;
+    G._everyone({ t: 'gather', k: 'cut', id: c.id, cut: cut.join(''), side: k, dir, open, of: N, fresh: open > before });
+  }
+
+  _give(c, n, dir, from, cut = null) {
+    const G = this.game, s = G.state.s;
+    const at = new THREE.Vector3(n.it[0], n.it[1] + Math.min(1.2, 0.5 * n.it[3] + 0.4), n.it[2]);
     // it gives
     this.hp.delete(c.id);
     (s.felled = s.felled || {})[c.id] = s.day;
     G._saveDirty = true;
     s.stats.gathered = (s.stats.gathered || 0) + 1;
-    G._everyone({ t: 'gather', k: n.def.fall ? 'fell' : 'break', id: c.id, dir });
+    G._everyone({ t: 'gather', k: n.def.fall ? 'fell' : 'break', id: c.id, dir, cut: cut ? cut.join('') : undefined });
     const drop = (delay, pts) => setTimeout(() => {
       for (const [m, q] of n.def.give) for (let k = 0; k < q; k++) {
         const p = pts(k, q);
@@ -211,8 +276,25 @@ export class Gather {
       if (!wood) G.fx.sparks(at.x - dx * 0.3, at.y, at.z - dz * 0.3, 5, 0xffe8a0);
       if (tree && LEAF[n.key] && Math.random() < 0.7) G.fx.leaves(n.it[0], n.it[1] + 5 * n.it[3], n.it[2], 6, LEAF[n.key]);
     }
+    if (e.k === 'cut') {
+      G.audio.chopWood(at);
+      const sideA = e.side / e.of * Math.PI * 2;
+      const P0 = this._trunkPoint(n, sideA);
+      G.fx.chips(P0.x, P0.y, P0.z, CHIP.axe, 12, Math.sin(sideA) * 0.8, Math.cos(sideA) * 0.8);
+      if (LEAF[n.key] && Math.random() < 0.6) G.fx.leaves(n.it[0], n.it[1] + 5 * n.it[3], n.it[2], 5, LEAF[n.key]);
+      this._chunk(P0, sideA, 'wood');
+      this._notches(n, e.cut);
+      (this.lastCut = this.lastCut || new Map()).set(n.id, e.cut);
+      this.wobbles.push({ n, t: 0, dx, dz, a: 0.05 });
+      // tell the one who swung how far round they are
+      if (e.fresh && G.player.pos.distanceTo(P0) < 4) G.ui.toast(e.open < e.of ? `Cut ${e.open} of ${e.of} sides - keep working round the trunk.` : '', 'info');
+      else if (!e.fresh && G.player.pos.distanceTo(P0) < 4 && (this._roundT || 0) < G.world.time) { this._roundT = G.world.time + 4; G.ui.toast('That side is cut. Walk round the trunk and cut the next one.', 'info'); }
+      return;
+    }
     if (e.k === 'hit') {
       if (!wood) {
+        // a lump breaks off the side you hit
+        this._chunk(new THREE.Vector3(at.x - dx * 0.5 * n.it[3], at.y, at.z - dz * 0.5 * n.it[3]), Math.atan2(-dx, -dz), n.key === 'crystal' ? 'crystal' : n.key === 'lavarock' || n.key === 'spire' ? 'dark' : 'stone');
         // a rock loses a piece every time: it gets smaller
         const k = 0.55 + 0.45 * e.hp / e.max;
         n.shrink = k;
@@ -223,6 +305,45 @@ export class Gather {
     if (e.k === 'break') { this._gone(e.id, null); G.fx.dust(n.it[0], n.it[1], n.it[2], 12, Math.min(2, n.it[3])); if (!wood) G.audio.crack(); }
   }
 
+  /** The point on the trunk's surface at chopping height on the side at angle a (0 = +z). */
+  _trunkPoint(n, a, inset = 0) {
+    const r = (TRUNK[n.key] || 0.3) * n.it[3] - inset;
+    return new THREE.Vector3(n.it[0] + Math.sin(a) * r, n.it[1] + (CHOPY[n.key] || 0.95) * Math.min(1.2, n.it[3]), n.it[2] + Math.cos(a) * r);
+  }
+  /** Draw the notches cut so far (cut: a string of depths, one per side). */
+  _notches(n, cut) {
+    const G = this.game;
+    const old = this.notches.get(n.id);
+    if (old) G.scene.remove(old);
+    if (!cut) { this.notches.delete(n.id); return; }
+    const g = new THREE.Group();
+    const N = cut.length, r = (TRUNK[n.key] || 0.3) * n.it[3], w = 2 * Math.PI * r / N * 1.04;
+    for (let k = 0; k < N; k++) {
+      const d = +cut[k];
+      if (!d) continue;
+      const a = k / N * Math.PI * 2;
+      const m = new THREE.Mesh(notchGeo(d), MAT.solid);
+      m.position.copy(this._trunkPoint(n, a, (TRUNK[n.key] || 0.3) * n.it[3] * 0.06));
+      m.rotation.y = a;
+      m.scale.set(w, Math.max(0.7, n.it[3]), Math.max(0.8, n.it[3]));
+      m.castShadow = true;
+      g.add(m);
+    }
+    G.scene.add(g);
+    this.notches.set(n.id, g);
+  }
+  /** A chunk knocked off at p, flying out along angle a, then lying on the ground a while. */
+  _chunk(p, a, kind) {
+    const G = this.game;
+    const m = new THREE.Mesh(chunkGeo(kind), kind === 'crystal' ? MAT.glow : MAT.solid);
+    m.position.copy(p);
+    m.castShadow = true;
+    G.scene.add(m);
+    const s = 1.8 + Math.random() * 1.6;
+    this.debris.push({ m, v: new THREE.Vector3(Math.sin(a) * s + (Math.random() - 0.5), 2 + Math.random() * 2.5, Math.cos(a) * s + (Math.random() - 0.5)), w: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), t: 0 });
+    if (this.debris.length > 60) G.scene.remove(this.debris.shift().m);
+  }
+
   /** Hide a node (with a fall if `fall`), leave a stump, take its collider away. */
   _gone(id, fall) {
     const G = this.game;
@@ -230,6 +351,7 @@ export class Gather {
     const n = this.node(id);
     if (!n) return;
     this.gone.add(id);
+    this._notches(n, null);
     _m.makeScale(0, 0, 0);
     this._setInst(n, _m);
     this.wobbles = this.wobbles.filter(w => w.n.id !== id);
@@ -263,7 +385,9 @@ export class Gather {
   _restore(id) {
     const G = this.game, n = this.node(id);
     this.gone.delete(id);
+    this.cuts.delete(id);
     if (!n) return;
+    this._notches(n, null);
     this._setInst(n, this._matrix(n.it));
     for (const c of this.cols.get(id) || []) G.world.colliders._add(c, c.t === 'c' ? c.r : Math.hypot(c.hw, c.hd));
     this.cols.delete(id);
@@ -324,6 +448,19 @@ export class Gather {
       if (t > 2.4) { F.m.position.set(0, -0.5 * (t - 2.4), 0); F.m.matrix.elements[13] -= (t - 2.4) * 1.5; }
       if (t > 3.1) { G.scene.remove(F.m); this.falling.splice(i, 1); }
     }
+    // chunks knocked off: fly, bounce, lie there a while, sink into the ground
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const D = this.debris[i];
+      D.t += dt;
+      const g = G.world.ground(D.m.position.x, D.m.position.z);
+      if (!D.rest) {
+        D.v.y -= 9.8 * dt;
+        D.m.position.addScaledVector(D.v, dt);
+        D.m.rotation.x += D.w.x * dt; D.m.rotation.y += D.w.y * dt; D.m.rotation.z += D.w.z * dt;
+        if (D.m.position.y < g + 0.03) { D.m.position.y = g + 0.03; if (Math.abs(D.v.y) < 1.2) D.rest = true; else { D.v.y *= -0.3; D.v.x *= 0.5; D.v.z *= 0.5; D.w.multiplyScalar(0.5); } }
+      } else if (D.t > 8) D.m.position.y -= dt * 0.05;
+      if (D.t > 10) { G.scene.remove(D.m); this.debris.splice(i, 1); }
+    }
     // loose pieces
     const P = G.player;
     for (const M of this.pieces.values()) {
@@ -375,6 +512,11 @@ export class Gather {
   _hint(P, tool) {
     const T = this.target(P, tool);
     if (!T) return null;
+    if (T.def.fall) {
+      const N = sidesOf(T.key), c = this.lastCut?.get(T.id);
+      const open = c ? [...c].filter(x => x !== '0').length : 0;
+      return { T, text: open ? `Chop round the trunk (${open} of ${N} sides cut)` : `Chop the tree - cut it all the way round (${N} sides)` };
+    }
     const hp = this.hp.get(T.id) ?? T.def.hp;
     return { T, text: (tool === 'axe' ? (T.def.fall ? 'Chop the tree' : 'Cut it') : 'Break the rock') + (T.def.hp > 1 ? ` (${clamp(hp, 0, T.def.hp)} more)` : '') };
   }

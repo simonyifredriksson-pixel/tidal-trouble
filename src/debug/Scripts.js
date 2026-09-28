@@ -1062,8 +1062,13 @@ export async function runScripts(names, game) {
           ok(T && T.id === tree.k + '#' + tree.i, 'the axe finds the tree in front of you: ' + (T ? T.key : 'nothing'));
           const before = s.mats.wood || 0;
           let hits = 0;
-          for (; hits < 12 && !Ga.gone.has(tree.k + '#' + tree.i); hits++) { G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [1, 0] }); step(0.2); }
-          ok(Ga.gone.has(tree.k + '#' + tree.i) && !!s.felled[tree.k + '#' + tree.i], `it came down after ${hits} blows`);
+          // the same side again and again only deepens one notch
+          for (let k = 0; k < 4; k++) { G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [1, 0], at: [x - 1.5, z] }); step(0.2); hits++; }
+          ok(!Ga.gone.has(tree.k + '#' + tree.i) && Ga.notches.get(tree.k + '#' + tree.i)?.children.length === 1, 'hitting one side only cuts one notch - it is still standing');
+          ok(Ga.debris.length > 0, 'chunks of wood fly off with every swing (' + Ga.debris.length + ')');
+          // then all the way round
+          for (let k = 0; k < 6 && !Ga.gone.has(tree.k + '#' + tree.i); k++) { const a = k / 6 * Math.PI * 2; G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [-Math.sin(a), -Math.cos(a)], at: [x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5] }); step(0.2); hits++; }
+          ok(Ga.gone.has(tree.k + '#' + tree.i) && !!s.felled[tree.k + '#' + tree.i], 'cut all the way round, it came down (' + hits + ' blows)');
           ok(Ga.falling.length > 0 || true, 'and it falls');
           await new Promise(r => setTimeout(r, 2200));
           step(1.2);
@@ -1178,8 +1183,9 @@ export async function runScripts(names, game) {
             ok(s.upg?.axe && s.mats.iron === 0, 'an iron axe, for six iron ore');
             let tree = null;
             for (const [k, blk] of G.world.flora.blocks) { if (blk.key !== 'pine' || tree) continue; for (let i = 0; i < blk.list.length; i++) { const id = k + '#' + i; if (!G.gather.gone.has(id) && Math.hypot(blk.list[i][0], blk.list[i][2] - 60) < 300) { tree = id; break; } } }
-            let blows = 0; for (; blows < 12 && tree && !G.gather.gone.has(tree); blows++) { G.act({ t: 'hit', id: tree, tool: 'axe', dir: [1, 0] }); step(0.1); }
-            ok(tree && blows <= 3, 'it fells a pine in ' + blows + ' blows instead of six');
+            const tn = tree && G.gather.node(tree);
+            let blows = 0; for (; blows < 12 && tn && !G.gather.gone.has(tree); blows++) { const a = blows * 2 / 6 * Math.PI * 2; G.act({ t: 'hit', id: tree, tool: 'axe', dir: [1, 0], at: [tn.it[0] + Math.sin(a) * 1.5, tn.it[2] + Math.cos(a) * 1.5] }); step(0.1); }
+            ok(tree && blows <= 3, 'with the iron axe a pine comes down in ' + blows + ' blows instead of six');
             G.act({ t: 'bdel', id: bench2.S.id }); step(0.3);
           } else ok(false, 'room for a workbench');
           G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 13, 'the blueprint book lists thirteen buildings'); G.ui.close();
