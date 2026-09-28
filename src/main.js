@@ -385,6 +385,25 @@ function stage(name) {
       G.tod = +(Q.get('tod') || 0.5);
     } else window.__log && window.__log('no room for the yard');
   }
+  // the four player looks side by side on the beach: ?stage=looks[:zoom]
+  if (name.startsWith('looks')) {
+    const zoom = name.includes(':');
+    import('./art/Character.js').then(({ Character, PLAYER_LOOKS }) => {
+      const at = new THREE.Vector3(20, 0, 196); at.y = world.ground(at.x, at.z);
+      PLAYER_LOOKS.forEach((L, i) => {
+        const c = new Character(L, i * 13 + 5);
+        c.root.position.set(at.x + (i - 1.5) * 1.1, world.ground(at.x + (i - 1.5) * 1.1, at.z), at.z);
+        c.update(0.5, 'idle', 0);
+        scene.add(c.root);
+      });
+      const d = zoom ? 2.2 : 4.2;
+      P.place(new THREE.Vector3(at.x + (zoom ? -1.65 : 0), at.y, at.z + d), 0);
+      P.pitch = name.endsWith(':feet') ? -0.62 : zoom ? -0.05 : -0.1;
+      G.tod = 0.45;
+      game.frozen = false;
+      setTimeout(() => { game.frozen = true; }, 400);
+    });
+  }
   // a pine coming down: ?stage=chop[:SECONDS after the last blow]
   if (name.startsWith('chop')) {
     const sec = name.includes(':') ? +name.split(':')[1] : 0.8;

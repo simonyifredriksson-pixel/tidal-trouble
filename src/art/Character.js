@@ -51,15 +51,29 @@ export class Character {
       const leg = new THREE.Group();
       leg.position.set(side * 0.11 * B, 0, 0);
       const tb = new MeshBuilder(this.r);
-      tb.color(L.pants).cyl(0.085 * B, 0.075 * B, -0.45 * H, 0, 6, true);
+      // thigh: wider at the hip, a seam down the outside
+      tb.color(L.pants).cyl(0.09 * B, 0.074 * B, -0.45 * H, 0, 8, true);
+      tb.color(shadeHex(L.pants, 0.82)).box(0.012, 0.42 * H, 0.03, side * 0.085 * B, -0.22 * H, 0);
+      tb.color(shadeHex(L.pants, 0.9)).box(0.06 * B, 0.07, 0.012, side * 0.03, -0.12 * H, 0.085 * B);
       leg.add(mesh(tb));
       const knee = new THREE.Group();
       knee.position.y = -0.45 * H;
       const sb = new MeshBuilder(this.r);
-      sb.color(L.pants).cyl(0.07 * B, 0.075 * B, -0.4 * H, 0, 6, true);
-      sb.color(L.boots).box(0.14 * B, 0.1, 0.26, 0, -0.43 * H, 0.05);
-      sb.color(shadeHex(L.boots, 0.8)).box(0.15 * B, 0.03, 0.27, 0, -0.475 * H, 0.05);
-      sb.color(L.boots).cyl(0.08 * B, 0.08 * B, -0.43 * H, -0.3 * H, 6, true);
+      const bt = L.boots, bd = shadeHex(bt, 0.72), bl = shadeHex(bt, 1.25);
+      // shin, with a knee patch
+      sb.color(L.pants).cyl(0.066 * B, 0.075 * B, -0.3 * H, 0, 8, true);
+      sb.color(shadeHex(L.pants, 0.85)).blob(0.06 * B, 0.05, 0.03, 0, -0.03, 0.06 * B, 6, 3);
+      // the boot: a shaft with a rolled cuff, a heel, an arched sole and a rounded toe cap, laced up the front
+      const by = -0.43 * H;
+      sb.color(bt).cyl(0.07 * B, 0.078 * B, by + 0.06, -0.28 * H, 8, false);
+      sb.color(bl).cyl(0.085 * B, 0.082 * B, -0.3 * H, -0.26 * H, 8, true);
+      sb.color(bt).box(0.13 * B, 0.09, 0.15, 0, by + 0.035, -0.02);
+      sb.color(bt).box(0.125 * B, 0.075, 0.12, 0, by + 0.03, 0.1);
+      sb.color(bt).blob(0.065 * B, 0.05, 0.065, 0, by + 0.035, 0.155, 7, 3);
+      sb.color(bd).box(0.14 * B, 0.03, 0.14, 0, by - 0.022, -0.035);
+      sb.color(bd).box(0.132 * B, 0.022, 0.16, 0, by - 0.026, 0.12);
+      sb.color(shadeHex(bt, 0.55)).box(0.1 * B, 0.05, 0.05, 0, by - 0.01, -0.09);
+      sb.color(0xd8c8a0); for (let k = 0; k < 4; k++) sb.box(0.07 * B, 0.01, 0.012, 0, by + 0.07 + k * 0.045, 0.074 * B + (k < 1 ? 0.03 : 0));
       knee.add(mesh(sb));
       leg.add(knee);
       leg.userData.knee = knee;
@@ -73,7 +87,7 @@ export class Character {
     const tb = new MeshBuilder(this.r);
     const shirt = L.shirt, belly = L.belly;
     tb.color(L.overalls ? L.pants : shirt);
-    tb.lathe([[0.16 * B, -0.05], [0.19 * B + belly * 0.06, 0.12], [0.2 * B + belly * 0.08, 0.26], [0.2 * B, 0.4], [0.16 * B, 0.52], [0.08, 0.58]], 7);
+    tb.lathe([[0.16 * B, -0.05], [0.185 * B + belly * 0.06, 0.1], [0.2 * B + belly * 0.08, 0.24], [0.205 * B, 0.38], [0.2 * B, 0.46], [0.15 * B, 0.54], [0.08, 0.59]], 10);
     if (L.overalls) {
       // shirt shows at the shoulders and arms, the bib covers the front
       tb.color(shirt).lathe([[0.2 * B, 0.36], [0.2 * B, 0.42], [0.16 * B, 0.53], [0.08, 0.585]], 7);
@@ -86,10 +100,21 @@ export class Character {
       tb.color(L.vest);
       tb.lathe([[0.205 * B, 0.1], [0.21 * B + belly * 0.08, 0.26], [0.21 * B, 0.42], [0.17 * B, 0.52]], 7);
     }
-    // belt
-    tb.color(shadeHex(L.pants, 0.6)).cyl(0.175 * B, 0.18 * B, -0.03, 0.03, 7, false);
-    // collar
-    tb.color(shadeHex(shirt, 0.8)).cyl(0.1, 0.09, 0.54, 0.6, 6, false);
+    // shirt front: a placket, buttons and a pocket (hidden under the bib or vest)
+    const front = 0.2 * B + belly * 0.07;
+    if (!L.overalls && !L.vest) {
+      tb.color(shadeHex(shirt, 0.86)).box(0.035, 0.42, 0.012, 0, 0.3, front + 0.004);
+      tb.color(0xe8e0c8); for (let k = 0; k < 4; k++) tb.box(0.018, 0.018, 0.01, 0, 0.14 + k * 0.1, front + 0.012);
+      tb.color(shadeHex(shirt, 0.82)).box(0.075, 0.08, 0.012, 0.09 * B, 0.36, front - 0.004);
+      tb.color(shadeHex(shirt, 0.7)).box(0.078, 0.014, 0.014, 0.09 * B, 0.4, front);
+    }
+    // belt and buckle
+    tb.color(shadeHex(L.pants, 0.55)).cyl(0.178 * B, 0.182 * B, -0.035, 0.035, 10, false);
+    tb.color(0xc8a048).box(0.055, 0.05, 0.02, 0, 0, 0.182 * B + 0.004);
+    tb.color(shadeHex(L.pants, 0.55)).box(0.028, 0.026, 0.024, 0, 0, 0.182 * B + 0.006);
+    // collar: two points turned down over the chest
+    tb.color(shadeHex(shirt, 0.8)).cyl(0.1, 0.09, 0.54, 0.6, 8, false);
+    for (const sx of [-1, 1]) tb.color(shadeHex(shirt, 0.75)).tri([sx * 0.02, 0.585, 0.1], [sx * 0.1, 0.56, 0.06], [sx * 0.035, 0.5, 0.135]).tri([sx * 0.02, 0.585, 0.1], [sx * 0.035, 0.5, 0.135], [sx * 0.1, 0.56, 0.06]);
     this.torso.add(mesh(tb));
 
     // --- head ---
@@ -121,16 +146,17 @@ export class Character {
     hb.color(0x7a3a2e).box(0.08, 0.015, 0.02, 0, -0.1, 0.19);
     // hair
     if (L.hair === 'short') {
-      hb.color(L.hairCol).blob(0.205, 0.14, 0.215, 0, 0.12, -0.015, 8, 3, 0.1);
+      hb.color(L.hairCol).blob(0.208, 0.14, 0.215, 0, 0.13, -0.04, 9, 4, 0.1);
+      hb.color(shadeHex(L.hairCol, 0.85)); for (const sx of [-1, 1]) hb.blob(0.035, 0.07, 0.06, sx * 0.19, 0.06, -0.02, 5, 3);
     } else if (L.hair === 'long') {
-      hb.color(L.hairCol).blob(0.215, 0.15, 0.22, 0, 0.11, -0.02, 8, 3, 0.1);
+      hb.color(L.hairCol).blob(0.215, 0.15, 0.22, 0, 0.12, -0.045, 9, 4, 0.1);
       hb.color(L.hairCol).box(0.36, 0.3, 0.12, 0, -0.08, -0.14);
     } else if (L.hair === 'bald') {
       hb.color(L.hairCol);
       for (const sx of [-1, 1]) hb.blob(0.05, 0.07, 0.1, sx * 0.18, 0.02, -0.06, 5, 3);
     } else if (L.hair === 'bun') {
-      hb.color(L.hairCol).blob(0.205, 0.14, 0.215, 0, 0.12, -0.015, 8, 3, 0.1);
-      hb.color(L.hairCol).blob(0.08, 0.08, 0.08, 0, 0.2, -0.16, 6, 3);
+      hb.color(L.hairCol).blob(0.208, 0.14, 0.215, 0, 0.13, -0.04, 9, 4, 0.1);
+      hb.color(L.hairCol).blob(0.08, 0.08, 0.08, 0, 0.2, -0.17, 6, 3);
     }
     // beard
     if (L.beard === 'full') {
@@ -162,15 +188,18 @@ export class Character {
       hb.color(0x1a1a2a).cyl(0.225, 0.225, 0.12, 0.155, 8, false, 0, -0.01);
       hb.color(0xd8b048).box(0.06, 0.05, 0.02, 0, 0.19, 0.225);
     } else if (L.hat === 'cap') {
-      hb.color(hc).blob(0.215, 0.12, 0.22, 0, 0.14, -0.01, 8, 3);
-      hb.color(shadeHex(hc, 0.85)).box(0.24, 0.025, 0.16, 0, 0.14, 0.24);
+      hb.color(hc).lathe([[0.222, 0.15], [0.225, 0.19], [0.2, 0.25], [0.14, 0.3], [0.05, 0.325], [0, 0.33]], 10);
+      hb.color(shadeHex(hc, 0.85)).push(0, 0.155, 0.2, -0.12, 0, 0).box(0.26, 0.022, 0.16, 0, 0, 0.03).pop();
+      hb.color(shadeHex(hc, 0.75)).blob(0.025, 0.015, 0.025, 0, 0.33, 0, 5, 2);
     } else if (L.hat === 'beanie') {
-      hb.color(hc).blob(0.215, 0.18, 0.22, 0, 0.12, -0.01, 8, 4);
-      hb.color(shadeHex(hc, 0.8)).cyl(0.22, 0.22, 0.04, 0.1, 8, false);
-      hb.color(0xf2f2f2).blob(0.05, 0.05, 0.05, 0, 0.31, 0, 5, 3);
+      // a knitted dome above the brows, a folded cuff, no pom-pom
+      hb.color(hc).lathe([[0.224, 0.17], [0.222, 0.22], [0.2, 0.28], [0.15, 0.33], [0.08, 0.36], [0, 0.37]], 10);
+      hb.color(shadeHex(hc, 0.78)).lathe([[0.228, 0.15], [0.232, 0.175], [0.226, 0.2]], 10);
+      hb.color(shadeHex(hc, 0.88)); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; hb.beam([Math.cos(a) * 0.222, 0.21, Math.sin(a) * 0.222], [Math.cos(a) * 0.15, 0.33, Math.sin(a) * 0.15], 0.012, 0.012); }
     } else if (L.hat === 'bucket') {
-      hb.color(hc).cyl(0.2, 0.22, 0.12, 0.28, 8, true);
-      hb.color(shadeHex(hc, 0.9)).cyl(0.34, 0.22, 0.1, 0.14, 8, true);
+      hb.color(hc).cyl(0.2, 0.222, 0.16, 0.31, 9, true);
+      hb.color(shadeHex(hc, 0.9)).cyl(0.34, 0.23, 0.14, 0.18, 9, true);
+      hb.color(shadeHex(hc, 0.7)).cyl(0.224, 0.224, 0.18, 0.21, 9, false);
     } else if (L.hat === 'straw') {
       hb.color(0xe0c070).cyl(0.18, 0.21, 0.13, 0.27, 8, true);
       hb.color(0xd8b460).cyl(0.42, 0.4, 0.12, 0.15, 10, true);
@@ -189,17 +218,21 @@ export class Character {
       const arm = new THREE.Group();
       arm.position.set(side * 0.235 * B, 0.5, 0);
       const ab = new MeshBuilder(this.r);
-      ab.color(L.shirt).cyl(0.065, 0.06, -0.3, 0.02, 6, true);
-      ab.color(L.shirt).blob(0.075, 0.07, 0.075, 0, 0, 0, 6, 3);
+      ab.color(L.shirt).cyl(0.068, 0.058, -0.3, 0.02, 8, true);
+      ab.color(L.shirt).blob(0.082, 0.075, 0.08, 0, 0, 0, 8, 4);
+      ab.color(shadeHex(L.shirt, 0.85)).cyl(0.07, 0.07, -0.1, -0.085, 8, false);
       arm.add(mesh(ab));
       const elbow = new THREE.Group();
       elbow.position.y = -0.3;
       const fb = new MeshBuilder(this.r);
-      fb.color(L.shirt).cyl(0.055, 0.055, -0.12, 0, 6, false);
-      fb.color(L.skin).cyl(0.045, 0.05, -0.27, -0.1, 6, false);
-      // big mitten hand + thumb
-      fb.color(L.skin).blob(0.075, 0.09, 0.055, 0, -0.34, 0.01, 6, 3, 0.1);
-      fb.color(L.skin).blob(0.03, 0.05, 0.03, side * -0.055, -0.31, 0.05, 5, 3);
+      fb.color(L.shirt).cyl(0.057, 0.056, -0.12, 0, 8, false);
+      fb.color(shadeHex(L.shirt, 0.78)).cyl(0.062, 0.062, -0.13, -0.1, 8, true);
+      fb.color(L.skin).cyl(0.045, 0.05, -0.27, -0.12, 7, false);
+      // a big hand: palm, four chunky fingers and a thumb, knuckles a shade darker
+      const sk = L.skin, sd = shadeHex(sk, 0.9);
+      fb.color(sk).blob(0.07, 0.065, 0.048, 0, -0.31, 0.008, 7, 3, 0.06);
+      for (let k = 0; k < 4; k++) fb.color(k % 2 ? sk : sd).blob(0.018, 0.04, 0.022, (k - 1.5) * 0.034, -0.375, 0.018, 5, 3);
+      fb.color(sk).blob(0.024, 0.042, 0.024, side * -0.062, -0.305, 0.045, 5, 3);
       elbow.add(mesh(fb));
       const hand = new THREE.Group();
       hand.position.set(0, -0.35, 0.02);
