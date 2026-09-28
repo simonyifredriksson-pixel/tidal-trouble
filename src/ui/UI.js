@@ -1147,6 +1147,7 @@ export class UI {
       <div class="legend">
         <div>${ic('arrow')} You</div><div>${ic('boat')} Your boat</div><div>${ic('people')} Friends</div>
         <div>${ic('target')} Leviathan lure point</div><div>${ic('eye')} Clue to inspect</div><div>${ic('trap')} Your traps</div>
+        ${(s.builds || []).length ? `<div>${ic('hut')} Your buildings</div><div>${ic('fire')} Your beacons</div>` : ''}
         ${G.state.has('charts') ? `<div>${ic('current')} Currents (from your charts)</div>` : ''}
         ${known.map(r => `<div>${ic(REGION_ICON[r.id] || 'map')} ${esc(r.name)}</div>`).join('')}
         <p style="font-size:12px;color:var(--ink2)">The dark is sea nobody has charted for you. Sail into it to fill it in. Scroll or use the buttons to zoom, and drag to look around.</p>
@@ -1254,6 +1255,15 @@ export class UI {
       if (G.state.levReady(L)) { const [px, py] = toPx(L.lure.x, L.lure.z); c.strokeStyle = '#ff5a4a'; c.lineWidth = 3; c.beginPath(); c.arc(px, py, 12 + Math.sin(this.t * 4) * 2, 0, 6.28); c.stroke(); dot(L.lure.x, L.lure.z, '#ff5a4a', 6); }
     }
     for (const t of G.tools.traps.values()) dot(t.x, t.z, '#f2c14a', 4);
+    // what you have built: a square for each building, a flame for a beacon, a dashed box for a blueprint still going up
+    for (const S of s.builds || []) {
+      const [bx, by] = toPx(S.x, S.z), done = !S.p.includes('0');
+      if (bx < -10 || by < -10 || bx > N + 10 || by > N + 10) continue;
+      if (S.bp === 'beacon' && done) { c.fillStyle = '#ffb03a'; c.beginPath(); c.moveTo(bx, by - 8); c.lineTo(bx + 4, by + 2); c.lineTo(bx, by + 5); c.lineTo(bx - 4, by + 2); c.fill(); c.strokeStyle = 'rgba(255,176,58,0.5)'; c.lineWidth = 2; c.beginPath(); c.arc(bx, by, 11, 0, 6.28); c.stroke(); continue; }
+      c.lineWidth = 2; c.strokeStyle = '#fbf4e2';
+      if (done) { c.fillStyle = S.bp === 'shelter' ? '#e8a060' : '#c8985a'; c.fillRect(bx - 3.5, by - 3.5, 7, 7); c.strokeRect(bx - 3.5, by - 3.5, 7, 7); }
+      else { c.setLineDash([2, 2]); c.strokeRect(bx - 3.5, by - 3.5, 7, 7); c.setLineDash([]); }
+    }
     // the X from a waterlogged chart
     for (const m of s.mysteries || []) {
       if (m.stage) continue;

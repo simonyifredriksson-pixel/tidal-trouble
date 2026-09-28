@@ -23,11 +23,16 @@ import * as THREE from '../../lib/three.module.js';
 import { BLUEPRINTS, BP_BY_ID, MATS, MAT_BY_ID, bpCost } from '../data/BuildData.js';
 import { partGeo, GHOST, pieceMesh } from '../art/BuildArt.js';
 import { MAT } from '../art/Materials.js';
+import { MeshBuilder } from '../art/Geo.js';
+import { rng } from '../core/Util.js';
 import { heightAt } from '../world/Terrain.js';
 import { uid, clamp } from '../core/Util.js';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _e = new THREE.Euler();
 const MAX_SITES = 60;
+const DRY_SECONDS = 180;      // three minutes of game time on the rack
+// a beacon's fire is not hidden by the fog: that is the whole point of it
+const FLAME = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
 
 /** Which tier a site is working on (the lowest with anything left). */
 export function openTier(bp, placed) {
@@ -189,6 +194,12 @@ export class Build {
       }
     }
     for (const b of G.world.settlement.blockers) if (Math.hypot(x - b.x, z - b.z) < b.r + bp.foot) return 'There is already something built here.';
+    // trees, rocks, walls: clear the ground first (a tree you have felled is gone from here too)
+    for (const c of G.world.colliders.near(x, z, bp.foot + 1)) {
+      if (c.tag === 'build') continue;
+      const d = c.t === 'c' ? Math.hypot(c.x - x, c.z - z) - c.r : Math.hypot(c.x - x, c.z - z) - Math.min(c.hw, c.hd);
+      if (d < bp.foot * 0.85) return c.tag === 'tree' ? 'A tree is in the way. Chop it down first (0).' : c.tag === 'rock' ? 'A rock is in the way. Break it up first (-).' : 'Something is in the way.';
+    }
     for (const S of s.builds || []) { const o = BP_BY_ID[S.bp]; if (o && Math.hypot(x - S.x, z - S.z) < bp.foot + o.foot + 0.3) return 'Too close to another blueprint.'; }
     return null;
   }
@@ -307,7 +318,7 @@ export class Build {
   update(dt, input, blocked) {
     const G = this.game, P = G.player;
     this.syncT -= dt;
-    if (this.syncT <= 0) { this.syncT = 0.5; this._sync(); }
+    if (this.syncT <= 0) { this.syncT = 0.5; this._sync(); this._racks(); }
     // pieces in the air
     for (let i = this.flyers.length - 1; i >= 0; i--) {
       const F = this.flyers[i];
@@ -375,8 +386,25 @@ export class Build {
     for (const site of this.sites.values()) {
       if (!site.complete) continue;
       const id = site.bp.id;
-      if (id !== 'campfire' && id !== 'lantern') continue;
+      if (id !== 'campfire' && id !== 'lantern' && id !== 'beacon') continue;
       const c = site.group.position;
+      if (id === 'beacon') {
+        // a real fire basket at night, and a glow you can see from far out at sea
+        const lit = night > 0.15;
+        if (!site.flame) {
+          const fb = new MeshBuilder(rng(5));
+          fb.color(0xffb03a).blob(0.42, 0.7, 0.42, 0, 0.6, 0, 7, 4); fb.color(0xfff0a0).blob(0.22, 0.45, 0.22, 0, 0.45, 0, 6, 3);
+          site.flame = new THREE.Mesh(fb.build(), FLAME);
+          site.flame.position.set(0, 3.1, 0);
+          site.group.add(site.flame);
+        }
+        site.flame.visible = lit;
+        const d = Math.hypot(c.x - G.player.pos.x, c.z - G.player.pos.z);
+        site.flame.scale.setScalar(1 + Math.min(4, d / 250) + Math.sin(G.world.time * 9 + c.x) * 0.08);
+        if (lit && d < 160 && Math.random() < 0.9) G.fx.fire(c.x, c.y + 3.35, c.z, 1.1);
+        if (lit) { site.light = site.light || { pos: new THREE.Vector3(c.x, c.y + 3.6, c.z), color: 0xffa04a, intensity: 2.4, dist: 26, flicker: true, beacon: true }; out.push(site.light); }
+        continue;
+      }
       if (Math.hypot(c.x - G.player.pos.x, c.z - G.player.pos.z) > 160) continue;
       if (id === 'campfire') {
         if (Math.random() < 0.9) G.fx.fire(c.x, c.y + 0.25, c.z, 0.8);
@@ -389,6 +417,35 @@ export class Build {
       }
     }
     G.world.extraLights.push(...out);
+  }
+
+  /** The game clock in seconds (days and time of day, so it survives saving). */
+  clock() { const s = this.game.state.s; return (s.day + this.game.tod) * 1080; }
+  /** Dried yet? */
+  dried(it) { return !!it.dry || this.clock() - (it.t0 || 0) >= DRY_SECONDS; }
+
+  /** Fish hanging on the drying racks, drawn where they hang. */
+  _racks() {
+    const G = this.game;
+    for (const site of this.sites.values()) {
+      if (site.bp.id !== 'dryrack' || !site.complete) { if (site.hung) { for (const m of site.hung) site.group.remove(m); site.hung = null; } continue; }
+      const store = site.S.store || [];
+      const key = store.map(x => x.sp + (this.dried(x) ? 'd' : '')).join(',');
+      if (key === site.hungKey) continue;
+      site.hungKey = key;
+      if (site.hung) for (const m of site.hung) site.group.remove(m);
+      site.hung = store.map((x, i) => {
+        const m = G.fishMeshCache(x.sp).clone();
+        const s = Math.min(0.9, 0.25 + Math.cbrt(x.kg) * 0.18);
+        m.scale.setScalar(s);
+        m.position.set(-0.75 + i * 0.5, 1.38 - s * 0.45, 0);
+        m.rotation.set(0, 0, Math.PI / 2);
+        // a dried fish goes dark and shrivelled
+        if (this.dried(x)) m.traverse(o => { if (o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.setRGB(0.55, 0.42, 0.3); } });
+        site.group.add(m);
+        return m;
+      });
+    }
   }
 
   /** Is there a lit campfire within r of a point? (warmth at Frostfall) */

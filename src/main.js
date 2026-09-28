@@ -22,6 +22,7 @@ import { Remote } from './game/Remote.js';
 import { heightAt } from './world/Terrain.js';
 import { VIGIL, REGIONS, HOME_CENTRE } from './world/MapData.js';
 import { U } from './art/Materials.js';
+import { BP_BY_ID } from './data/BuildData.js';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -336,6 +337,54 @@ function stage(name) {
     G.intro.start(+sec);
     G.intro.hold = +sec;
     if (yaw !== undefined) G.intro.yaw = +yaw;
+  }
+  // every blueprint in a row on open ground near the village: ?stage=yard[:FRACTION]  (FRACTION of pieces placed, 1 = all built)
+  if (name.startsWith('yard')) {
+    const frac = name.includes(':') ? +name.split(':')[1] : -1;
+    const B = G.build, s = G.state.s;
+    s.mats = { wood: 400, stone: 400, fibre: 60, crystal: 20, iron: 10 };
+    const bps = (Q.get('bps') || 'campfire,bench,lantern,chest,baitstation,palisade,shelter,watchtower').split(',');
+    // a long flat stretch: walk out from the hut until the ground is kind
+    let x0 = null, z0 = null;
+    for (let r = 30; r < 500 && x0 === null; r += 6) for (let a = 0; a < 6.28 && x0 === null; a += 0.2) {
+      const x = A.spawn.x + Math.cos(a) * r, z = A.spawn.z + Math.sin(a) * r;
+      let good = true;
+      for (let k = 0; k < bps.length && good; k++) { const bx = x + k * 6.5, y = world.ground(bx, z); if (B._why(BP_BY_ID[bps[k]], bx, z, y, 0)) good = false; }
+      if (good) { x0 = x; z0 = z; }
+    }
+    if (x0 !== null) {
+      bps.forEach((id, k) => {
+        const bx = x0 + k * 6.5;
+        G.act({ t: 'bnew', bp: id, x: bx, y: world.ground(bx, z0), z: z0, r: 0 });
+        const S = s.builds[s.builds.length - 1];
+        if (!S) return;
+        const n = BP_BY_ID[id].parts.length, want = frac < 0 ? [0, 0.3, 0.6, 1, 1, 0.5, 0.45, 1][k] ?? 1 : frac;
+        S.p = BP_BY_ID[id].parts.map((p, i) => i < Math.round(n * want) ? '1' : '0').join('');
+      });
+      B._sync();
+      // look at one of them close up (?focus=K) or down the whole row
+      const fk = Q.has('focus') ? +Q.get('focus') : -1;
+      const mid = fk >= 0 ? x0 + fk * 6.5 : x0 + 3.5 * 6.5, back = fk >= 0 ? 5.5 : 12, side = fk >= 0 ? 2.5 : -6;
+      P.place(new THREE.Vector3(mid + side, world.ground(mid + side, z0 + back) + 0.1, z0 + back), 0);
+      P.yaw = Math.atan2(-(mid - P.pos.x), -(z0 - P.pos.z)); P.pitch = fk >= 0 ? -0.18 : -0.1;
+      G.tod = +(Q.get('tod') || 0.5);
+    } else window.__log && window.__log('no room for the yard');
+  }
+  // a pine coming down: ?stage=chop[:SECONDS after the last blow]
+  if (name.startsWith('chop')) {
+    const sec = name.includes(':') ? +name.split(':')[1] : 0.8;
+    let tree = null;
+    for (const [k, blk] of world.flora.blocks) { if (blk.key !== 'pine' || tree) continue; for (let i = 0; i < blk.list.length; i++) { const it = blk.list[i]; if (Math.hypot(it[0] - 60, it[2] - 60) < 260 && it[3] > 0.95 && it[1] > 2) { tree = { id: k + '#' + i, it }; break; } } }
+    if (tree) {
+      const [x, y, z] = tree.it;
+      P.place(new THREE.Vector3(x - 6, world.ground(x - 6, z + 4) + 0.1, z + 4), 0);
+      P.yaw = Math.atan2(-(x - P.pos.x), -(z - P.pos.z)); P.pitch = 0.25;
+      P.tool = 'axe'; G.vm.setTool('axe'); G.tod = 0.42;
+      const f = [(x - P.pos.x), (z - P.pos.z)], l = Math.hypot(...f);
+      for (let h = 0; h < 12 && !G.gather.gone.has(tree.id); h++) G._do({ t: 'hit', id: tree.id, tool: 'axe', dir: [+(f[1] / l).toFixed(2), +(-f[0] / l).toFixed(2)] }, P.id);
+      advance(sec);
+      game.frozen = true;
+    }
   }
   // the Warden, at a phase: ?stage=warden:PHASE:SECONDS
   if (name.startsWith('warden:')) {

@@ -145,6 +145,27 @@ function watchtower() {
   return P;
 }
 
+function dryrack() {
+  // two A-frames with a pole between them: fish hang from the pole (the four hooks are the `hang` points)
+  const P = [{ m: 'stone', k: 'stone', t: 0, x: -1.1, y: 0.08, z: 0, w: 0.22 }, { m: 'stone', k: 'stone', t: 0, x: 1.1, y: 0.08, z: 0, w: 0.22 }];
+  for (const x of [-1.1, 1.1]) for (const s of [-1, 1]) P.push({ m: 'wood', k: 'post', t: 1, x, y: 0, z: s * 0.35, w: 0.06, h: 1.75, rx: -s * 0.19, solid: true });
+  P.push({ m: 'wood', k: 'log', t: 2, x: 0, y: 1.68, z: 0, w: 2.5, h: 0.05 });
+  for (let i = 0; i < 4; i++) P.push({ m: 'fibre', k: 'thatch', t: 3, x: -0.75 + i * 0.5, y: 1.52, z: 0, w: 0.06, h: 0.3, d: 0.03 });
+  return P;
+}
+function beacon() {
+  // a stone tower with an iron fire basket on top; it burns every night and can be seen from far out
+  const P = [];
+  for (let ring = 0; ring < 3; ring++) {
+    const n = 8 - ring * 2, r = 0.95 - ring * 0.22;
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + ring * 0.3; P.push({ m: 'stone', k: 'stone', t: ring, x: Math.cos(a) * r, y: 0.15 + ring * 0.75, z: Math.sin(a) * r, w: 0.42 - ring * 0.06 }); }
+  }
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4; P.push({ m: 'wood', k: 'post', t: 3, x: Math.cos(a) * 0.35, y: 1.9, z: Math.sin(a) * 0.35, w: 0.07, h: 1.3 }); }
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2; P.push({ m: 'iron', k: 'plank', t: 4, x: Math.cos(a) * 0.36, y: 3.25, z: Math.sin(a) * 0.36, w: 0.5, h: 0.32, d: 0.05, r: -a + Math.PI / 2 }); }
+  for (let i = 0; i < 3; i++) P.push({ m: 'wood', k: 'log', t: 5, x: 0, y: 3.2 + i * 0.1, z: 0, w: 0.55, h: 0.07, r: i * 1.05 });
+  return P;
+}
+
 export const BLUEPRINTS = [
   { id: 'campfire', name: 'Campfire', icon: 'fire', foot: 1.3, parts: campfire(),
     blurb: 'A ring of stones and a few logs. Warmth on a cold night, light to see by, and a place to rest until morning.', use: 'Rest by it (E) to heal and wait for dawn. Keeps the Frostfall cold off you.' },
@@ -156,6 +177,10 @@ export const BLUEPRINTS = [
     blurb: 'A plank box on stone feet with a heavy lid. What goes in stays put.', use: 'Stores up to 16 catches. Hold a fish and press E to put it in; E with empty hands to take one out.' },
   { id: 'baitstation', name: 'Bait Station', icon: 'worm', foot: 1.2, parts: baitstation(),
     blurb: 'A cutting table under a fibre screen. Everyone who fishes needs one.', use: 'Hold a fish and press E: it becomes a stack of Fish Pieces bait. Bigger fish, more bait.' },
+  { id: 'dryrack', name: 'Fish Drying Rack', icon: 'fish', foot: 1.3, parts: dryrack(), hang: 4,
+    blurb: 'A pole between two A-frames, with fibre lines to hang fish from. The wind does the rest.', use: 'Hang up to four fish (hold one, press E). After a few minutes they are dried, and dried fish sells for half as much again.' },
+  { id: 'beacon', name: 'Signal Beacon', icon: 'fire', foot: 1.2, parts: beacon(),
+    blurb: 'A stone tower with an iron fire basket on top. Every beacon you light is one more thing in the dark that is yours.', use: 'Burns every night, bright enough to see from far out at sea, and marks your map.' },
   { id: 'palisade', name: 'Palisade Wall', icon: 'shield', foot: 1.9, parts: palisade(),
     blurb: 'Eight sharpened stakes between two footing stones. Keeps the wind off a camp - and anything else.', use: 'A solid wall. Build several round a camp.' },
   { id: 'jetty', name: 'Fishing Jetty', icon: 'dock', foot: 1.3, shore: true, parts: jetty(),

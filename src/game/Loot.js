@@ -47,7 +47,7 @@ export class Loot {
     const sp = FISH_BY_ID[o.sp];
     if (!sp) return null;
     const it = {
-      id: o.id || uid('l'), sp: o.sp, kg: o.kg, cm: o.cm, mult: o.mult || 1,
+      id: o.id || uid('l'), sp: o.sp, kg: o.kg, cm: o.cm, mult: o.mult || 1, dried: !!o.dried,
       pos: new THREE.Vector3().copy(o.pos), vel: new THREE.Vector3().copy(o.vel || _v.set(0, 0, 0)),
       yaw: o.yaw ?? Math.random() * 6.28, roll: 0, spinY: (Math.random() - 0.5) * 6, spinR: (Math.random() - 0.5) * 8,
       boat: null, local: new THREE.Vector3(), held: null, state: 'free', t: 0, flop: o.flop ?? (sp.junk ? 0 : 22),
@@ -389,11 +389,11 @@ export class Loot {
 
   /* ---------------- persistence (host) ---------------- */
   saveOnBoat(boat) {
-    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0 }));
+    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0, d: it.dried ? 1 : 0 }));
   }
   loadOnBoat(boat, list) {
     for (const o of list || []) {
-      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f });
+      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f, dried: !!o.d });
       if (!it) continue;
       it.boat = boat; it.local.set(o.x, Math.max(o.y, boat.deck + 0.05), o.z); it.vel.set(0, 0, 0);
       if (o.c) { it.state = 'cooler'; it.mesh.visible = false; }

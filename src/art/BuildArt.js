@@ -30,10 +30,12 @@ function partBuilder(p, seed = 1) {
       b.pop();
       break;
     }
-    case 'plank':
-      b.color(PLANK, 0.08).box(w, h, d, 0, 0, 0);
-      b.color(shadeHex(PLANK, 0.8)).box(w * 1.001, h * 0.2, d * 0.04, 0, h * 0.5, 0);
+    case 'plank': {
+      const c = p.m === 'iron' ? 0x4a4644 : PLANK;
+      b.color(c, 0.08).box(w, h, d, 0, 0, 0);
+      b.color(shadeHex(c, p.m === 'iron' ? 1.4 : 0.8)).box(w * 1.001, h * 0.2, d * 0.04, 0, h * 0.5, 0);
       break;
+    }
     case 'post':
       b.color(WOOD, 0.08).cyl(w, w * 0.9, 0, h, 6, true);
       b.color(BARK).cyl(w * 1.04, w * 1.04, h * 0.1, h * 0.2, 6, false);
@@ -60,15 +62,15 @@ function partBuilder(p, seed = 1) {
 
 const geoCache = new Map();
 export function partGeo(p) {
-  const key = [p.k, p.w, p.h, p.d].join(':');
+  const key = [p.k, p.w, p.h, p.d, p.m === 'iron' ? 'i' : ''].join(':');
   if (!geoCache.has(key)) geoCache.set(key, partBuilder(p, key.length).build());
   return geoCache.get(key);
 }
 
 /** The ghost: pale blue where it is waiting for you, gold where you are about to put the next piece. */
 export const GHOST = {
-  wait: new THREE.MeshBasicMaterial({ color: 0x7ad0ff, transparent: true, opacity: 0.26, depthWrite: false }),
-  locked: new THREE.MeshBasicMaterial({ color: 0x7ad0ff, transparent: true, opacity: 0.1, depthWrite: false }),
+  wait: new THREE.MeshBasicMaterial({ color: 0x8ad8ff, transparent: true, opacity: 0.42, depthWrite: false }),
+  locked: new THREE.MeshBasicMaterial({ color: 0x8ad8ff, transparent: true, opacity: 0.16, depthWrite: false }),
   next: new THREE.MeshBasicMaterial({ color: 0xffe07a, transparent: true, opacity: 0.6, depthWrite: false }),
   bad: new THREE.MeshBasicMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.35, depthWrite: false }),
   good: new THREE.MeshBasicMaterial({ color: 0x8aff9a, transparent: true, opacity: 0.35, depthWrite: false }),

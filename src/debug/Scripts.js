@@ -1111,9 +1111,44 @@ export async function runScripts(names, game) {
           B.cancelPlan();
           B.held = null; B.cycleHeld('wood');
           ok(B.held === 'wood' && G.vm.heldMat === 'wood' || B.held === 'wood', 'G takes wood out of the pack into your hands');
+          // a drying rack: hang a fish, wait, take it down worth half as much again
+          G.act({ t: 'bnew', bp: 'dryrack', x: spot.x + 6, y: G.world.ground(spot.x + 6, spot.z), z: spot.z, r: 0 }); step(0.6);
+          const rack = [...B.sites.values()].find(S => S.bp.id === 'dryrack');
+          ok(!!rack, 'a drying rack laid out beside it');
+          if (rack) {
+            rack.S.p = '1'.repeat(rack.bp.parts.length); B._sync(); step(0.6);
+            const fish = G.loot.spawn({ sp: 'bass', kg: 3, cm: 45, pos: P.pos.clone().add(V(0, 1, 0)), flop: 0 });
+            const v0 = G.loot.value(fish);
+            G.act({ t: 'pickup', id: fish.id }); step(0.1);
+            G.act({ t: 'rackPut', site: rack.S.id, id: fish.id }); step(0.7);
+            ok((rack.S.store || []).length === 1 && rack.hung && rack.hung.length === 1, 'the bass hangs on the rack');
+            G.act({ t: 'rackTake', site: rack.S.id }); step(0.1);
+            ok(rack.S.store.length === 1, 'you cannot take it down before it is dry');
+            G.tod += 200 / 1080; step(0.7);
+            G.act({ t: 'rackTake', site: rack.S.id }); step(0.2);
+            const dried = [...G.loot.items.values()].find(x => x.sp === 'bass' && x.dried);
+            ok(dried && Math.abs(G.loot.value(dried) / v0 - 1.5) < 0.05, 'dried, it is worth 1.5x (' + (dried ? (G.loot.value(dried) / v0).toFixed(2) : '-') + ')');
+            if (dried) { G.act({ t: 'pickup', id: dried.id }); step(0.1); G.act({ t: 'rackPut', site: rack.S.id, id: dried.id }); step(0.2); ok(!rack.S.store.length, 'and it cannot be dried twice'); }
+            G.act({ t: 'bdel', id: rack.S.id }); step(0.3);
+          }
+          const wBefore = s.mats.wood;
           G.act({ t: 'bdel', id: site.S.id }); step(0.6);
-          ok(!B.sites.has(site.S.id) && s.mats.wood === w0, 'taking it down gives the materials back');
-          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 9, 'the blueprint book lists nine buildings'); G.ui.close();
+          ok(!B.sites.has(site.S.id) && s.mats.wood - wBefore === 4, 'taking it down gives the materials back (+' + (s.mats.wood - wBefore) + ' wood)');
+          // co-op: a guest's pieces go through the host exactly like yours, and the pieces lying around are in the world snapshot
+          let bs = null;
+          for (let r = 4; r < 40 && !bs; r += 1.5) for (let a = 0; a < 6.28 && !bs; a += 0.4) { const x = spot.x + Math.cos(a) * r, z = spot.z + Math.sin(a) * r, y = G.world.ground(x, z); if (!B._why(BP_BY_ID.bench, x, z, y, 0)) bs = { x, y, z }; }
+          if (bs) G.act({ t: 'bnew', bp: 'bench', x: bs.x, y: bs.y, z: bs.z, r: 0 }); step(0.6);
+          const bench = [...B.sites.values()].find(S => S.bp.id === 'bench');
+          if (bench) {
+            G._do({ t: 'bput', id: bench.S.id, i: 0 }, 'guest-a'); G._do({ t: 'bput', id: bench.S.id, i: 1 }, 'guest-b');
+            G.act({ t: 'bput', id: bench.S.id, i: 2 }); G._do({ t: 'bput', id: bench.S.id, i: 3 }, 'guest-a'); step(0.6);
+            ok(bench.complete, 'three players built one bench between them');
+            G.gather.spawn('stone', P.pos.clone().add(V(4, 1, 0)));
+            const snap = JSON.parse(JSON.stringify(G.worldSnapshot()));
+            ok(snap.mp && snap.mp.some(m => m[1] === 'stone'), 'loose materials are sent to the crew in the world snapshot');
+            G.act({ t: 'bdel', id: bench.S.id }); step(0.3);
+          } else ok(false, 'a bench for the co-op test');
+          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 11, 'the blueprint book lists eleven buildings'); G.ui.close();
         }
       }
       if (name === 'edge') {

@@ -393,7 +393,7 @@ export class Game {
         if (!S || !it || it.held !== from) break;
         S.store = S.store || [];
         if (S.store.length >= 16) { this.tell(from, 'The chest is full.', 'warn'); break; }
-        S.store.push({ sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav });
+        S.store.push({ sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav, dried: !!it.dried });
         this.loot.remove(it); P.held = null;
         this.tell(from, `Into the chest. (${S.store.length} of 16)`, 'good');
         this._saveDirty = true;
@@ -405,6 +405,33 @@ export class Game {
         if (!x) break;
         S.store.splice(c.i, 1);
         this.loot.spawn({ ...x, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), vel: new THREE.Vector3(0, 1.5, 0), flop: 0 });
+        this._saveDirty = true;
+        break;
+      }
+      case 'rackPut': {
+        const S = (s.builds || []).find(b => b.id === c.site);
+        if (!S || !it || it.held !== from) break;
+        const sp = FISH_BY_ID[it.sp];
+        if (sp.junk || sp.lev || sp.great) { this.tell(from, 'That is not going to dry.', 'warn'); break; }
+        if (it.kg > 60) { this.tell(from, 'Far too heavy to hang on a drying rack.', 'warn'); break; }
+        S.store = S.store || [];
+        if (S.store.length >= 4) { this.tell(from, 'The rack is full.', 'warn'); break; }
+        if (it.dried) { this.tell(from, 'That one is already dried.', 'info'); break; }
+        S.store.push({ sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav, t0: Math.round(this.build.clock()) });
+        this.loot.remove(it); P.held = null;
+        this.tell(from, 'Hung up to dry. Give it a few minutes.', 'good');
+        this._saveDirty = true;
+        break;
+      }
+      case 'rackTake': {
+        const S = (s.builds || []).find(b => b.id === c.site);
+        if (!S?.store?.length) break;
+        // the driest one first
+        let i = S.store.findIndex(x => this.build.dried(x));
+        if (i < 0) { this.tell(from, 'Not dry yet.', 'info'); break; }
+        const x = S.store.splice(i, 1)[0];
+        this.loot.spawn({ ...x, mult: (x.mult || 1) * 1.5, dried: true, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), vel: new THREE.Vector3(0, 1.5, 0), flop: 0 });
+        this.tell(from, `Dried ${FISH_BY_ID[x.sp].name}: worth half as much again.`, 'good');
         this._saveDirty = true;
         break;
       }
@@ -1382,6 +1409,12 @@ export class Game {
           if (it) opt.push({ label: `Put it in the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.act({ t: 'chestPut', site: site.S.id, id: it.id }) });
           else opt.push({ label: `Open the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.ui.open('chest', { site: site.S.id }) });
         }
+        if (id === 'dryrack') {
+          const st = site.S.store || [], ready = st.filter(x => this.build.dried(x)).length;
+          if (it) opt.push({ label: `Hang it up to dry (${st.length} of 4)`, icon: 'fish', run: () => this.act({ t: 'rackPut', site: site.S.id, id: it.id }) });
+          else if (st.length) opt.push({ label: ready ? `Take down a dried fish (${ready} ready)` : `Drying: ${st.length} fish, not ready yet`, icon: 'fish', run: () => this.act({ t: 'rackTake', site: site.S.id }) });
+        }
+        if (id === 'beacon') opt.push({ label: this._night() > 0.15 ? 'Your beacon is burning' : 'Your beacon (it lights itself at dusk)', icon: 'fire', run: () => {} });
         if (id === 'baitstation' && it) opt.push({ label: 'Cut it up for bait', icon: 'pieces', run: () => { this.act({ t: 'baitMake', id: it.id }); this.audio.chopWood(); } });
         if (id === 'shelter') opt.push({ label: this.tod > 0.72 || this.tod < 0.2 ? 'Sleep in your shelter' : 'Your shelter (you will wake up here)', icon: 'bed', run: () => this.act({ t: 'sleepShelter', site: site.S.id }) });
         if (id === 'bench') opt.push({ label: 'Sit and watch the water', icon: 'seat', run: () => this.ui.subtitle('You sit a while. The sea goes on and on, further than anyone has ever sailed and come back.', 5) });

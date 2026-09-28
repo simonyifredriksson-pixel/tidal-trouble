@@ -1,4 +1,4 @@
-﻿/* Hooked - UI in the same low-poly language as the world:
+/* Hooked - UI in the same low-poly language as the world:
    faceted panels (irregular chamfered corners, hard-stop gradients that
    read as planes), wood, parchment, sea glass. No emoji anywhere. */
 
@@ -564,7 +564,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 #game { transition: none; transform-origin: 50% 50%; }
 
 /* ---------- the pack while you gather and build ---------- */
-.matsbar { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); display: flex; gap: 5px; font-size: 13px; }
+.matsbar { position: absolute; left: 50%; bottom: 152px; transform: translateX(-50%); display: flex; gap: 5px; font-size: 13px; }
 .matsbar .mat { display: flex; align-items: center; gap: 4px; padding: 4px 9px 4px 5px; }
 .matsbar .mat .gi { font-size: 20px; }
 .matsbar .mat b { font-size: 15px; }
