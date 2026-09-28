@@ -16,7 +16,7 @@
            and Old Gus is standing over you
 
    You can look around the whole time (the mouse is yours) but you cannot
-   move, fish or open anything. Hold SPACE to skip to the beach. */
+   move, fish or open anything. There is no skipping it. */
 
 import * as THREE from '../../lib/three.module.js';
 import { buildBoat } from '../art/BoatArt.js';
@@ -52,7 +52,6 @@ export class Intro {
     this.active = true;
     this.t = at;
     this.said = false;
-    this.skipHeld = 0;
     this.yaw = -Math.PI / 2 + 0.25; this.pitch = 0.02;
     this.stage = '';
     G.ui.showHUD(false);
@@ -90,7 +89,7 @@ export class Intro {
     if (this.ov) return;
     const d = document.createElement('div');
     d.id = 'cine';
-    d.innerHTML = '<div class="bars top"></div><div class="bars bot"></div><div class="blk"></div><div class="say"><b></b><span></span></div><div class="skip">Hold <span class="key">SPACE</span> to skip</div>';
+    d.innerHTML = '<div class="bars top"></div><div class="bars bot"></div><div class="blk"></div><div class="say"><b></b><span></span></div>';
     document.body.appendChild(d);
     this.ov = d;
   }
@@ -101,9 +100,6 @@ export class Intro {
     const G = this.game;
     this.t = this.hold !== undefined ? this.hold : this.t + dt;
     const t = this.t;
-    // skip: hold space for a moment
-    if (input.held('Space') && t < T.wake) { this.skipHeld += dt; if (this.skipHeld > 0.8) { this.t = T.wake - 0.01; this._toBeach(); } } else this.skipHeld = 0;
-    this.ov.querySelector('.skip').style.opacity = t > 3 && t < T.black ? 0.7 : 0;
     // look around
     const look = input.look();
     this.yaw -= look.x;
@@ -212,7 +208,7 @@ export class Intro {
     }
     if (t > T.say && !this.said) {
       this.said = true;
-      this._say(G.state.settings.name || 'You', 'What the hell was that?', 3.6);
+      this._say('You', 'What the hell was that?', 3.6);
     }
   }
 
