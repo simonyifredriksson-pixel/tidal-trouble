@@ -1064,9 +1064,9 @@ export async function runScripts(names, game) {
           let hits = 0;
           // the same side again and again only deepens one notch
           for (let k = 0; k < 4; k++) { G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [1, 0], at: [x - 1.5, z] }); step(0.2); hits++; }
-          ok(!Ga.gone.has(tree.k + '#' + tree.i) && Ga.notches.get(tree.k + '#' + tree.i)?.children.length === 1, 'hitting one side only cuts one notch - it is still standing');
+          ok(!Ga.gone.has(tree.k + '#' + tree.i) && Ga.carved.get(tree.k + '#' + tree.i)?.mat.userData.u.uN.value === 1, 'four swings at one side carve one deep notch - still standing');
           ok(Ga.debris.length > 0, 'chunks of wood fly off with every swing (' + Ga.debris.length + ')');
-          // then all the way round
+          // one side alone does get there in the end - but a fresh side is quicker
           for (let k = 0; k < 6 && !Ga.gone.has(tree.k + '#' + tree.i); k++) { const a = k / 6 * Math.PI * 2; G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [-Math.sin(a), -Math.cos(a)], at: [x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5] }); step(0.2); hits++; }
           ok(Ga.gone.has(tree.k + '#' + tree.i) && !!s.felled[tree.k + '#' + tree.i], 'cut all the way round, it came down (' + hits + ' blows)');
           ok(Ga.falling.length > 0 || true, 'and it falls');
