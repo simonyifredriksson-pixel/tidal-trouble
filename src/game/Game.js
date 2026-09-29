@@ -51,7 +51,7 @@ import { Intro } from './Intro.js';
 import { Edge } from './Edge.js';
 import { Gather } from './Gather.js';
 import { Build } from './Build.js';
-import { MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID } from '../data/BuildData.js';
+import { MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID, bpCost, planPrice } from '../data/BuildData.js';
 import { GUS_INTRO } from '../data/NPCData.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
 import { mistAt, VIGIL, WORLD, HOME_CENTRE, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
@@ -147,7 +147,11 @@ export class Game {
     this.ui.showHUD(true);
     this.ui.hotbar();
     // a new world (or a crew you have just joined) begins at sea, in the storm, on the first night
-    if ((mode === 'new' || mode === 'join') && !this.skipIntro) this.intro.start();
+    if ((mode === 'new' || mode === 'join') && !this.skipIntro) {
+      // your boat went down in the storm: you will have to build the next one
+      if (mode === 'new' && !this.state.remote) { s.boat.built = false; s.hulls = []; }
+      this.intro.start();
+    }
     else if (mode !== 'continue' && !this.state.remote) {
       this.ui.subtitle(STORY.intro, 9);
       setTimeout(() => this.ui.radio('Radio: Morning, Driftwood Bay. Fish are biting and Old Gus is on his porch.'), 3000);
@@ -174,7 +178,7 @@ export class Game {
   boatById(id) { return this.boats.find(b => b.id === id) || null; }
   boatAt(pos, margin = 0) {
     for (const b of this.boats) {
-      if (b.sinking) continue;
+      if (b.sinking || b.absent) continue;
       const L = b.toLocal(pos, _w);
       if (b.over(L.x, L.z, -margin) && L.y > b.deck - 0.8 && L.y < b.deck + 3) return b;
     }
@@ -284,6 +288,8 @@ export class Game {
         if (!boat) break;
         const L = boat.leaks[c.leak];
         if (!L) break;
+        if (!L.paid && !this._payRepair(this.leakCost(L), from)) break;
+        L.paid = true;
         L.fix += c.dt / (1.6 * (boat.stats.repair || 1)) * (S.has('patchkit') ? 2 : 1);
         if (L.fix >= 1) { boat.leaks.splice(c.leak, 1); this.tell(from, 'Leak fixed.', 'good'); }
         break;
@@ -292,11 +298,20 @@ export class Game {
         if (!boat) break;
         const B = boat.breaks[c.i];
         if (!B) break;
+        if (!B.paid && !this._payRepair(this.breakCost(B), from)) break;
+        B.paid = true;
         B.fix += c.dt / ((B.kind === 'rail' ? 2.2 : 3.2) * (boat.stats.repair || 1)) * (S.has('patchkit') ? 2 : 1);
         if (B.fix >= 1) { boat.breaks.splice(c.i, 1); this.tell(from, { rail: 'Rail nailed back together.', wheel: 'The wheel turns freely again.', engine: 'The engine coughs back to life.', mount: 'The harpoon gun is unjammed.' }[B.kind], 'good'); }
         break;
       }
-      case 'patch': if (boat) boat.hp = Math.min(boat.stats.hp, boat.hp + c.dt * 5); break;
+      case 'patch': {
+        if (!boat) break;
+        // every 25 points of hull patched is one plank of wood
+        boat.patchAcc = (boat.patchAcc || 0) + c.dt * 5;
+        if (boat.patchAcc >= 25) { if (!this._payRepair({ wood: 1 }, from)) { boat.patchAcc = 25; break; } boat.patchAcc -= 25; }
+        boat.hp = Math.min(boat.stats.hp, boat.hp + c.dt * 5);
+        break;
+      }
       case 'scoop': if (boat && boat.water > 0) boat.water = Math.max(0, boat.water - 0.045); break;
       case 'bucket': {
         if (!boat) break;
@@ -1039,8 +1054,8 @@ export class Game {
     else if (k === 'setBait') { if ((s.baits[id] || 0) > 0) s.bait = id; }
     else if (k === 'tool') { const T = TOOL_BY_ID[id]; if (T && !s.tools[id] && ok(T.price)) { s.tools[id] = true; this.tell(from, T.name + ' - hotbar slot ' + T.slot, 'good'); } }
     else if (k === 'gear') { const Gd = GEAR_BY_ID[id]; if (Gd && !s.gear[id] && ok(Gd.price)) s.gear[id] = true; }
-    else if (k === 'hull') { const H = HULL_BY_ID[id]; if (H && !s.hulls.includes(id) && ok(H.price)) { s.hulls.push(id); s.boat.hull = id; this._boatChanged(); } }
-    else if (k === 'useHull') { if (s.hulls.includes(id)) { s.boat.hull = id; this._boatChanged(); } }
+    else if (k === 'hull') { const H = HULL_BY_ID[id]; s.boatPlans = s.boatPlans || []; if (H && !s.boatPlans.includes(id) && ok(planPrice(H))) { s.boatPlans.push(id); this.tell(from, `The ${H.name}'s plans are in your Blueprint Book (=). Lay them out at the water's edge and build her.`, 'good'); } }
+    else if (k === 'useHull') { if (s.hulls.includes(id)) { s.boat.hull = id; s.boat.built = true; this._boatChanged(); } }
     else if (k === 'part') { const P = PART_BY_ID[id]; const lv = s.boat.parts[id] || 0; if (P && lv < partCap(P, HULL_BY_ID[s.boat.hull] || {}) && ok(P.prices[lv + 1])) { s.boat.parts[id] = lv + 1; this._boatChanged(); } }
     else if (k === 'paint') { const P = PAINT_BY_ID[id]; if (P && !s.paints.includes(id) && ok(P.price)) { s.paints.push(id); s.boat.paint = id; this._boatChanged(); } }
     else if (k === 'applyPaint') { if (s.paints.includes(id)) { s.boat.paint = id; this._boatChanged(); } }
@@ -1053,6 +1068,21 @@ export class Game {
       if (cost > 0 && ok(cost)) { b.hp = b.stats.hp; b.leaks = []; b.water = 0; b.fires = []; this.tell(from, 'Good as new. Mostly.', 'good'); }
     }
     this._saveDirty = true;
+  }
+  /* What a repair takes out of the pack: a small hole is three planks, a big one six, the worst need iron too. */
+  leakCost(L) { return L.size < 0.75 ? { wood: 3 } : L.size < 1.05 ? { wood: 6 } : { wood: 8, iron: 1 }; }
+  breakCost(B) { return { rail: { wood: 4 }, wheel: { wood: 5 }, engine: { iron: 2, wood: 2 }, mount: { iron: 2 } }[B.kind] || { wood: 3 }; }
+  costText(c) { return Object.entries(c).map(([k, n]) => n + ' ' + MAT_BY_ID[k].name.toLowerCase()).join(' + '); }
+  _payRepair(c, from) {
+    const m = this.state.s.mats = this.state.s.mats || {};
+    const short = Object.entries(c).filter(([k, n]) => (m[k] || 0) < n);
+    if (short.length) {
+      if ((this._shortT || 0) < this.world.time) { this._shortT = this.world.time + 3; this.tell(from, 'You need ' + this.costText(c) + ' for that. Chop some wood (0) - any island will do.', 'warn'); }
+      return false;
+    }
+    for (const [k, n] of Object.entries(c)) m[k] -= n;
+    this._saveDirty = true;
+    return true;
   }
   _rodChanged() { this.vm.setRod(ROD_BY_ID[this.state.s.rod]); this.cabin.update(); }
   _boatChanged() {
@@ -1084,13 +1114,16 @@ export class Game {
     if (o) this.ui.banner(n >= 6 ? 'NEW GOAL' : 'NEXT', o.text, o.icon, 3.2);
     this._saveDirty = true;
   }
+  _planNeed() { const c = bpCost(BP_BY_ID['boat:dinghy']); return Object.entries(c).map(([k, n]) => n + ' ' + MAT_BY_ID[k].name.toLowerCase()).join(' and '); }
   objective() {
     const s = this.state.s;
     switch (s.tut) {
       case 0: return { icon: 'people', title: 'WELCOME TO DRIFTWOOD BAY', text: 'Talk to Old Gus. He is in the rocking chair on the porch of the tackle shop.' };
       case 1: return { icon: 'rod', title: 'YOUR FIRST FISH', text: 'Walk down to your dock, right outside your hut. Hold left mouse to cast, click when the bobber goes under, then hold to reel.' };
       case 2: return { icon: 'sell', title: 'SELL IT', text: 'Pim\'s fish stall is right next to your hut. Carry your fish over (F), talk to Pim (E) and sell it.' };
-      case 3: return { icon: 'boat', title: 'TAKE THE BOAT OUT', text: 'Your rowboat is tied up at your dock. Step aboard and press E at the tiller.' };
+      case 3: return s.boat.built === false
+        ? { icon: 'boat', title: 'BUILD YOUR BOAT', text: `Chop wood (0) and break stone (-) - the Rowboat takes ${this._planNeed()}. Then open the Blueprint Book (=), lay the Rowboat out at the water's edge, and build it piece by piece (G, then E).` }
+        : { icon: 'boat', title: 'TAKE THE BOAT OUT', text: 'Your boat is tied up at the water. Step aboard and press E at the helm.' };
       case 4: return { icon: 'crown', title: 'THE GUILD', text: 'Visit the Guild Hall up the hill and study the great map with Guildmaster Odessa.' };
       case 5: return { icon: 'eye', title: 'THE FIRST CLUE', text: 'Something has been chewing the little pier on Mirror Lake. Go and have a look (E).' };
     }
@@ -1573,6 +1606,17 @@ export class Game {
       else if (P.tool === 'plans' && !this.build.plan) { const st = this.build.siteNear(P.pos, 3); tip = st && !st.complete ? `<span class="key">LMB</span>${ic('plans')} Open the blueprint book  <span class="key">X</span> take down this blueprint` : `<span class="key">LMB</span>${ic('plans')} Open the blueprint book`; }
       else if (this.build.plan) tip = `<span class="key">LMB</span>${ic('plans')} Lay out the ${this.build.plan.bp.name}  <span class="key">R</span> turn  <span class="key">RMB</span> put away`;
     }
+    // on a damaged boat: what the nearest hole or break will take to fix, and whether you have it
+    if (!o && b && !P.held && P.mode === 'walk') {
+      const L = P.local;
+      let best = null, bd = 2.4;
+      b.leaks.forEach(x => { const d = Math.hypot(x.x - L.x, x.z - L.z); if (d < bd) { bd = d; best = { c: x.paid ? null : this.leakCost(x), what: x.size < 0.75 ? 'small hole' : x.size < 1.05 ? 'bad hole' : 'huge hole' }; } });
+      b.breaks.forEach(x => { const d = Math.hypot(x.x - L.x, x.z - L.z); if (d < bd) { bd = d; best = { c: x.paid ? null : this.breakCost(x), what: 'broken ' + x.kind }; } });
+      if (best) {
+        const m = s.mats || {}, have = !best.c || Object.entries(best.c).every(([k, n]) => (m[k] || 0) >= n);
+        tip = `<span class="key">${P.tool === 'hammer' ? 'LMB' : '5'}</span>${ic('hammer')} ${P.tool === 'hammer' ? 'Hold to repair the' : 'Hammer out (5) to repair the'} ${best.what}${best.c ? `  -  ${this.costText(best.c)} <span style="opacity:.75">(${have ? 'you have it' : 'you need more: chop some wood'})</span>` : ''}`;
+      }
+    }
     UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : tip);
     if (E && o) o.run();
     this.hauling = !!(o && o.hold && I.held('KeyE'));
@@ -1907,7 +1951,7 @@ export class Game {
       case 'tod': this.tod = c.v; break;
       case 'event': this.events.start(c.id, P.pos); break;
       // the ship
-      case 'giveHull': if (HULL_BY_ID[c.id]) { if (!s.hulls.includes(c.id)) s.hulls.push(c.id); s.boat.hull = c.id; this._boatChanged(); } break;
+      case 'giveHull': if (HULL_BY_ID[c.id]) { if (!s.hulls.includes(c.id)) s.hulls.push(c.id); s.boat.hull = c.id; s.boat.built = true; this._boatChanged(); } break;
       case 'breakPart': if (b) { if (c.id === 'all') for (const k of ['rail', 'rail', 'wheel', 'engine', 'mount']) b.breakSomething(k); else b.breakSomething(c.id); } break;
       case 'hole': if (b) b.addHole(0.6); break;
       case 'bigHole': if (b) b.addHole(1.2); break;

@@ -585,3 +585,71 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 @keyframes dyingPulse { from { opacity: 0.6; } to { opacity: 1; } }
 .card.dim { opacity: 0.6; }
 .card .note { font-size: 12px; color: var(--ink2); }
+
+/* =====================================================================
+   SHOPS - one look for every counter in the sea: a paper ledger on a
+   wooden board, big previews, few words, one clear button per thing.
+   Each kind of shop tints it: nautical blue for the boatyards, kelp green
+   for the tackle shops, driftwood for plans and chests, sea glass for tanks.
+   ===================================================================== */
+.frame.shop { --accent: #2e7f8c; --accent2: #3f9aa8; --tint: rgba(46,127,140,0.08); }
+.frame.shop-boat { --accent: #24587e; --accent2: #3a78a8; --tint: rgba(36,88,126,0.09); }
+.frame.shop-tackle { --accent: #3a7a3e; --accent2: #5a9a4a; --tint: rgba(58,122,62,0.08); }
+.frame.shop-plans, .frame.shop-craft { --accent: #7a5226; --accent2: #a8743a; --tint: rgba(122,82,38,0.08); }
+.frame.shop-tank { --accent: #1f7a8c; --accent2: #36a6b8; --tint: rgba(31,122,140,0.09); }
+.frame.shop > .panel { background: linear-gradient(180deg, #f6edd8 0%, #efe2c4 100%); }
+.frame.shop .shead { background: linear-gradient(135deg, var(--accent) 0 58%, var(--accent2) 58%); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18); }
+.frame.shop .shead h2 { letter-spacing: 0.02em; }
+.frame.shop .shead p { max-width: 560px; }
+.frame.shop .tab { background: transparent; border-bottom: 3px solid transparent; clip-path: none; padding: 8px 12px; transition: color .15s, border-color .15s; }
+.frame.shop .tab:hover { border-color: rgba(58,42,28,0.25); }
+.frame.shop .tab.on { background: transparent; color: var(--accent); border-color: var(--accent); }
+.frame.shop .tabs { border-bottom: 1px solid rgba(58,42,28,0.14); margin-bottom: 14px; gap: 2px; }
+.frame.shop .grid { gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.frame.shop .card { background: #fffaf0; clip-path: none; border-radius: 6px; box-shadow: 0 1px 0 rgba(58,42,28,0.08), 0 6px 14px -8px rgba(58,42,28,0.45); padding: 14px 16px 12px; transition: transform .16s ease, box-shadow .16s ease; animation: cardIn .28s ease backwards; display: flex; flex-direction: column; }
+.frame.shop .card:hover { transform: translateY(-3px); box-shadow: 0 1px 0 rgba(58,42,28,0.08), 0 14px 22px -10px rgba(58,42,28,0.55); }
+.frame.shop .card .row { margin-top: auto; padding-top: 8px; }
+.frame.shop .card.owned { background: #f3f9ee; }
+.frame.shop .card.equipped { outline: 2px solid var(--accent); outline-offset: 0; }
+.frame.shop .card .thumb { height: 110px; background: radial-gradient(ellipse at 50% 60%, var(--tint), transparent 70%); border-radius: 4px; margin: -4px -4px 8px; width: calc(100% + 8px); transition: transform .3s ease; }
+.frame.shop .card:hover .thumb { transform: scale(1.05) rotate(-1deg); }
+.frame.shop .card h3 { font-size: 20px; }
+.frame.shop .card p { font-weight: 600; }
+.frame.shop .card .price { color: #7a4a0a; }
+.frame.shop .btn { transition: transform .12s ease, filter .12s ease, box-shadow .12s; }
+.frame.shop .btn.gold:hover { box-shadow: 0 0 0 3px rgba(246,207,90,0.35); }
+.frame.shop .statrow { grid-template-columns: 76px 1fr 46px; }
+.frame.shop .statrow .bar { height: 6px; border-radius: 3px; overflow: hidden; }
+.frame.shop .statrow .bar i { background: var(--accent2); border-radius: 3px; }
+.frame.shop .card:nth-child(2) { animation-delay: .03s; } .frame.shop .card:nth-child(3) { animation-delay: .06s; } .frame.shop .card:nth-child(4) { animation-delay: .09s; }
+.frame.shop .card:nth-child(5) { animation-delay: .12s; } .frame.shop .card:nth-child(n+6) { animation-delay: .15s; }
+@keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* the boatyard: a showcase */
+.yard { display: grid; grid-template-columns: 250px 1fr; gap: 16px; min-height: 420px; }
+.ylist { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 62vh; padding-right: 4px; }
+.yitem { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 0; border-radius: 6px; background: #fffaf0; color: var(--ink); cursor: pointer; text-align: left; box-shadow: 0 4px 10px -8px rgba(58,42,28,0.6); transition: transform .14s, background .14s; animation: cardIn .25s ease backwards; }
+.yitem:hover { transform: translateX(3px); }
+.yitem.on { background: var(--accent); color: var(--paper1); }
+.yitem img { width: 64px; height: 42px; object-fit: contain; }
+.yitem b { display: block; font: 400 16px var(--display); }
+.yitem small { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 12px; opacity: 0.8; }
+.yitem small .gi { font-size: 14px; }
+.ydetail { background: #fffaf0; border-radius: 8px; padding: 16px 22px 18px; box-shadow: 0 10px 24px -14px rgba(58,42,28,0.6); animation: detailIn .3s ease; display: flex; flex-direction: column; }
+@keyframes detailIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+.ypic { height: 210px; margin: -6px -10px 6px; border-radius: 6px; background: radial-gradient(ellipse at 50% 70%, rgba(58,120,168,0.22), transparent 70%), linear-gradient(180deg, rgba(130,190,220,0.18), rgba(58,120,168,0.05)); display: grid; place-items: center; overflow: hidden; }
+.ypic img { width: 80%; max-height: 205px; object-fit: contain; animation: boatBob 4.5s ease-in-out infinite; filter: drop-shadow(0 12px 10px rgba(20,40,60,0.28)); }
+@keyframes boatBob { 0%, 100% { transform: translateY(0) rotate(-1.2deg) scale(1); } 50% { transform: translateY(-6px) rotate(1.2deg) scale(1.02); } }
+.ydetail h2 { font-size: 30px; margin: 4px 0 2px; }
+.ydetail h4 { margin: 12px 0 4px; font: 400 16px var(--display); color: var(--ink2); }
+.ydesc { margin: 0 0 10px; font-weight: 600; color: var(--ink2); line-height: 1.4; max-width: 620px; }
+.sstats { display: grid; gap: 7px; max-width: 520px; }
+.sstat { display: grid; grid-template-columns: 90px 1fr 110px; align-items: center; gap: 10px; font-weight: 800; font-size: 13px; color: var(--ink2); }
+.sstat b { color: var(--ink); font-size: 13px; text-align: right; }
+.sbar { height: 8px; border-radius: 4px; background: rgba(58,42,28,0.12); overflow: hidden; }
+.sbar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); animation: barIn .6s ease backwards; }
+@keyframes barIn { from { width: 0 !important; } }
+.yact { margin-top: auto; padding-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.btn.big { font-size: 18px; padding: 10px 18px; }
+.tagline { font: 400 17px var(--display); color: var(--accent); }
+@media (max-width: 760px) { .yard { grid-template-columns: 1fr; } .ylist { flex-direction: row; overflow-x: auto; max-height: none; } }

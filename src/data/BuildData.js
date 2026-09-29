@@ -278,6 +278,47 @@ export const AQUARIUMS = [
     blurb: 'A round glass tower fifteen metres across, ringed in iron and lit with reef crystal. The sea, brought home.', use: 'Holds up to 16 catches of any size - even the greatest sea beasts.' },
 ];
 
+/* ---------------- boats ----------------
+   A boat is built on its blueprint at the water's edge, keel first: the
+   keel and stem, then the ribs, then the planks of the hull, the deck, the
+   rail, and last whatever makes it that boat (a mast, a wheelhouse, an
+   engine). Laid out along local +Z (the bow), like the boat it becomes.
+   The better the boat, the more it takes - and the rarer the stuff. */
+export function boatParts(H) {
+  const hl = H.hl, hw = H.hw, tier = H.tier || 1, P = [];
+  const ribs = Math.max(3, Math.round(hl * 1.1)), rows = tier >= 3 ? 3 : 2;
+  const hwAt = z => hw * Math.sqrt(Math.max(0.05, 1 - Math.pow(Math.max(0, z / hl), 2.4) * 0.9)) * (z < -hl * 0.8 ? 0.85 : 1);
+  // cradle stones and the keel
+  for (const z of [-hl * 0.6, 0, hl * 0.6]) P.push({ m: 'stone', k: 'stone', t: 0, x: 0, y: -0.15, z, w: 0.28 });
+  P.push({ m: tier >= 4 ? 'iron' : 'wood', k: 'log', t: 1, x: 0, y: 0.05, z: 0, w: hl * 1.9, h: 0.1, r: Math.PI / 2 });
+  // ribs
+  for (let i = 0; i < ribs; i++) {
+    const z = -hl * 0.85 + (hl * 1.7) * i / (ribs - 1), w = hwAt(z);
+    for (const s of [-1, 1]) P.push({ m: 'wood', k: 'post', t: 2, x: s * w * 0.92, y: 0.05, z, w: 0.05, h: H.deck * 0.9 + 0.25 });
+  }
+  // hull planks, both sides, in strakes
+  const segs = Math.max(2, Math.round(hl / 1.3));
+  for (let r = 0; r < rows; r++) for (let i = 0; i < segs; i++) {
+    const z0 = -hl * 0.9 + (hl * 1.8) * i / segs, z1 = -hl * 0.9 + (hl * 1.8) * (i + 1) / segs, zc = (z0 + z1) / 2, w = hwAt(zc);
+    for (const s of [-1, 1]) P.push({ m: tier >= 5 && r === 0 ? 'iron' : 'wood', k: 'plank', t: 3, x: s * w * (0.85 + r * 0.05), y: 0.2 + r * (H.deck / rows), z: zc, w: 0.05, h: H.deck / rows * 0.95, d: (z1 - z0) * 1.02, r: s * (w - hwAt(z1)) / (z1 - z0) * -0.9 });
+  }
+  // the deck
+  const dk = Math.max(2, Math.round(hl * 0.9));
+  for (let i = 0; i < dk; i++) { const z = -hl * 0.8 + hl * 1.6 * (i + 0.5) / dk; P.push({ m: 'wood', k: 'plank', t: 4, x: 0, y: H.deck, z, w: hwAt(z) * 1.7, h: 0.05, d: hl * 1.6 / dk * 0.96 }); }
+  // the rail
+  for (const s of [-1, 1]) P.push({ m: 'wood', k: 'log', t: 5, x: s * hw * 0.9, y: H.deck + 0.45, z: -hl * 0.1, w: hl * 1.5, h: 0.04, r: Math.PI / 2 });
+  // what makes it this boat
+  if (tier >= 2) P.push({ m: 'iron', k: 'plank', t: 5, x: 0, y: H.deck + 0.3, z: -hl * 0.75, w: 0.5, h: 0.45, d: 0.45 });                       // an engine
+  if (H.engine === 'sail' || tier >= 3) P.push({ m: 'wood', k: 'post', t: 6, x: 0, y: H.deck, z: hl * 0.15, w: 0.1, h: 3 + tier });            // a mast
+  if (H.cabin) P.push({ m: 'wood', k: 'plank', t: 6, x: 0, y: H.deck + H.cabin.h / 2, z: H.cabin.z, w: H.cabin.hw * 2, h: H.cabin.h, d: H.cabin.hl * 2 });
+  if (tier >= 4) P.push({ m: 'glass', k: 'glass', t: 6, x: 0, y: H.deck + 1.5, z: (H.cabin?.z || 0) + (H.cabin?.hl || 1), w: hw * 1.2, h: 0.6, d: 0.04 });
+  for (let i = 0; i < Math.max(0, tier - 2) * 3; i++) { const z = -hl * 0.7 + hl * 1.4 * i / Math.max(1, (tier - 2) * 3 - 1), s = i % 2 ? 1 : -1; P.push({ m: 'iron', k: 'plank', t: 5, x: s * hwAt(z) * 0.9, y: H.deck + 0.15, z, w: 0.1, h: 0.08, d: 0.22 }); }
+  if (tier >= 5) for (let i = 0; i < 2; i++) P.push({ m: 'crystal', k: 'crystal', t: 6, x: (i ? 1 : -1) * hw * 0.8, y: H.deck + 1.2, z: hl * 0.5, w: 0.14, h: 0.26 });
+  return P;
+}
+export const boatBlueprint = H => ({ id: 'boat:' + H.id, name: H.name, icon: 'boat', foot: H.hw + 0.8, boat: H.id, water: true, parts: boatParts(H),
+  blurb: H.blurb, use: 'When the last piece goes on, she floats - and she is yours.' });
+
 /* What the workbench makes. `give` is a bait (bait:id, n), or an upgrade (up:key). */
 export const RECIPES = [
   { id: 'glass', name: 'Glass Panes (x2)', icon: 'glass', cost: { stone: 3, fibre: 1 }, mat: 'glass', n: 2, blurb: 'Crushed stone and a little fibre ash, melted down and poured flat. Every aquarium needs it. (A campfire can do it too.)' },
@@ -320,6 +361,11 @@ export const BLUEPRINTS = [
 ];
 BLUEPRINTS.push(...AQUARIUMS);
 export const BP_BY_ID = Object.fromEntries(BLUEPRINTS.map(b => [b.id, b]));
+// every boat has its plan (in BP_BY_ID so a laid-out one can be found, but only in your book once you own it)
+import { HULLS } from './BoatData.js';
+for (const H of HULLS) BP_BY_ID['boat:' + H.id] = boatBlueprint(H);
+/** What a boat's blueprint costs at the yard: a third of the old price of the boat. */
+export const planPrice = H => Math.round(H.price * 0.35 / 50) * 50;
 
 /** The materials a blueprint needs in all. */
 export function bpCost(bp) {

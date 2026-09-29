@@ -26,7 +26,7 @@ import { REGIONS, PLACES, WORLD, ZONES, MAX_ZONE, HOME_CENTRE, currentAt } from 
 import { CHART_N, CHART_CELL } from '../game/IslandLife.js';
 import { ISLAND_INFO } from '../data/IslandData.js';
 import { livesSp } from '../game/Loot.js';
-import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost, RECIPES } from '../data/BuildData.js';
+import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost, RECIPES, planPrice } from '../data/BuildData.js';
 import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
@@ -634,6 +634,7 @@ export class UI {
     if (act === 'close') return this.close();
     if (act === 'closeTalk') return this.closeTalk();
     if (act === 'tab') { this.tab[this.screen] = el.dataset.arg; this.data.sel = null; return this.render(); }
+    if (act === 'pickHull') { this.data.hull = el.dataset.arg; this.game.audio.hover(); return this.render(); }
     if (act === 'mapZoom') {
       if (el.dataset.arg === 'me') { this.mapC = null; if (!this.mapZoom) this.mapZoom = 1; }
       else { this.mapZoom = +el.dataset.arg; if (!this.mapZoom) this.mapC = null; }
@@ -664,7 +665,7 @@ export class UI {
     const cur = this.tab[this.screen] || def;
     return { cur, html: `<div class="tabs">${list.map(([id, label, icon]) => `<button class="tab ${cur === id ? 'on' : ''}" data-act="tab" data-arg="${id}">${icon ? ic(icon) : ''}${esc(label)}</button>`).join('')}</div>` };
   }
-  _wrap(inner) { return `<div class="frame"><div class="panel">${inner}</div></div>`; }
+  _wrap(inner, cls = '') { return `<div class="frame ${cls}"><div class="panel">${inner}</div></div>`; }
 
   /* ---------- pause ---------- */
   _pause() {
@@ -747,7 +748,7 @@ export class UI {
         const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
           <h3>${esc(R.name)}</h3><p>${esc(R.blurb)}</p>
-          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Zone', Math.round(R.band * 100), 27, Math.round(cur.band * 100))}${bar('Line (m)', R.line, 320, cur.line)}
+          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Line (m)', R.line, 320, cur.line)}
           <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(MAX_ZONE, [0, 1, 2, 4, 6, 7][R.tier] ?? 4)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
           <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : here(R, 'rod') ? `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>` : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span>${sold(R, 'rod')}`}</div></div>`;
       }).join('')}</div>`;
@@ -771,7 +772,7 @@ export class UI {
       }).join('')}</div>`;
     }
     const shopName = SHOPS[shop]?.outfit || "Melvin's Bait & Tackle";
-    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : shop === 'home' ? 'Everything is on sale. Nothing is refundable.' : 'Some of this you will not find anywhere else in the sea.')}${t.html}<div class="sbody">${body}</div>`);
+    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : shop === 'home' ? 'Everything is on sale. Nothing is refundable.' : 'Some of this you will not find anywhere else in the sea.')}${t.html}<div class="sbody">${body}</div>`, 'shop shop-tackle');
   }
 
   /* ---------- boatyard (Marge) ---------- */
@@ -784,6 +785,30 @@ export class UI {
     const yardWhere = y => this.game.state.knowsShop(y) ? yardName(y) + ' in ' + (SHOPS[y]?.place || 'Driftwood Bay') : 'a shipwright on an island you have not found yet';
     let body = '';
     if (t.cur === 'hulls') {
+      // a showcase: the yard's boat plans down the side, the one you are looking at large
+      const list = [...HULLS].filter(H => H.yard === yard || s.boatPlans?.includes(H.id) || s.hulls.includes(H.id)).sort((a, b) => ((b.yard === yard) - (a.yard === yard)) || (a.price - b.price));
+      const sel = HULL_BY_ID[this.data.hull] && list.includes(HULL_BY_ID[this.data.hull]) ? HULL_BY_ID[this.data.hull] : list[0];
+      if (sel) {
+        const H = sel, st = boatStats({ ...s.boat, hull: H.id });
+        const planned = s.boatPlans?.includes(H.id), built = s.hulls.includes(H.id), eq = s.boat.hull === H.id && s.boat.built !== false, here = H.yard === yard;
+        const stat = (label, v, max, txt) => `<div class="sstat"><span>${label}</span><div class="sbar"><i style="width:${Math.max(4, Math.min(100, v / max * 100))}%"></i></div><b>${txt}</b></div>`;
+        const cost = bpCost(BP_BY_ID['boat:' + H.id]), m = s.mats || {};
+        const need = Object.entries(cost).map(([k, n]) => `<span class="cost ${(m[k] || 0) >= n ? 'ok' : ''}">${ic(MAT_BY_ID[k].icon)}${n} ${esc(MAT_BY_ID[k].name)}</span>`).join('');
+        const action = eq ? '<span class="tagline">This is your boat</span>'
+          : built ? `<button class="btn gold big" data-act="useHull" data-arg="${H.id}">${ic('boat')} Sail this one</button>`
+          : planned ? `<span class="tagline">The plans are in your Blueprint Book (=). Build her at the water's edge.</span>`
+          : here ? `<button class="btn gold big" data-act="buyHull" data-arg="${H.id}" ${s.money < planPrice(H) ? 'disabled' : ''}>${ic('plans')} Buy the blueprint  -  ${ic('coin')}${fmtInt(planPrice(H))}</button>`
+          : `<span class="soldby">${ic('map')}Plans drawn by ${esc(yardWhere(H.yard))}</span>`;
+        const side = list.map(B => `<button class="yitem ${B === H ? 'on' : ''}" data-act="pickHull" data-arg="${B.id}"><img src="${boatThumb({ hull: B.id, parts: {}, paint: s.boat.paint, decor: [] })}" alt=""><span><b>${esc(B.name)}</b><small>${s.hulls.includes(B.id) ? 'Built' : s.boatPlans?.includes(B.id) ? 'Plans owned' : ic('coin') + fmtInt(planPrice(B))}</small></span></button>`).join('');
+        body = `<div class="yard"><div class="ylist">${side}</div>
+          <div class="ydetail" data-k="${H.id}"><div class="ypic"><img src="${boatThumb({ hull: H.id, parts: s.boat.parts, paint: s.boat.paint, decor: [] })}" alt=""></div>
+            <h2>${esc(H.name)}</h2><p class="ydesc">${esc(H.blurb)}</p>
+            <div class="sstats">${stat('Speed', st.speed * 1.94, 50, Math.round(st.speed * 1.94) + ' kn')}${stat('Durability', st.hp, 3200, fmtInt(st.hp))}${stat('Storage', st.cargoKg, 16000, fmtInt(st.cargoKg) + ' kg')}${stat('Stability', st.stability * 100, 100, Math.round(st.stability * 100) + '%')}${stat('Storms', st.waves, 7, st.waves.toFixed(1) + ' m waves')}</div>
+            <h4>To build her</h4><div class="costs">${need}</div>
+            <div class="yact">${action}</div></div></div>`;
+      } else body = '<div class="empty">This yard has no plans for sale.</div>';
+    }
+    else if (t.cur === 'hullsOld') {
       // the boats built here first, then the rest of the sea's
       const list = [...HULLS].sort((a, b) => ((b.yard === yard) - (a.yard === yard)) || (a.price - b.price));
       body = `<div class="grid">${list.map(H => {
@@ -833,7 +858,7 @@ export class UI {
       body = `<div class="card" style="max-width:520px"><h3>${ic('hammer')}Full repair</h3><p>Every plank patched, the water pumped out and anything on fire put out. Hull ${b ? Math.round(b.hp) : 0} / ${b ? b.stats.hp : 0}, ${b ? b.leaks.length : 0} leaks.${b && b.stats.repair > 1.05 ? ' This hull is hard to work on: repairs cost x' + b.stats.repair.toFixed(1) + '.' : ''}${yard === 'ironwreck' ? ' Big Olga charges half.' : ''}</p>
         <div class="row"><span class="price">${ic('coin')}${cost}</span><button class="btn gold" data-act="repair" data-arg="${yard}" ${cost <= 0 || s.money < cost ? 'disabled' : ''}>Repair</button></div></div>`;
     }
-    return this._wrap(`${this._head('boat', yardName(yard), yard === 'home' ? 'You break it, I fix it. You sink it, I build you a new one.' : 'Every island builds boats for its own water. The best ones are built farthest out.')}${t.html}<div class="sbody">${body}</div>`);
+    return this._wrap(`${this._head('boat', yardName(yard), yard === 'home' ? 'You break it, I fix it. You want a new one, I sell you the plans.' : 'Every island builds boats for its own water. The best ones are built farthest out.')}${t.html}<div class="sbody">${body}</div>`, 'shop shop-boat');
   }
 
   /* ---------- fish market (Pim) ---------- */
@@ -852,7 +877,7 @@ export class UI {
     return this._wrap(`${this._head('sell', "Pim's Fish Market", 'I buy anything with fins. And some things without.')}
       <div class="sbody">${body}</div>
       <div class="foot"><span class="spacer"></span><span class="price" style="font:400 20px var(--display);color:#8a5a10">${ic('coin')} ${fmtInt(total)}</span>
-      <button class="btn gold" data-act="sellAll" ${items.length ? '' : 'disabled'}>Sell everything</button></div>`);
+      <button class="btn gold" data-act="sellAll" ${items.length ? '' : 'disabled'}>Sell everything</button></div>`, 'shop shop-tackle');
   }
 
   /* ---------- your catch: everything you are carrying, favourites first ---------- */
@@ -1296,17 +1321,19 @@ export class UI {
   /* ---------- the blueprint book ---------- */
   _plans() {
     const s = this.game.state.s, m = s.mats || {};
-    const cards = BLUEPRINTS.map(B => {
+    const boats = (s.boatPlans || []).map(id => BP_BY_ID['boat:' + id]).filter(Boolean);
+    const cards = [...boats, ...BLUEPRINTS].map(B => {
       const c = bpCost(B);
       const need = Object.entries(c).map(([k, n]) => `<span class="cost ${(m[k] || 0) >= n ? 'ok' : ''}">${ic(MAT_BY_ID[k].icon)}${n} ${esc(MAT_BY_ID[k].name)}</span>`).join('');
       const built = (s.builds || []).filter(x => x.bp === B.id).length;
-      return `<div class="card bp"><h3>${ic(B.icon)}${esc(B.name)}${built ? `<small> - ${built} laid out</small>` : ''}</h3><p>${esc(B.blurb)}</p><p class="use"><b>Use:</b> ${esc(B.use)}</p>
+      const pic = B.boat ? `<img class="thumb" src="${boatThumb({ hull: B.boat, parts: {}, paint: s.boat.paint, decor: [] })}" alt="">` : '';
+      return `<div class="card bp ${B.boat ? 'boatplan' : ''}">${pic}<h3>${ic(B.icon)}${esc(B.name)}${B.boat ? '<small> - boat</small>' : ''}${built ? `<small> - ${built} laid out</small>` : ''}</h3><p>${esc(B.boat ? 'Lay her out in the water just off a beach, then build her plank by plank.' : B.blurb)}</p><p class="use"><b>Use:</b> ${esc(B.use)}</p>
         <div class="costs">${need}</div><div class="row"><span class="price">${B.parts.length} pieces</span><button class="btn gold" data-act="bpPick" data-arg="${B.id}">${ic('plans')} Lay it out</button></div></div>`;
     }).join('');
     const pack = MATS.map(M => `<span class="cost ${(m[M.id] || 0) ? 'ok' : ''}">${ic(M.icon)}${m[M.id] || 0} ${esc(M.name)}</span>`).join('');
     return this._wrap(`${this._head('plans', 'The Blueprint Book', 'Lay a plan out on the ground, then build it piece by piece: hold a material (G), walk up to a blue piece, press E.', false)}
       <div class="sbody"><p class="packline"><b>In the pack:</b> ${pack}</p><div class="grid">${cards}</div>
-      <p class="note">${MATS.map(M => `<b>${esc(M.name)}:</b> ${esc(M.from)}`).join('<br>')}</p></div>`);
+      <p class="note">${MATS.map(M => `<b>${esc(M.name)}:</b> ${esc(M.from)}`).join('<br>')}</p></div>`, 'shop shop-plans');
   }
 
   /* ---------- the workbench ---------- */
@@ -1318,14 +1345,14 @@ export class UI {
       return `<div class="card bp"><h3>${ic(R.icon)}${esc(R.name)}</h3><p>${esc(R.blurb)}</p><div class="costs">${need}</div>
         <div class="row">${owned ? '<span class="price">Yours</span>' : `<button class="btn gold" data-act="craft" data-arg="${R.id}" ${can ? '' : 'disabled'}>${ic('hammer')} Make it</button>`}</div></div>`;
     }).join('');
-    return this._wrap(`${this._head('hammer', 'The Workbench', 'Iron from the black rock, crystal from the reef, fibre from the bush.', false)}<div class="sbody"><div class="grid">${cards}</div></div>`);
+    return this._wrap(`${this._head('hammer', 'The Workbench', 'Iron from the black rock, crystal from the reef, fibre from the bush.', false)}<div class="sbody"><div class="grid">${cards}</div></div>`, 'shop shop-craft');
   }
 
   /* ---------- an aquarium ---------- */
   _tank(d) {
     const G = this.game, s = G.state.s, S = (s.builds || []).find(b => b.id === d.site);
     const site = S && G.build.sites.get(S.id);
-    if (!site) return this._wrap('<div class="sbody"><div class="empty">Gone.</div></div>');
+    if (!site) return this._wrap('<div class="sbody"><div class="empty">Gone.</div></div>', 'shop shop-tank');
     const T = site.bp.tank, list = S.store || [];
     const len = cm => cm >= 100 ? (cm / 100).toFixed(1) + ' m' : Math.round(cm) + ' cm';
     const inside = list.map(x => { const sp = FISH_BY_ID[x.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(x.sp)}" alt=""><h3>${esc(catchName(sp, x.v))}</h3><p>${fmtKg(x.kg)}  -  ${len(x.cm)}</p><button class="btn" data-act="tankTake" data-arg="${S.id}|${x.id}">Take it out</button></div>`; }).join('');
@@ -1342,7 +1369,7 @@ export class UI {
     const avail = cands.slice(0, 24).map(it => { const sp = FISH_BY_ID[it.sp], why = G.build.tankRefuses(site, it); return `<div class="card ${why ? 'dim' : ''}"><img class="thumb" src="${fishThumb(it.sp)}" alt=""><h3>${esc(catchName(sp, it.v))}</h3><p>${len(it.cm)}  -  ${esc(lifeText(it, sp).replace('  -  ', ''))}${it.state === 'cooler' ? ' (in the cooler)' : it.held === P.id ? ' (in your hands)' : ''}</p>${why ? `<p class="note">${esc(why)}</p>` : `<button class="btn gold" data-act="tankPut" data-arg="${S.id}|${it.id}">Put it in</button>`}</div>`; }).join('');
     return this._wrap(`${this._head('fish', site.bp.name, `${list.length} of ${T.n}  -  catches up to ${len(T.cm)}. Only living fish go in, and in here they live for good.`, false)}
       <div class="sbody"><h3 style="margin:0 0 8px">In the aquarium</h3>${inside ? `<div class="grid">${inside}</div>` : '<div class="empty">Empty water. Bring it something alive.</div>'}
-      <h3 style="margin:16px 0 8px">Living fish near you</h3>${avail ? `<div class="grid">${avail}</div>` : '<div class="empty">Nothing alive near you. A fish lasts five minutes out of the water - three hours in the boat cooler.</div>'}</div>`);
+      <h3 style="margin:16px 0 8px">Living fish near you</h3>${avail ? `<div class="grid">${avail}</div>` : '<div class="empty">Nothing alive near you. A fish lasts five minutes out of the water - three hours in the boat cooler.</div>'}</div>`, 'shop shop-tank');
   }
 
   /* ---------- the boat cooler ---------- */
@@ -1350,7 +1377,7 @@ export class UI {
     const G = this.game, b = G.player.boat || G.boats[0];
     const list = b ? G.loot.onBoat(b).filter(x => x.state === 'cooler') : [];
     const rows = list.map(it => { const sp = FISH_BY_ID[it.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(it.sp)}" alt=""><h3>${esc(catchName(sp, it.v))}</h3><p>${fmtKg(it.kg)}${esc(lifeText(it, sp))}</p><button class="btn" data-act="coolTake" data-arg="${it.id}">Take it out</button></div>`; }).join('');
-    return this._wrap(`${this._head('box', 'The Cooler', 'Ice and sea water. A living fish in here stays alive for three hours.', false)}<div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`);
+    return this._wrap(`${this._head('box', 'The Cooler', 'Ice and sea water. A living fish in here stays alive for three hours.', false)}<div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`, 'shop shop-tank');
   }
 
   /* ---------- a storage chest ---------- */
@@ -1359,7 +1386,7 @@ export class UI {
     const list = S?.store || [];
     const rows = list.map((x, i) => { const sp = FISH_BY_ID[x.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(x.sp)}" alt=""><h3>${esc(catchName(sp, x.v))}</h3><p>${fmtKg(x.kg)}</p><button class="btn" data-act="chestTake" data-arg="${d.site}:${i}">Take it out</button></div>`; }).join('');
     return this._wrap(`${this._head('chest', 'Storage Chest', `${list.length} of 16. To put a catch in, hold it and press E at the chest.`, false)}
-      <div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`);
+      <div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`, 'shop shop-plans');
   }
 
   /* ---------- bait picker ---------- */

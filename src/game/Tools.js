@@ -286,12 +286,13 @@ export class Tools {
     this.warned = false;
     const L = P.local;
     let leak = null, bd = 2.2;
+    this.fixCost = null;
     b.leaks.forEach((l, i) => { const d = Math.hypot(l.x - L.x, l.z - L.z); if (d < bd) { bd = d; leak = i; } });
     this.hamT = (this.hamT || 0) + dt;
     if (this.hamT > 0.2) { this.hamT = 0; G.audio.hammer(); const w = b.toWorld(_v.set(L.x, b.deck + 0.2, L.z)); G.fx.sparks(w.x, w.y, w.z, 3, 0xd8b890); }
     let brk = null, bb = 2.2;
     b.breaks.forEach((B, i) => { const d = Math.hypot(B.x - L.x, B.z - L.z); if (d < bb) { bb = d; brk = i; } });
-    if (leak !== null) G.act({ t: 'fix', leak, dt });
+    if (leak !== null) { const L = b.leaks[leak]; if (!L.paid) this.fixCost = G.leakCost(L); G.act({ t: 'fix', leak, dt }); }
     else if (brk !== null) G.act({ t: 'fixBreak', i: brk, dt });
     else if (b.hp < b.stats.hp) G.act({ t: 'patch', dt });
   }

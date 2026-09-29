@@ -22,6 +22,7 @@
 import * as THREE from '../../lib/three.module.js';
 import { BLUEPRINTS, BP_BY_ID, MATS, MAT_BY_ID, bpCost, WORMS } from '../data/BuildData.js';
 import { FISH_BY_ID } from '../data/FishData.js';
+import { HULL_BY_ID } from '../data/BoatData.js';
 import { partGeo, GHOST, GLASS, pieceMesh } from '../art/BuildArt.js';
 import { MAT } from '../art/Materials.js';
 import { MeshBuilder } from '../art/Geo.js';
@@ -168,14 +169,15 @@ export class Build {
     const f = P.forward(_v).clone();
     const o = P.eye.clone();
     let hit = null;
-    for (let s = 1.5; s < 11; s += 0.25) {
+    for (let s = 1.5; s < (bp.water ? 30 : 11); s += 0.25) {
       const p = o.clone().addScaledVector(f, s);
       if (p.y <= Math.max(G.world.ground(p.x, p.z), 0)) { hit = p; break; }
     }
     if (!hit) { const ff = P.flatForward(_w); hit = P.pos.clone().addScaledVector(ff, Math.max(3, bp.foot * 2.2)); }
-    const d = Math.hypot(hit.x - P.pos.x, hit.z - P.pos.z), min = bp.foot + 1.2;
+    const d = Math.hypot(hit.x - P.pos.x, hit.z - P.pos.z), min = bp.foot + 1.2 + (bp.boat ? (HULL_BY_ID[bp.boat]?.hl || 0) : 0);
     if (d < min) { const ff = P.flatForward(_w); hit.x = P.pos.x + ff.x * min; hit.z = P.pos.z + ff.z * min; }
     const r = P.yaw + this.plan.rot;
+    if (bp.water) { const yw = 0; return { x: hit.x, z: hit.z, y: yw, r, why: this._why(bp, hit.x, hit.z, yw, r) }; }
     const y = G.world.ground(hit.x, hit.z);
     return { x: hit.x, z: hit.z, y, r, why: this._why(bp, hit.x, hit.z, y, r) };
   }
@@ -185,7 +187,14 @@ export class Build {
     if (G.player.boat) return 'You cannot build on a boat.';
     if ((s.builds || []).length >= MAX_SITES) return 'You have laid out as many blueprints as the islands will stand. Finish or take down some first.';
     const h = heightAt(x, z);
-    if (bp.shore) {
+    if (bp.water) {
+      const d = -heightAt(x, z);
+      if (d < 0.6) return 'A boat is built in the water - lay it out just off the beach, where it is at least knee deep.';
+      if (d > 9) return 'Too deep to build here. Come in closer to the shore.';
+      let near = false; for (let i = 0; i < 16 && !near; i++) { const a = i / 16 * Math.PI * 2; for (const r of [8, 16, 26]) if (heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r) > 0.3) near = true; }
+      if (!near) return 'Too far from land - build her close to the shore.';
+      for (const b2 of G.boats) if (!b2.absent && Math.hypot(b2.pos.x - x, b2.pos.z - z) < b2.hull.hl + bp.foot + 1) return 'Your boat is in the way.';
+    } else if (bp.shore) {
       if (h < -0.4 || h > 1.6) return 'A jetty starts at the water\'s edge: stand on the beach and face the sea.';
       const fx = -Math.sin(r), fz = -Math.cos(r);
       if (heightAt(x + fx * 6, z + fz * 6) > -0.8) return 'Face deeper water - the far end of the jetty needs the sea under it.';
@@ -276,6 +285,7 @@ export class Build {
     G._saveDirty = true;
     const done = !S.p.includes('0');
     G._everyone({ t: 'build', k: 'put', id: S.id, i: c.i, by: from, done });
+    if (done && bp.boat) { this._launch(S, bp, from); return; }
     if (done) {
       S.t0 = Math.round(this.clock());
       s.stats.built = (s.stats.built || 0) + 1;
@@ -283,6 +293,25 @@ export class Build {
       if (s.stats.built >= 6) G.award('settler', from);
       G._everyone({ t: 'build', k: 'done', id: S.id });
     }
+  }
+  /** The last piece of a boat: she slides into the water and she is yours. */
+  _launch(S, bp, from) {
+    const G = this.game, s = G.state.s, H = HULL_BY_ID[bp.boat];
+    s.hulls = s.hulls || [];
+    if (!s.hulls.includes(H.id)) s.hulls.push(H.id);
+    s.boat.hull = H.id; s.boat.built = true;
+    s.builds.splice(s.builds.indexOf(S), 1);
+    G._boatChanged();
+    const b = G.boats[0];
+    b.pos.set(S.x, 0, S.z); b.heading = S.r; b.vel.set(0, 0); b.yawRate = 0;
+    b.hp = b.stats.hp; b.leaks = []; b.breaks = []; b.water = 0; b.fires = []; b.sinking = 0;
+    b.docked = false; b._updateMatrix();
+    s.stats.built = (s.stats.built || 0) + 1;
+    s.stats.boats = (s.stats.boats || 0) + 1;
+    G.award('builder', from);
+    G._saveDirty = true;
+    G._everyone({ t: 'build', k: 'launch', id: S.id, hull: H.id, x: S.x, z: S.z });
+    this._sync();
   }
   hostDel(c, from) {
     const G = this.game, s = G.state.s;
@@ -311,6 +340,10 @@ export class Build {
       const P = site.parts[e.i];
       if (P) { this._setPart(site, e.i, true, true); }
       if (e.by === G.player.id && this.held && !((G.state.s.mats || {})[this.held] > (G.isHost ? 0 : 1))) { this.held = null; G.vm.heldMat = null; }
+    }
+    if (e.k === 'launch') {
+      G.fx.splash(e.x, 0, e.z, 3); G.audio.splash(2); G.audio.fanfare(3);
+      if (G.player.pos.distanceTo(new THREE.Vector3(e.x, 0, e.z)) < 80) G.ui.banner('SHE FLOATS', 'The ' + HULL_BY_ID[e.hull].name + ' is in the water. You built her. Step aboard and take the helm (E).', 'boat', 6);
     }
     if (e.k === 'tank' && site) {
       const c = site.group.position, T = site.bp.tank;

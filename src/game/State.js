@@ -41,6 +41,7 @@ export function freshSave() {
     found: {}, chart: '', notes: {}, farthest: 0, salvaged: {},
     // gathering and building: the crew's pack, what has been cut down (id -> day), and every blueprint laid out
     mats: {}, felled: {}, builds: [],
+    boatPlans: ['dinghy'],                 // boat blueprints you own (the rowboat's are Old Gus's gift)
   };
 }
 /* The islands everyone already knows about (their shops can be named from the start). */
@@ -78,6 +79,7 @@ export class State {
     if (!s.rods.includes('basic')) s.rods.unshift('basic');
     s.tools.axe = true; s.tools.pick = true; s.tools.plans = true;
     s.mats = s.mats || {}; s.felled = s.felled || {}; s.builds = s.builds || [];
+    s.boatPlans = s.boatPlans || [...new Set(['dinghy', ...(s.hulls || [])])];
     // a save from before the storm on the first night has already been through it
     if (s.flags && s.flags.intro === undefined && (s.stats.caught > 0 || s.tut > 0)) s.flags.intro = 1;
     s.trophies = Object.assign(f.trophies, s.trophies || {});

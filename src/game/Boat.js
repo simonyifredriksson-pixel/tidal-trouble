@@ -207,7 +207,11 @@ export class Boat {
   cargoKg() { return this.game.loot ? this.game.loot.massOn(this) : 0; }
 
   /* ---------------- simulation (host) ---------------- */
+  /** Not built yet (a new castaway has only the plans): not in the water, not boardable. */
+  get absent() { return this.game.state?.s?.boat?.built === false; }
   simulate(dt, world) {
+    if (this.absent) { this.group.visible = false; return; }
+    this.group.visible = true;
     if (this.sinking > 0) return this._sinkStep(dt, world);
     const H = this.hull, st = this.stats;
     const load = clamp(this.cargoKg() / Math.max(1, st.cargoKg), 0, 2);
@@ -647,6 +651,7 @@ export class Boat {
   }
 
   visuals(dt, fx, world, night) {
+    if (this.absent) { this.group.visible = false; if (this.rope?.mesh) this.rope.mesh.visible = false; return; }
     this._anchorVisuals(dt, fx, world);
     const sp = this.speed();
     // propeller

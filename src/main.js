@@ -24,6 +24,7 @@ import { VIGIL, REGIONS, HOME_CENTRE } from './world/MapData.js';
 import { U } from './art/Materials.js';
 import { BP_BY_ID } from './data/BuildData.js';
 import { FISH_BY_ID } from './data/FishData.js';
+import { HULL_BY_ID } from './data/BoatData.js';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -385,6 +386,24 @@ function stage(name) {
       P.yaw = Math.atan2(-(mid - P.pos.x), -(z0 - P.pos.z)); P.pitch = fk >= 0 ? -0.18 : -0.1;
       G.tod = +(Q.get('tod') || 0.5);
     } else window.__log && window.__log('no room for the yard');
+  }
+  // a boat going up on its blueprint: ?stage=boatbuild:HULL:FRACTION
+  if (name.startsWith('boatbuild')) {
+    const [, hull = 'seafarer', fr = '0.55'] = name.split(':');
+    const bp = BP_BY_ID['boat:' + hull], B = G.build, s = G.state.s;
+    let q = null;
+    for (let r = 20; r < 400 && !q; r += 3) for (let a = 0; a < 6.28 && !q; a += 0.15) { const x = 20 + Math.cos(a) * r, z = 160 + Math.sin(a) * r; if (!B._why(bp, x, z, 0, a)) q = { x, z, r: a }; }
+    if (q) {
+      G.act({ t: 'bnew', bp: bp.id, x: q.x, y: 0, z: q.z, r: q.r });
+      const S = s.builds[s.builds.length - 1];
+      S.p = bp.parts.map((p, i) => i < Math.round(bp.parts.length * +fr) ? '1' : '0').join('');
+      B._sync();
+      const side = new THREE.Vector3(Math.cos(q.r), 0, -Math.sin(q.r)), H = HULL_BY_ID[hull];
+      const eye = new THREE.Vector3(q.x, 0, q.z).addScaledVector(side, H.hl * 1.6 + 3);
+      P.place(new THREE.Vector3(eye.x, Math.max(0, world.ground(eye.x, eye.z)) + 0.1, eye.z), 0);
+      P.yaw = Math.atan2(-(q.x - eye.x), -(q.z - eye.z)); P.pitch = -0.2;
+      G.tod = 0.45;
+    }
   }
   // an aquarium, built and stocked: ?stage=tank:N  (1-6)
   if (name.startsWith('tank:')) {

@@ -9,7 +9,7 @@ import { heightAt } from '../world/Terrain.js';
 import { VIGIL } from '../world/MapData.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
 import { Bus } from '../core/Bus.js';
-import { BP_BY_ID } from '../data/BuildData.js';
+import { BP_BY_ID, bpCost } from '../data/BuildData.js';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -343,7 +343,7 @@ export async function runScripts(names, game) {
           const [kk, id] = k.split(':');
           G.act({ t: 'buy', k: kk, id });
         }
-        ok(G.state.s.boat.hull === 'motor' && b.hull.id === 'motor', 'bought and switched to the motorboat');
+        ok(G.state.s.boatPlans.includes('motor') && G.state.s.boat.hull !== 'motor', 'buying the motorboat gets you its blueprint - you build it yourself');
         ok(G.state.has('harpoon') && G.state.s.rod === 'reinforced', 'bought gear');
         step(2);
       }
@@ -368,8 +368,12 @@ export async function runScripts(names, game) {
         b.leaks = []; b.hp -= 40; b.leaks.push({ x: 0.5, y: b.deck, z: 0, size: 1, fix: 0 });
         P.local.set(0.3, b.deck, 0);
         P.tool = 'hammer'; G.vm.setTool('hammer');
+        G.state.s.mats = { wood: 0 };
+        I.fakeBtn(0, true); step(1.5); I.fakeBtn(0, false);
+        ok(b.leaks.length === 1 && b.leaks[0].fix === 0, 'with no wood in the pack the hole stays a hole');
+        G.state.s.mats = { wood: 10 };
         I.fakeBtn(0, true); step(2.5); I.fakeBtn(0, false);
-        ok(b.leaks.length === 0, 'hammer fixed the leak');
+        ok(b.leaks.length === 0 && G.state.s.mats.wood === 4, 'with wood the hammer fixes it - six planks for a bad hole (' + G.state.s.mats.wood + ' left)');
         b.ignite(0, 1); b.ignite(0.2, 1.2);
         P.tool = 'bucket'; G.vm.setTool('bucket'); P.yaw = b.heading + Math.PI; P.pitch = -0.5; P.local.set(0, b.deck, -0.2);
         for (let i = 0; i < 6; i++) { I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.9); }
@@ -534,6 +538,7 @@ export async function runScripts(names, game) {
         ok(safe && P.boat !== b, 'the same shove: stays aboard at a whole rail, goes through the broken one (safe ' + safe + ', gap ' + atGap + ', x ' + lx0 + ' / ' + hw0 + ', aboard after: ' + (P.boat === b) + ')');
         P.attach(b, V(0, b.deck, -H.hl + 1.2)); P.mode = 'walk'; P.tool = 'hammer'; G.vm.setTool('hammer'); step(0.3);
         const n0 = b.breaks.length;
+        G.state.s.mats = { wood: 20, iron: 6 };
         I.fakeBtn(0, true); step(4); I.fakeBtn(0, false); step(0.2);
         ok(b.breaks.length < n0 && !b.broken('engine'), 'hammering at the stern fixes the engine (' + n0 + ' -> ' + b.breaks.length + ' broken)');
         b.breaks = []; P.tool = 'rod'; G.vm.setTool('rod');
@@ -1187,7 +1192,7 @@ export async function runScripts(names, game) {
             ok(tree && blows <= 3, 'with the iron axe a pine comes down in ' + blows + ' blows instead of six');
             G.act({ t: 'bdel', id: bench2.S.id }); step(0.3);
           } else ok(false, 'room for a workbench');
-          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 19, 'the blueprint book lists nineteen buildings, six of them aquariums'); G.ui.close();
+          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp:not(.boatplan)').length === 19 && document.querySelectorAll('.card.boatplan').length >= 1, 'the blueprint book lists nineteen buildings (six aquariums) and your boat plans'); G.ui.close();
         }
       }
       if (name === 'aquarium') {
@@ -1266,6 +1271,40 @@ export async function runScripts(names, game) {
         ok(!B.tankRefuses(a5, kr) && /Too big/.test(B.tankRefuses(a5, { sp: 'beast:cthulhu', cm: FISH_BY_ID['beast:cthulhu'].cm[0], alive: true }) || '') && !B.tankRefuses(a6, { sp: 'beast:cthulhu', cm: FISH_BY_ID['beast:cthulhu'].cm[0], alive: true }), 'the Kraken fits the Massive aquarium; Cthulhu needs the Oceanarium');
         G._do({ t: 'drop', id: kr.id, pos: P.pos.toArray(), vel: [0, 0, 0] }, P.id); P.held = null;
         ok(Lm.carryStyle({ sp: 'bass', kg: 2 }) === 'hands', 'a bass is simply in your hands');
+      }
+      if (name === 'boatbuild') {
+        // a new castaway: no boat, Old Gus's rowboat plans, a boatyard that sells plans, and building it at the water
+        const s = G.state.s, B = G.build, bb = G.boats[0];
+        s.boat.built = false; s.hulls = []; s.boatPlans = ['dinghy']; G._boatChanged(); step(0.3);
+        ok(bb.absent && !bb.group.visible && !G.boatAt(bb.pos, 1), 'no boat after the wreck - nothing at the dock');
+        s.tut = 3; ok(/BUILD YOUR BOAT/.test(G.objective().title), 'the goal: ' + G.objective().title + ' - ' + G.objective().text.slice(0, 60));
+        G.ui.open('plans', {}); ok([...document.querySelectorAll('.card.boatplan h3')].some(e => /Soggy Biscuit/.test(e.textContent)), 'the rowboat plans are in the blueprint book'); G.ui.close();
+        // the boatyard sells plans, not boats
+        s.money = 5000; G.act({ t: 'buy', k: 'hull', id: 'motor', yard: 'home' }); step(0.1);
+        ok(s.boatPlans.includes('motor') && !s.hulls.includes('motor') && s.money === 5000 - 900, 'buying at the boatyard gets you the Motorboat plans (' + (5000 - s.money) + ' coins), not a boat');
+        G.ui.open('boatyard', { yard: 'home' }); ok(!!document.querySelector('.ydetail .ypic img') && document.querySelectorAll('.yitem').length >= 2, 'the boatyard is a showcase: a big preview and the plans for sale'); G.ui.close();
+        // find water just off the beach and lay the rowboat out
+        let spot = null;
+        for (let r = 20; r < 400 && !spot; r += 3) for (let a = 0; a < 6.28 && !spot; a += 0.15) { const x = 20 + Math.cos(a) * r, z = 160 + Math.sin(a) * r; if (!B._why(BP_BY_ID['boat:dinghy'], x, z, 0, a)) spot = { x, z, r: a }; }
+        ok(!!spot, 'found knee-deep water off a beach');
+        if (spot) {
+          const bad = B._why(BP_BY_ID['boat:dinghy'], 20, 180, 1, 0);
+          ok(!!bad, 'on dry land it will not go: ' + bad);
+          G.act({ t: 'bnew', bp: 'boat:dinghy', x: spot.x, y: 0, z: spot.z, r: spot.r }); step(0.6);
+          const site = [...B.sites.values()].find(S2 => S2.bp.boat === 'dinghy');
+          ok(site && site.parts.length > 15, 'the rowboat is laid out on the water: ' + (site ? site.parts.length : 0) + ' pieces, keel first');
+          s.mats = { wood: 40, stone: 10 };
+          for (let i = 0; i < site.parts.length; i++) { G.act({ t: 'bput', id: site.S.id, i }); step(0.03); }
+          step(0.8);
+          ok(!B.sites.has(site.S.id) && s.boat.built === true && s.hulls.includes('dinghy') && !bb.absent, 'the last piece on, and she floats: the boat is yours');
+          ok(Math.hypot(bb.pos.x - spot.x, bb.pos.z - spot.z) < 2 && bb.group.visible, 'right where you built her');
+          ok(s.mats.wood === 40 - bpCost(BP_BY_ID['boat:dinghy']).wood, 'she took ' + bpCost(BP_BY_ID['boat:dinghy']).wood + ' wood');
+          // and you can repair her yourself, anywhere
+          P.attach(bb, V(0, bb.deck, 0)); bb.leaks = [{ x: 0.3, y: bb.deck, z: 0, size: 0.5, fix: 0 }]; s.mats.wood = 3; P.tool = 'hammer'; G.vm.setTool('hammer'); P.local.set(0.2, bb.deck, 0);
+          I.fakeBtn(0, true); step(2.5); I.fakeBtn(0, false);
+          ok(!bb.leaks.length && s.mats.wood === 0, 'a small hole: three planks and a hammer, a long way from any boatyard');
+          P.detach();
+        }
       }
       if (name === 'edgebtn') {
         G.ui.open('admin', {}); const btn = document.querySelector('[data-arg="edgeTest"]'); ok(!!btn, 'the admin panel has the edge-of-the-world button');

@@ -356,7 +356,7 @@ export class Player {
     this.speed = Math.hypot(V.x, V.z);
     // boarding: walk onto a deck
     for (const b of this.game.boats) {
-      if (b.sinking) continue;
+      if (b.sinking || b.absent) continue;
       const L = b.toLocal(P, _w);
       if (b.over(L.x, L.z, 0.2) && L.y > b.deck - 0.9 && L.y < b.deck + 1.2) {
         L.y = Math.max(L.y, b.deck);
@@ -411,7 +411,7 @@ export class Player {
     if (this.mode !== 'swim') return false;
     const G = this.game;
     for (const b of G.boats) {
-      if (b.sinking) continue;
+      if (b.sinking || b.absent) continue;
       const L = b.toLocal(this.pos, _w);
       const hw = b.halfWidth(clamp(L.z, -b.hull.hl, b.hull.hl));
       if (Math.abs(L.z) < b.hull.hl + 0.8 && Math.abs(L.x) < hw + 1.6) {
