@@ -10,6 +10,7 @@ import { VIGIL } from '../world/MapData.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
 import { Bus } from '../core/Bus.js';
 import { BP_BY_ID, bpCost } from '../data/BuildData.js';
+import { HULLS } from '../data/BoatData.js';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -374,6 +375,9 @@ export async function runScripts(names, game) {
         G.state.s.mats = { wood: 10 };
         I.fakeBtn(0, true); step(2.5); I.fakeBtn(0, false);
         ok(b.leaks.length === 0 && G.state.s.mats.wood === 4, 'with wood the hammer fixes it - six planks for a bad hole (' + G.state.s.mats.wood + ' left)');
+        step(0.1);
+        ok(b.patches.length === 1 && b.patchMeshes?.[0]?.visible && b.patchMeshes[0].position.x > 0, 'and two planks stay nailed over where the hole was');
+        ok(b.snapshot().pa.length === 1, 'the patch goes out to the crew too');
         b.ignite(0, 1); b.ignite(0.2, 1.2);
         P.tool = 'bucket'; G.vm.setTool('bucket'); P.yaw = b.heading + Math.PI; P.pitch = -0.5; P.local.set(0, b.deck, -0.2);
         for (let i = 0; i < 6; i++) { I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.9); }
@@ -1151,6 +1155,14 @@ export async function runScripts(names, game) {
           B.cancelPlan();
           B.held = null; B.cycleHeld('wood');
           ok(B.held === 'wood' && G.vm.heldMat === 'wood' || B.held === 'wood', 'G takes wood out of the pack into your hands');
+          // the pack list is not in the way: M opens it, M closes it; M is not the map any more
+          const mbar = () => !document.querySelector('.matsbar').classList.contains('hide');
+          step(0.2); const shown0 = mbar();
+          I.down.add('KeyM'); step(1 / 30); I.down.clear(); step(0.2); const shown1 = mbar(), scr = G.ui.isOpen ? G.ui.screen : null;
+          I.down.add('KeyM'); step(1 / 30); I.down.clear(); step(0.2);
+          ok(!shown0 && shown1 && !mbar() && scr !== 'map', 'the material list stays hidden until M, and M again puts it away (and M does not open a map)');
+          s.tools.rod = true; I.down.add('Digit1'); step(1 / 30); I.down.clear(); step(0.1);
+          ok(P.tool === 'rod' && !B.held && !G.vm.heldMat, 'picking a tool puts the wood back in the pack: you can equip anything');
           // a drying rack: hang a fish, wait, take it down worth half as much again
           G.act({ t: 'bnew', bp: 'dryrack', x: spot.x + 6, y: G.world.ground(spot.x + 6, spot.z), z: spot.z, r: 0 }); step(0.6);
           const rack = [...B.sites.values()].find(S => S.bp.id === 'dryrack');
@@ -1326,6 +1338,34 @@ export async function runScripts(names, game) {
           ok(!bb.leaks.length && s.mats.wood === 0, 'a small hole: three planks and a hammer, a long way from any boatyard');
           P.detach();
         }
+        // every other boat, built from its plans the same way, piece by piece, and sailed off
+        for (const H of HULLS) {
+          if (H.id === 'dinghy') continue;
+          const bp = BP_BY_ID['boat:' + H.id];
+          s.boatPlans = [...new Set([...(s.boatPlans || []), H.id])];
+          let sp = null;
+          for (let r = 20; r < 900 && !sp; r += 6) for (let a = 0; a < 6.28 && !sp; a += 0.12) { const x = 20 + Math.cos(a) * r, z = 160 + Math.sin(a) * r; if (!B._why(bp, x, z, 0, a)) sp = { x, z, r: a }; }
+          if (!sp) { ok(false, H.name + ': nowhere to lay her out'); continue; }
+          G.act({ t: 'bnew', bp: 'boat:' + H.id, x: sp.x, y: 0, z: sp.z, r: sp.r }); step(0.3);
+          const site = [...B.sites.values()].find(S2 => S2.bp.boat === H.id);
+          if (!site) { ok(false, H.name + ': the plans would not lay out'); continue; }
+          const need = bpCost(bp); s.mats = {}; for (const m in need) s.mats[m] = need[m];
+          // in tier order, as a player has to
+          for (let pass = 0; pass < 12 && site.S.p.includes('0'); pass++) for (let i = 0; i < site.parts.length; i++) if (site.S.p[i] === '0') { G.act({ t: 'bput', id: site.S.id, i }); }
+          step(0.8);
+          const used = Object.values(s.mats).every(v => v === 0);
+          ok(!B.sites.has(site.S.id) && s.boat.hull === H.id && s.boat.built && !bb.absent && used && Math.hypot(bb.pos.x - sp.x, bb.pos.z - sp.z) < 8,
+            H.name + ': ' + site.parts.length + ' pieces, every material used up, and she floats where she was built' + ` [left ${site.S.p.split('0').length - 1} of ${site.parts.length}, mats ${JSON.stringify(s.mats)}, hull ${s.boat.hull}, tier ${site.tier}, ground ${heightAt(sp.x, sp.z).toFixed(1)}, off by ${Math.hypot(bb.pos.x - sp.x, bb.pos.z - sp.z).toFixed(1)} m, absent ${bb.absent}, built ${s.boat.built}, site ${B.sites.has(site.S.id)}]`);
+          // point her at open water
+          let bestH = bb.heading, bestD = 0;
+          for (let k = 0; k < 24; k++) { const h = k / 24 * 6.283; let d = 0; for (let m = 10; m <= 60; m += 10) d += Math.min(0, heightAt(bb.pos.x + Math.sin(h) * m, bb.pos.z + Math.cos(h) * m)); if (d < bestD) { bestD = d; bestH = h; } }
+          bb.heading = bestH; bb._updateMatrix();
+          P.attach(bb, V(0, bb.deck, 0)); G.act({ t: 'helm', boat: bb.id, on: true }); P.mode = 'drive'; const p0 = bb.pos.clone();
+          for (let i = 0; i < 120; i++) { G.driveInput(bb, 1, 0); G.update(1 / 30); }
+          G.driveInput(bb, 0, 0);
+          ok(bb.pos.distanceTo(p0) > 3 && !bb.sinking, '  ... and she sails (' + bb.pos.distanceTo(p0).toFixed(0) + ' m in 4 s)');
+          G.act({ t: 'helm', boat: bb.id, on: false }); P.detach(); P.mode = 'walk';
+        }
       }
       if (name === 'deep') {
         // out in the deep in a sturdy boat: every kind of thing that can happen under it
@@ -1375,11 +1415,15 @@ export async function runScripts(names, game) {
           step(0.6);
           ok(J.complete, 'the jetty is built (' + J.bp.parts.length + ' pieces)');
           const end = B.worldPoint(J, 0, 1.0, -5.6);
-          P.place(B.worldPoint(J, 0, 1.2, 0.2), J.S.r); step(0.3);
-          for (let i = 0; i < 90; i++) { I.keys.add('KeyW'); step(1 / 30); }
+          // start on the sand behind it and just walk on - no jumping
+          const sand = B.worldPoint(J, 0, 0, 3.4); P.place(V(sand.x, G.world.ground(sand.x, sand.z) + 0.05, sand.z), J.S.r); step(0.3);
+          const y0 = P.pos.y;
+          // walk until you're most of the way out (the end is open: keep going and you're in the sea)
+          const lz = () => { const dx = P.pos.x - J.S.x, dz = P.pos.z - J.S.z; return dx * Math.sin(J.S.r) + dz * Math.cos(J.S.r); };
+          for (let i = 0; i < 150 && lz() > -5; i++) { I.keys.add('KeyW'); step(1 / 30); }
           I.keys.clear(); step(0.3);
           const dEnd = Math.hypot(P.pos.x - end.x, P.pos.z - end.z);
-          ok(P.mode === 'walk' && P.pos.y > 0.7 && heightAt(P.pos.x, P.pos.z) < -0.5, 'you walk out along the planks, dry, over ' + (-heightAt(P.pos.x, P.pos.z)).toFixed(1) + ' m of water (y ' + P.pos.y.toFixed(2) + ', ' + dEnd.toFixed(1) + ' m from the end)');
+          ok(P.mode === 'walk' && P.pos.y > 0.7 && heightAt(P.pos.x, P.pos.z) < -0.5, 'from the beach (y ' + y0.toFixed(2) + ') you walk up the step and out along the planks, dry, over ' + (-heightAt(P.pos.x, P.pos.z)).toFixed(1) + ' m of water (y ' + P.pos.y.toFixed(2) + ', ' + dEnd.toFixed(1) + ' m from the end)');
         }
         let ws = null;
         for (let r = 20; r < 500 && !ws; r += 4) for (let a = 0; a < 6.28 && !ws; a += 0.3) { const x = Math.cos(a) * r, z = 80 + Math.sin(a) * r, y = G.world.ground(x, z); if (!B._why(BP_BY_ID.watchtower, x, z, y, 0)) ws = { x, y, z }; }
@@ -1392,11 +1436,14 @@ export async function runScripts(names, game) {
           P.place(V(foot.x, G.world.ground(foot.x, foot.z) + 0.1, foot.z), Math.PI); step(0.3);
           const hasLadder = [...document.querySelectorAll('.prompt .chip')].some(e => /Climb the ladder/.test(e.textContent));
           ok(hasLadder, 'at its foot: Climb the ladder');
-          I.keys.add('KeyE'); I._pressed?.add?.('KeyE'); step(0.05); I.keys.clear(); step(0.1);
+          I.keys.add('KeyE'); I.down.add('KeyE'); step(1 / 30); I.keys.clear(); I.down.clear(); step(0.1);
           { const top = B.worldPoint(W, 0, 6.1, 0); log('INFO floor at top: ' + G.world.colliders.floorAt(top.x, top.z, top.y, 0.6).toFixed(2) + ' site y ' + W.S.y.toFixed(2) + ' cols ' + W.parts.reduce((n, p) => n + p.cols.length, 0) + ' floors ' + W.parts.filter(p => p.cols.some(c => c.floor)).length); }
-          if (P.pos.y < W.S.y + 3) { const top = B.worldPoint(W, 0, 6.1, 0); P.place(top, 0); }
           step(1);
-          ok(P.pos.y > W.S.y + 5.5 && P.mode === 'walk', 'you stand on the platform, ' + (P.pos.y - W.S.y).toFixed(1) + ' m up');
+          ok(P.pos.y > W.S.y + 5.5 && P.mode === 'walk', 'up the ladder: you stand on the platform, ' + (P.pos.y - W.S.y).toFixed(1) + ' m up');
+          // walk about on it: across every plank and back, without dropping through a crack
+          let low = 99;
+          for (const k of ['KeyA', 'KeyD', 'KeyD', 'KeyA']) { for (let i = 0; i < 14; i++) { I.keys.add(k); step(1 / 30); low = Math.min(low, P.pos.y - W.S.y); } I.keys.clear(); }
+          ok(low > 5.5, 'you walk across the planks and never fall through (lowest ' + low.toFixed(2) + ' m up)');
           const c0 = G.isles.chartedFraction();
           G.act({ t: 'lookout', x: P.pos.x + 900, z: P.pos.z }); step(0.2);
           ok(G.isles.charted(P.pos.x + 900, P.pos.z), 'looking out from the top charts the sea around it');

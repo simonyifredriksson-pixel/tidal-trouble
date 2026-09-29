@@ -267,9 +267,9 @@ export class UI {
       if (kg > b.stats.cargoKg) w.push('Overloaded');
       this.el('.bwarn').textContent = w.join('  |  ');
     }
-    // the crew's pack: shown while you are gathering or building
+    // the crew's pack: M shows it, M again puts it away
     const mb = this.el('.matsbar'), mats = s.mats || {};
-    const building = ['axe', 'pick', 'plans'].includes(P.tool) || !!G.build?.held || !!G.build?.aim;
+    const building = !!this.showMats;
     const mk = building ? JSON.stringify([mats, G.build?.held]) : '';
     mb.classList.toggle('hide', !building);
     if (mk !== this._matsKey) {
@@ -674,7 +674,6 @@ export class UI {
       <div class="menu" style="max-width:420px">
         <button class="btn gold" data-act="close">${ic('play')} Resume</button>
         <button class="btn" data-act="open" data-arg="journal">${ic('journal')} Journal <small>J</small></button>
-        <button class="btn" data-act="open" data-arg="map">${ic('map')} Map <small>M</small></button>
         ${!G.net?.isOnline ? `<button class="btn" data-act="hostNow">${ic('people')} Invite friends (host co-op)</button>` : ''}
         <button class="btn dark" data-act="open" data-arg="settings">${ic('gear')} Settings</button>
         <button class="btn dark" data-act="open" data-arg="controls">${ic('keyE')} Controls</button>
@@ -713,7 +712,7 @@ export class UI {
       ['Use tool / cast (hold)', k('LMB')], ['Strike when it bites', k('CLICK')], ['Fight: lift the catch zone (hold)', k('LMB')], ['Reel in an empty line (hold)', k('LMB')],
       ['Interact / drive / talk', k('E')], ['Pick up / drop', k('F')], ['Throw what you hold', k('LMB')], ['Tools', k('1 - 9') + ' or wheel'],
       ['Your catch (favourites)', k('TAB') + ' / ' + k('I')], ['Favourite the fish in your hands', k('RMB')], ['Hand axe (kraken arms)', k('0')], ['Talk: pick an answer', k('1 - 9') + ' or click'],
-      ['Change bait', k('B')], ['Journal', k('J')], ['Map', k('M')], ['Text chat', k('CTRL') + ' (tap)'], ['Walkie-talkie (co-op voice)', k('C') + ' (hold)'], ['Mute microphone', k('V')], ['Pause', k('ESC')],
+      ['Change bait', k('B')], ['Journal', k('J')], ['Materials in your pack', k('M')], ['Hold a material', k('G')], ['Map', 'the chart on your hut wall'], ['Text chat', k('CTRL') + ' (tap)'], ['Walkie-talkie (co-op voice)', k('C') + ' (hold)'], ['Mute microphone', k('V')], ['Pause', k('ESC')],
       ['Boat: throttle', k('W S')], ['Boat: steer', k('A D')], ['Boat: full stop', k('X')],
     ];
     return this._wrap(`${this._head('keyE', 'Controls', 'Fishing, boating and general chaos', false)}

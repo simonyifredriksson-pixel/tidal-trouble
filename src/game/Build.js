@@ -63,6 +63,9 @@ export class Build {
     const ids = new Set();
     for (const S of list) {
       ids.add(S.id);
+      // a blueprint that gained a piece since this was built: a finished one gets it for free
+      const bpN = BP_BY_ID[S.bp]?.parts.length || 0;
+      if (S.p.length < bpN) S.p = S.p.padEnd(bpN, S.p.includes('0') ? '0' : '1');
       let site = this.sites.get(S.id);
       if (!site) site = this._make(S);
       site.S = S;
@@ -113,7 +116,11 @@ export class Build {
       let c;
       if (p.k === 'post' || p.k === 'stake') c = G.world.colliders.circle(wx, wz, (p.w || 0.1) + 0.08, y0 - 0.2, y0 + (p.h || 1), 'build');
       else if (p.k === 'log') c = G.world.colliders.box(wx, wz, (p.w || 1) / 2, (p.h || 0.1) + 0.05, S.r + (p.r || 0), y0 - (p.h || 0.1), y0 + (p.h || 0.1), 'build');
-      else { const h = (p.h || 0.1) / 2; c = G.world.colliders.box(wx, wz, (p.w || 1) / 2, (p.d || p.w || 1) / 2, S.r + (p.r || 0), p.floor ? y0 - 0.4 : y0 - h, y0 + h, 'build'); }
+      else {
+        // floor planks overlap a little, so you can't drop through the crack between two of them
+        const h = (p.h || 0.1) / 2, pad = p.floor ? 0.05 : 0;
+        c = G.world.colliders.box(wx, wz, (p.w || 1) / 2 + pad, (p.d || p.w || 1) / 2 + pad, S.r + (p.r || 0), p.floor ? y0 - 0.4 : y0 - h, y0 + h, 'build');
+      }
       if (p.floor) c.floor = true;
       P.cols.push(c);
     }
@@ -304,7 +311,7 @@ export class Build {
     G._boatChanged();
     const b = G.boats[0];
     b.pos.set(S.x, 0, S.z); b.heading = S.r; b.vel.set(0, 0); b.yawRate = 0;
-    b.hp = b.stats.hp; b.leaks = []; b.breaks = []; b.water = 0; b.fires = []; b.sinking = 0;
+    b.hp = b.stats.hp; b.leaks = []; b.patches = []; b.breaks = []; b.water = 0; b.fires = []; b.sinking = 0;
     b.docked = false; b._updateMatrix();
     s.stats.built = (s.stats.built || 0) + 1;
     s.stats.boats = (s.stats.boats || 0) + 1;

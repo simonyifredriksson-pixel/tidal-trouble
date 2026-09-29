@@ -301,7 +301,7 @@ export class Game {
         if (!L.paid && !this._payRepair(this.leakCost(L), from)) break;
         L.paid = true;
         L.fix += c.dt / (1.6 * (boat.stats.repair || 1)) * (S.has('patchkit') ? 2 : 1);
-        if (L.fix >= 1) { boat.leaks.splice(c.leak, 1); this.tell(from, 'Leak fixed.', 'good'); }
+        if (L.fix >= 1) { boat.patchHole(c.leak); this.tell(from, 'Leak fixed.', 'good'); }
         break;
       }
       case 'fixBreak': {
@@ -767,7 +767,7 @@ export class Game {
       this.loot.remove(it); P.held = null;
       b.hp = Math.min(b.stats.hp, b.hp + 40);
       const L = b.leaks.sort((a, c) => c.size - a.size)[0];
-      if (L) { b.leaks.splice(b.leaks.indexOf(L), 1); this.tell(P.id, 'You nail the salvaged planks over the worst hole.', 'good'); }
+      if (L) { b.patchHole(b.leaks.indexOf(L)); this.tell(P.id, 'You nail the salvaged planks over the worst hole.', 'good'); }
       else this.tell(P.id, 'You patch the hull with the salvaged planks.', 'good');
       this.audio.hammer();
     }
@@ -1074,7 +1074,7 @@ export class Game {
       const b = this.boats[0];
       // harder hulls cost more to fix; Big Olga at Ironwreck charges half of what anyone else does
       const cost = Math.ceil(((b.stats.hp - b.hp) * 0.6 + b.leaks.length * 15) * (b.stats.repair || 1) * (id === 'ironwreck' ? 0.5 : 1));
-      if (cost > 0 && ok(cost)) { b.hp = b.stats.hp; b.leaks = []; b.water = 0; b.fires = []; this.tell(from, 'Good as new. Mostly.', 'good'); }
+      if (cost > 0 && ok(cost)) { b.hp = b.stats.hp; b.leaks = []; b.patches = []; b.water = 0; b.fires = []; this.tell(from, 'Good as new. Mostly.', 'good'); }
     }
     this._saveDirty = true;
   }
@@ -1397,7 +1397,8 @@ export class Game {
     if (this.intro?.active) return;
     const combo = I.keys.has('KeyL');       // L is the first key of the admin combination: J, M and 3 wait
     if (I.pressedRaw('KeyJ') && !I.blocked && !combo) this.ui.isOpen && this.ui.screen === 'journal' ? this.ui.close() : this.ui.open('journal');
-    if (I.pressedRaw('KeyM') && !I.blocked && !combo) this.ui.isOpen && this.ui.screen === 'map' ? this.ui.close() : this.ui.open('map');
+    // M: what is in your pack (there is no map in your pocket - it hangs on the wall of your hut)
+    if (I.pressedRaw('KeyM') && !I.blocked && !combo) { this.ui.showMats = !this.ui.showMats; this.audio.click(); }
     if ((I.pressedRaw('KeyI') || I.pressedRaw('Tab')) && !I.blocked) this.ui.isOpen && this.ui.screen === 'catch' ? this.ui.close() : this.ui.open('catch');
     if (blocked) return;
     if (I.pressed('KeyB')) this.ui.open('bait');
@@ -1408,13 +1409,14 @@ export class Game {
       if (it) { const on = !it.fav; this.act({ t: 'fav', id: it.id, on }); it.fav = on; this.ui.toast(it.fav ? catchName(FISH_BY_ID[it.sp], it.v) + ' is a favourite. It will never be sold.' : 'No longer a favourite.', it.fav ? 'good' : 'info'); this.audio.tone(it.fav ? 1320 : 660, 0.12, 'triangle', 0.08); }
     }
     // hotbar
-    const pick = id => { if (!s.tools[id]) { this.ui.toast((TOOL_BY_ID[id]?.name || 'That') + ' - buy it at Melvin\'s.', 'warn'); return; } if (this.fishing.state === 'fight') return; P.tool = id; this.vm.setTool(id); this.audio.click(); };
+    // taking a tool out puts whatever material you were carrying back in the pack
+    const pick = id => { if (!s.tools[id]) { this.ui.toast((TOOL_BY_ID[id]?.name || 'That') + ' - buy it at Melvin\'s.', 'warn'); return; } if (this.fishing.state === 'fight') return; this.build.held = null; this.vm.heldMat = null; P.tool = id; this.vm.setTool(id); this.audio.click(); };
     if (!combo) for (const T of TOOLS) if (I.pressed(T.key || 'Digit' + T.slot)) pick(T.id);
     if (I.mouse.wheel && this.fishing.state !== 'fight' && P.mode !== 'drive') {
       const owned = TOOLS.filter(T => s.tools[T.id]);
       const i = owned.findIndex(T => T.id === P.tool);
       const n = owned[(i + (I.mouse.wheel > 0 ? 1 : -1) + owned.length) % owned.length];
-      if (n) { P.tool = n.id; this.vm.setTool(n.id); }
+      if (n) { this.build.held = null; this.vm.heldMat = null; P.tool = n.id; this.vm.setTool(n.id); }
     }
   }
 
@@ -2190,7 +2192,7 @@ export class Game {
         if (e.k === 'dive') this.fx.eruption(e.x, this.world.sea(e.x, e.z), e.z, 12);
         break;
       }
-      case 'mystery': this.ui.banner('A WATERLOGGED CHART', 'Someone marked an X far out at sea. It is on your map now (M).', 'map', 5); this.chat.system('A chart was found. The X is on the map.'); break;
+      case 'mystery': this.ui.banner('A WATERLOGGED CHART', 'Someone marked an X far out at sea. It is on the chart in your hut now.', 'map', 5); this.chat.system('A chart was found. The X is on the map.'); break;
       case 'page': { const D = BEAST_BY_ID[e.id]; if (D) { this.ui.banner('A DROWNED JOURNAL PAGE', 'About something called ' + D.name + '.', 'journal', 4); this.ui.subtitle('"' + D.page + '"', 14); } break; }
       case 'beastPhase': { const B = this.beasts.b; if (B && e.ph === 'dive' && B.id === 'skymaw') this.audio.beastCall('skymaw', 1); if (e.ph === 'risen' || e.ph === 'surfaced' || e.ph === 'reaching') { const d = Math.hypot(this.player.pos.x - e.x, this.player.pos.z - e.z); if (d < 700) { this.fx.eruption(e.x, this.world.sea(e.x, e.z), e.z, 14); this.audio.beastCall(e.id || B?.id, Math.max(0.2, 1 - d / 700)); } } break; }
       case 'beastFx': {

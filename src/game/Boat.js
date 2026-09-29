@@ -58,6 +58,19 @@ function holeGeo() {
   _holeGeo = b.build();
   return _holeGeo;
 }
+let _patchGeo = null;
+/** Where a hole was hammered shut: two planks nailed across it, lighter than the hull. */
+function patchGeo() {
+  if (_patchGeo) return _patchGeo;
+  const b = new MeshBuilder(rng(21));
+  [[0.28, 0x9a7650, 0.03], [-0.34, 0xb88e5e, 0.062]].forEach(([a, col, z]) => {
+    b.color(col).push(0, 0, z, 0, 0, a); b.box(0.66, 0.14, 0.03); b.pop();
+    b.color(0x3c3c40);
+    for (const s of [-1, 1]) b.box(0.03, 0.03, 0.02, Math.cos(a) * 0.27 * s, Math.sin(a) * 0.27 * s, z + 0.02);
+  });
+  _patchGeo = b.build();
+  return _patchGeo;
+}
 
 export class Boat {
   constructor(game, cfg, id = 'boat') {
@@ -75,6 +88,7 @@ export class Boat {
     this.mooring = null;
     this.fires = [];
     this.leaks = [];
+    this.patches = [];            // holes hammered shut out at sea: planks nailed over them until a yard does it properly
     this.water = 0;
     this.sinking = 0;
     this.tow = new THREE.Vector2();
@@ -486,6 +500,12 @@ export class Boat {
     Bus.emit('boat:leak', { boat: this });
     return L;
   }
+  /** A hole is shut: it stops leaking and a nailed patch stays where it was. */
+  patchHole(i) {
+    const L = this.leaks.splice(i, 1)[0];
+    if (L) { this.patches.push({ x: L.x, z: L.z, size: L.size }); if (this.patches.length > 10) this.patches.shift(); }
+    return L;
+  }
 
   breakSomething(kind = null) {
     const H = this.hull, have = new Set(this.breaks.map(b => b.kind));
@@ -580,7 +600,7 @@ export class Boat {
     this.heading = t.h;
     this.vel.set(0, 0); this.yawRate = 0;
     this.y = 0; this.vy = 0; this.pitch = 0; this.roll = 0; this.vp = 0; this.vr = 0;
-    this.sinking = 0; this.water = 0; this.fires = []; this.leaks = []; this.breaks = [];
+    this.sinking = 0; this.water = 0; this.fires = []; this.leaks = []; this.breaks = []; this.patches = [];
     this.hp = Math.max(this.hp, Math.round(this.stats.hp * (towed ? 0.6 : 1)));
     this.docked = true; this.driver = null; this.stolen = false; this.autopilot = null;
     this.stowAnchor();
@@ -691,6 +711,18 @@ export class Boat {
         fx.water(w.x, w.y, w.z, -Math.cos(this.heading) * side * 0.35, 0.25, Math.sin(this.heading) * side * 0.35);
       }
     });
+    // patches: where a hole was, two planks nailed over it
+    this.patchMeshes = this.patchMeshes || [];
+    while (this.patchMeshes.length < this.patches.length) { const m = new THREE.Mesh(patchGeo(), MAT_HOLE); m.castShadow = true; this.group.add(m); this.patchMeshes.push(m); }
+    this.patchMeshes.forEach((m, i) => {
+      const Q = this.patches[i];
+      m.visible = !!Q;
+      if (!Q) return;
+      const side = Math.sign(Q.x) || 1;
+      m.position.set(side * (this.halfWidth(Q.z) / 0.9 - 0.01), this.deck - 0.05, Q.z);
+      m.rotation.set(0, side * Math.PI / 2, 0);
+      m.scale.setScalar(0.7 + Q.size * 0.6);
+    });
     // flooding sheet
     const fl = this.parts.flood;
     if (this.parts.holdFlood) {
@@ -735,6 +767,7 @@ export class Boat {
       hp: Math.round(this.hp), w: +this.water.toFixed(3), sk: +this.sinking.toFixed(2), th: +this.throttle.toFixed(2), st: +this.steer.toFixed(2),
       dr: this.driver, f: this.fires.map(F => [+F.x.toFixed(2), +F.z.toFixed(2), +F.i.toFixed(2)]), l: this.leaks.map(L => [+L.x.toFixed(2), +L.z.toFixed(2), +L.size.toFixed(2), +L.fix.toFixed(2)]),
       dk: this.docked ? 1 : 0, cfg: this.cfgKey(), bk: this.breaks.map(B => [B.kind, +B.x.toFixed(2), +B.z.toFixed(2), +B.fix.toFixed(2)]),
+      pa: this.patches.map(Q => [+Q.x.toFixed(2), +Q.z.toFixed(2), +Q.size.toFixed(2)]),
       an: this.anchor.st === 'stow' ? 0 : [ST_CODE.indexOf(this.anchor.st), +this.anchor.p.x.toFixed(2), +this.anchor.p.y.toFixed(2), +this.anchor.p.z.toFixed(2), +this.anchor.len.toFixed(2), this.anchor.drag > 0 ? 1 : 0, this.anchor.reelT > 0 ? 1 : 0],
     };
   }
@@ -753,6 +786,7 @@ export class Boat {
     this.fires = s.f.map(a => ({ x: a[0], z: a[1], i: a[2], t: 0 }));
     this.leaks = s.l.map(a => ({ x: a[0], y: this.deck + 0.05, z: a[1], size: a[2], fix: a[3] }));
     this.breaks = (s.bk || []).map(a => ({ kind: a[0], x: a[1], z: a[2], fix: a[3] }));
+    this.patches = (s.pa || []).map(a => ({ x: a[0], z: a[1], size: a[2] }));
     const A = this.anchor;
     if (!s.an) { if (A.st !== 'stow') A.crank += A.len / Math.max(0.05, this.windlassR || 0.1); A.st = 'stow'; A.len = 0; }
     else {

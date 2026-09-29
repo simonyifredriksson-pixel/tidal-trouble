@@ -114,6 +114,8 @@ function jetty() {
   for (const z of [-3, -6]) for (const x of [-0.85, 0.85]) P.push({ m: 'stone', k: 'stone', t: 0, x, y: -0.9, z, w: 0.4 });
   for (const z of [-3, -6]) for (const x of [-0.85, 0.85]) P.push({ m: 'wood', k: 'post', t: 1, x, y: -1.4, z, w: 0.12, h: 2.3, solid: true });
   for (let i = 0; i < 8; i++) P.push({ m: 'wood', k: 'plank', t: 2, x: 0, y: 0.84, z: 0.3 - i * 0.85, w: 2.0, h: 0.08, d: 0.8, floor: true });
+  // a step up from the sand: the deck is higher than you can step in one go (kept last so older saves keep their pieces)
+  P.push({ m: 'wood', k: 'plank', t: 2, x: 0, y: 0.2, z: 1.1, w: 1.8, h: 0.5, d: 0.75, floor: true, solid: true });
   return P;
 }
 function shelter() {
@@ -140,9 +142,12 @@ function watchtower() {
   for (const [x, z] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) { P.push({ m: 'wood', k: 'post', t: 1, x, y: 0.2, z, w: 0.14, h: 3.2, solid: true }); P.push({ m: 'wood', k: 'post', t: 2, x, y: 3.4, z, w: 0.13, h: 3.6, solid: true }); }
   for (let i = 0; i < 4; i++) P.push({ m: 'wood', k: 'log', t: 2, x: 0, y: 1.6, z: i < 2 ? (i ? 1.2 : -1.2) : 0, w: 2.5, h: 0.08, r: i < 2 ? 0 : Math.PI / 2 });
   for (let i = 0; i < 6; i++) P.push({ m: 'wood', k: 'plank', t: 3, x: -1.1 + i * 0.44, y: 5.9, z: 0, w: 0.42, h: 0.1, d: 2.7, floor: true });
-  for (let i = 0; i < 2; i++) P.push({ m: 'wood', k: 'log', t: 4, x: 0, y: 6.9, z: i ? 1.25 : -1.25, w: 2.6, h: 0.07 });
-  P.push({ m: 'wood', k: 'log', t: 4, x: 1.25, y: 6.9, z: 0, w: 2.6, h: 0.07, r: Math.PI / 2 });
+  // the rails round the top are solid: lean on them, don't walk off six metres up
+  for (let i = 0; i < 2; i++) P.push({ m: 'wood', k: 'log', t: 4, x: 0, y: 6.9, z: i ? 1.25 : -1.25, w: 2.6, h: 0.07, solid: true });
+  P.push({ m: 'wood', k: 'log', t: 4, x: 1.25, y: 6.9, z: 0, w: 2.6, h: 0.07, r: Math.PI / 2, solid: true });
   P.push({ m: 'wood', k: 'plank', t: 4, x: 0, y: 3.3, z: 1.55, w: 0.55, h: 6.1, d: 0.08, ladder: true });
+  // the fourth side (kept last so older saves keep their pieces)
+  P.push({ m: 'wood', k: 'log', t: 4, x: -1.25, y: 6.9, z: 0, w: 2.6, h: 0.07, r: Math.PI / 2, solid: true });
   return P;
 }
 
