@@ -33,16 +33,8 @@ import { clamp, damp, wrapAngle, lerp, smoothstep } from '../core/Util.js';
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 
-// both fight through the ordinary rod code, so each gets a pseudo-species
-for (const D of [...GREAT, KRAKEN]) {
-  FISH_BY_ID['great:' + D.id] = {
-    id: 'great:' + D.id, name: D.name, rarity: 'legendary', great: D.id, lev: false, beh: null, where: [], water: 'any', time: 'any', bait: {},
-    kg: [1, 1], cm: [D.size * 100, D.size * 100], value: D.reward,
-    fight: { power: 5, stamina: 9, erratic: 0.9, jump: 0 },
-    art: { h: 0.2, w: 0.12, back: 0x3a3e44, belly: 0xa8a8a8, fin: 0x2a2e34, pat: 'none', patCol: 0xffffff, tail: 'fork', extras: [] },
-    blurb: D.blurb,
-  };
-}
+// both fight through the ordinary rod code, and come out of it as a real catch (BeastCatch.js)
+import '../data/BeastCatch.js';
 
 const PHASES = { deep: [12, 22], rise: [10, 16], breach: [5, 5], dive: [4, 4] };
 
@@ -271,7 +263,7 @@ export class Great {
     const first = creature === 'kraken' ? !s.kraken.caught : !s.great[D.id];
     if (creature === 'kraken') { s.kraken.caught++; this.kraken = null; this.krakenCool = 600; G.award('kraken', from); }
     else { s.great[D.id] = { n: (s.great[D.id]?.n || 0) + 1, day: s.day }; this.lev = null; G.award('great:' + D.id, from); }
-    G.state.earn(first ? D.reward : Math.round(D.reward * 0.35), 'legend');
+    G.landBeast('great:' + D.id, from, first);
     G._everyone({ t: 'greatCaught', id: D.id, first, by: G.playerById(from)?.name || 'Someone', reward: first ? D.reward : Math.round(D.reward * 0.35) });
     G._changed();
   }

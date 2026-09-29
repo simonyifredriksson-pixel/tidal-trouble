@@ -23,6 +23,7 @@ import { heightAt } from './world/Terrain.js';
 import { VIGIL, REGIONS, HOME_CENTRE } from './world/MapData.js';
 import { U } from './art/Materials.js';
 import { BP_BY_ID } from './data/BuildData.js';
+import { FISH_BY_ID } from './data/FishData.js';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -384,6 +385,29 @@ function stage(name) {
       P.yaw = Math.atan2(-(mid - P.pos.x), -(z0 - P.pos.z)); P.pitch = fk >= 0 ? -0.18 : -0.1;
       G.tod = +(Q.get('tod') || 0.5);
     } else window.__log && window.__log('no room for the yard');
+  }
+  // an aquarium, built and stocked: ?stage=tank:N  (1-6)
+  if (name.startsWith('tank:')) {
+    const id = 'aq' + name.split(':')[1], bp = BP_BY_ID[id], B = G.build, s = G.state.s;
+    let q = null;
+    for (let r = 20; r < 600 && !q; r += 5) for (let a = 0; a < 6.28 && !q; a += 0.25) { const x = A.spawn.x + Math.cos(a) * r, z = A.spawn.z + Math.sin(a) * r, y = world.ground(x, z); if (!B._why(bp, x, z, y, 0)) q = { x, y, z }; }
+    if (q) {
+      G.act({ t: 'bnew', bp: id, x: q.x, y: q.y, z: q.z, r: 0 });
+      const S = s.builds[s.builds.length - 1];
+      S.p = '1'.repeat(bp.parts.length);
+      const T = bp.tank;
+      const pool = { aq1: ['bass', 'perch', 'goldtrout', 'sunfish'], aq2: ['bass', 'pike', 'catfish', 'goldtrout', 'perch', 'salmon'], aq3: ['salmon', 'catfish', 'pike', 'tuna', 'bass', 'ghost', 'eel', 'puffer'] }[id];
+      const list = pool || Object.values(FISH_BY_ID).filter(f => !f.junk && !f.beast && f.cm && f.cm[1] <= T.cm && f.cm[1] > T.cm * 0.25 && f.art).slice(0, T.n - (id === 'aq5' || id === 'aq6' ? 2 : 0)).map(f => f.id);
+      if (id === 'aq5') list.push('great:kraken', 'beast:mirrorfish');
+      if (id === 'aq6') list.push('beast:cthulhu', 'great:ninefold');
+      S.store = list.filter(sp => FISH_BY_ID[sp]).slice(0, T.n).map((sp, i) => ({ id: 'q' + i, sp, kg: FISH_BY_ID[sp].kg[1], cm: Math.min(T.cm, FISH_BY_ID[sp].cm[1]), zone: 0, mult: 1 }));
+      B._sync();
+      const back = T.round ? T.r + 6 : T.d / 2 + Math.max(1.8, T.w * 0.55);
+      P.place(new THREE.Vector3(q.x + 0.4, world.ground(q.x, q.z + back) + 0.1, q.z + back), 0);
+      P.pitch = T.round ? 0.05 : -0.12 - (T.y0 < 0.9 && T.h < 1 ? 0.15 : 0);
+      G.tod = +(Q.get('tod') || 0.5);
+      for (let i = 0; i < 60; i++) G.update(1 / 30);
+    }
   }
   // the four player looks side by side on the beach: ?stage=looks[:zoom]
   if (name.startsWith('looks')) {

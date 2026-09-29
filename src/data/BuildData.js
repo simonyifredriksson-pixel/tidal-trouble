@@ -20,6 +20,7 @@ export const MATS = [
   { id: 'stone', name: 'Stone', col: 0x8e8e88, icon: 'stone', from: 'Break rocks with the pickaxe (-).' },
   { id: 'fibre', name: 'Fibre', col: 0x9ab04a, icon: 'fibre', from: 'Cut bushes, ferns, reeds and mushrooms with the axe.' },
   { id: 'crystal', name: 'Crystal', col: 0x9ae8f0, icon: 'crystal', from: 'Chip it off the crystal spires of the Crystal Reef with the pickaxe.' },
+  { id: 'glass', name: 'Glass', col: 0xcfefff, icon: 'glass', from: 'Melt 3 stone and 1 fibre into 2 panes at a campfire or a workbench.' },
   { id: 'iron', name: 'Iron Ore', col: 0x6a5a52, icon: 'ore', from: 'Black rock: the spires of the Blackwater and Thunderpeak, and the lava rock of Sunscar. Pickaxe.' },
 ];
 export const MAT_BY_ID = Object.fromEntries(MATS.map(m => [m.id, m]));
@@ -187,8 +188,99 @@ function workbench() {
   return P;
 }
 
+/* ---------------- aquariums ----------------
+   `tank` is the water inside: w x h x d (or r for a round one), its floor
+   at y0, the longest catch it takes (cm) and how many (n). The parts are the
+   frame, the glass and the lamps; the water and the sand fill in when the
+   last piece goes on. */
+const G = (x, y, z, w, h, d, t, r = 0) => ({ m: 'glass', k: 'glass', t, x, y, z, w, h, d, r });
+function boxTank(W, H, D, y0, t, glassPer = 1) {
+  // four walls of panes (glassPer across each long side) - a pane is one piece of glass
+  const P = [], pw = W / glassPer;
+  for (let i = 0; i < glassPer; i++) for (const s of [-1, 1]) P.push(G(-W / 2 + pw * (i + 0.5), y0 + H / 2, s * D / 2, pw * 0.98, H, 0.04, t));
+  for (const s of [-1, 1]) P.push(G(s * W / 2, y0 + H / 2, 0, 0.04, H, D, t));
+  return P;
+}
+function aq1() {
+  const P = [];
+  for (const [x, z] of [[-0.48, -0.22], [0.48, -0.22], [-0.48, 0.22], [0.48, 0.22]]) P.push({ m: 'wood', k: 'post', t: 0, x, y: 0, z, w: 0.05, h: 0.8, solid: true });
+  P.push({ m: 'wood', k: 'plank', t: 1, x: 0, y: 0.82, z: 0, w: 1.2, h: 0.06, d: 0.62, solid: true });
+  P.push(...boxTank(1.1, 0.6, 0.55, 0.85, 2));
+  P.push({ m: 'wood', k: 'plank', t: 3, x: 0, y: 1.47, z: -0.25, w: 1.16, h: 0.04, d: 0.1 });
+  return P;
+}
+function aq2() {
+  const P = [];
+  for (const [x, z] of [[-0.75, -0.3], [0.75, -0.3], [-0.75, 0.3], [0.75, 0.3]]) P.push({ m: 'stone', k: 'stone', t: 0, x, y: 0.2, z, w: 0.26 });
+  P.push({ m: 'stone', k: 'plank', t: 1, x: 0, y: 0.5, z: 0, w: 2.0, h: 0.16, d: 0.95, solid: true, sand: 1 });
+  P.push(...boxTank(1.8, 0.9, 0.8, 0.6, 2));
+  for (const s of [-1, 1]) P.push({ m: 'wood', k: 'plank', t: 3, x: 0, y: 1.53, z: s * 0.4, w: 1.9, h: 0.06, d: 0.07 });
+  for (const s of [-1, 1]) P.push({ m: 'wood', k: 'plank', t: 3, x: s * 0.9, y: 1.53, z: 0, w: 0.07, h: 0.06, d: 0.86 });
+  return P;
+}
+function aq3() {
+  const P = [];
+  for (let i = 0; i < 8; i++) { const x = -1.35 + (i % 4) * 0.9, z = i < 4 ? -0.6 : 0.6; P.push({ m: 'stone', k: 'stone', t: 0, x, y: 0.22, z, w: 0.3 }); }
+  P.push({ m: 'stone', k: 'plank', t: 1, x: 0, y: 0.5, z: 0, w: 3.2, h: 0.2, d: 1.5, solid: true, sand: 1 });
+  for (const [x, z] of [[-1.5, -0.65], [1.5, -0.65], [-1.5, 0.65], [1.5, 0.65]]) P.push({ m: 'iron', k: 'post', t: 2, x, y: 0.6, z, w: 0.05, h: 1.35 });
+  P.push(...boxTank(3.0, 1.3, 1.3, 0.6, 3, 2));
+  for (const s of [-1, 1]) P.push({ m: 'wood', k: 'plank', t: 4, x: 0, y: 1.95, z: s * 0.65, w: 3.1, h: 0.08, d: 0.08 });
+  P.push({ m: 'crystal', k: 'crystal', t: 5, x: 0, y: 2.3, z: 0, w: 0.14, h: 0.26 });
+  return P;
+}
+function aq4() {
+  const P = [];
+  // a stepped plinth
+  for (let i = 0; i < 12; i++) { const a = i / 12, x = -2.1 + (i % 6) * 0.84, z = i < 6 ? -1.05 : 1.05; P.push({ m: 'stone', k: 'stone', t: 0, x, y: 0.25, z, w: 0.36 }); void a; }
+  P.push({ m: 'stone', k: 'plank', t: 1, x: 0, y: 0.3, z: 0, w: 5.0, h: 0.3, d: 2.6, solid: true, floor: true });
+  P.push({ m: 'stone', k: 'plank', t: 1, x: 0, y: 0.6, z: 0, w: 4.7, h: 0.2, d: 2.2, solid: true, sand: 1 });
+  for (let i = 0; i < 3; i++) for (const s of [-1, 1]) P.push({ m: 'iron', k: 'post', t: 2, x: -2.25 + i * 2.25, y: 0.7, z: s * 1.02, w: 0.06, h: 2.1 });
+  P.push(...boxTank(4.5, 2.0, 2.0, 0.7, 3, 3));
+  // arched beams over the top, and two lamps
+  for (let i = 0; i < 4; i++) P.push({ m: 'wood', k: 'log', t: 4, x: -1.7 + i * 1.13, y: 3.0, z: 0, w: 2.3, h: 0.07, r: Math.PI / 2 });
+  for (const x of [-1.5, 1.5]) P.push({ m: 'crystal', k: 'crystal', t: 5, x, y: 3.2, z: 0, w: 0.16, h: 0.3 });
+  return P;
+}
+function aq5() {
+  const P = [];
+  for (let i = 0; i < 16; i++) { const x = -3.3 + (i % 8) * 0.94, z = i < 8 ? -1.85 : 1.85; P.push({ m: 'stone', k: 'stone', t: 0, x, y: 0.28, z, w: 0.42 }); }
+  P.push({ m: 'stone', k: 'plank', t: 1, x: 0, y: 0.5, z: 0, w: 7.6, h: 0.36, d: 4.0, solid: true, sand: 1 });
+  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) P.push({ m: 'iron', k: 'post', t: 2, x: -3.5 + i * 2.333, y: 0.68, z: s * 1.78, w: 0.08, h: 3.3 });
+  P.push(...boxTank(7.0, 3.2, 3.5, 0.68, 3, 4));
+  for (let i = 0; i < 6; i++) P.push({ m: 'iron', k: 'plank', t: 4, x: -3.0 + i * 1.2, y: 3.95, z: 0, w: 0.1, h: 0.1, d: 3.6 });
+  for (const x of [-2.4, 0, 2.4]) P.push({ m: 'crystal', k: 'crystal', t: 5, x, y: 4.25, z: 0, w: 0.2, h: 0.36 });
+  return P;
+}
+function aq6() {
+  // the Oceanarium: a round glass tower fifteen metres across
+  const P = [], R = 7.5, N = 12;
+  for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; P.push({ m: 'stone', k: 'stone', t: 0, x: Math.cos(a) * (R + 0.3), y: 0.3, z: Math.sin(a) * (R + 0.3), w: 0.5 }); }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; P.push({ m: 'stone', k: 'plank', t: 1, x: Math.cos(a) * R * 0.5, y: 0.45, z: Math.sin(a) * R * 0.5, w: R * 1.05, h: 0.3, d: R * 0.42, r: -a, solid: true, sand: 1 }); }
+  for (let i = 0; i < N; i++) { const a = (i + 0.5) / N * Math.PI * 2; P.push({ m: 'iron', k: 'post', t: 2, x: Math.cos(a) * R, y: 0.6, z: Math.sin(a) * R, w: 0.12, h: 5.2 }); }
+  const chord = 2 * R * Math.sin(Math.PI / N);
+  for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2; P.push(G(Math.cos(a) * R * Math.cos(Math.PI / N), 0.6 + 2.5, Math.sin(a) * R * Math.cos(Math.PI / N), 0.05, 5.0, chord * 1.01, 3, -a)); }
+  for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2; P.push({ m: 'iron', k: 'plank', t: 4, x: Math.cos(a) * R * Math.cos(Math.PI / N), y: 5.9, z: Math.sin(a) * R * Math.cos(Math.PI / N), w: 0.14, h: 0.16, d: chord * 1.02, r: -a }); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; P.push({ m: 'crystal', k: 'crystal', t: 5, x: Math.cos(a) * R * 0.95, y: 6.35, z: Math.sin(a) * R * 0.95, w: 0.24, h: 0.44 }); }
+  return P;
+}
+export const AQUARIUMS = [
+  { id: 'aq1', name: 'Small Aquarium', icon: 'fish', foot: 1.0, parts: aq1(), tank: { w: 1.1, h: 0.6, d: 0.55, y0: 0.85, cm: 45, n: 4 },
+    blurb: 'A glass box on a wooden stand. Big enough for a few little fish, and the first thing in your hut that is alive.', use: 'Holds up to 4 living fish, each up to 45 cm.' },
+  { id: 'aq2', name: 'Medium Aquarium', icon: 'fish', foot: 1.3, parts: aq2(), tank: { w: 1.8, h: 0.9, d: 0.8, y0: 0.6, cm: 90, n: 6 },
+    blurb: 'A proper tank on a stone plinth, rimmed in wood.', use: 'Holds up to 6 living fish, each up to 90 cm.' },
+  { id: 'aq3', name: 'Large Aquarium', icon: 'fish', foot: 1.9, parts: aq3(), tank: { w: 3.0, h: 1.3, d: 1.3, y0: 0.6, cm: 160, n: 8 },
+    blurb: 'Iron corner posts, big panes and a crystal lamp over the water. Room for real fish.', use: 'Holds up to 8 living fish, each up to 1.6 m.' },
+  { id: 'aq4', name: 'Grand Aquarium', icon: 'fish', foot: 2.8, parts: aq4(), tank: { w: 4.5, h: 2.0, d: 2.0, y0: 0.7, cm: 260, n: 10 },
+    blurb: 'A stepped stone plinth, arched beams and two lamps. People will come to look at this.', use: 'Holds up to 10 living fish, each up to 2.6 m.' },
+  { id: 'aq5', name: 'Massive Aquarium', icon: 'fish', foot: 4.2, parts: aq5(), tank: { w: 7.0, h: 3.2, d: 3.5, y0: 0.68, cm: 620, n: 12 },
+    blurb: 'An iron-ribbed tank as long as a boat. The smaller sea beasts will fit - just.', use: 'Holds up to 12 catches up to 6.2 m - the Kraken and the Mirrorfish included.' },
+  { id: 'aq6', name: 'The Oceanarium', icon: 'fish', foot: 8.2, parts: aq6(), tank: { r: 7.2, h: 5.0, y0: 0.6, cm: 1500, n: 16, round: true },
+    blurb: 'A round glass tower fifteen metres across, ringed in iron and lit with reef crystal. The sea, brought home.', use: 'Holds up to 16 catches of any size - even the greatest sea beasts.' },
+];
+
 /* What the workbench makes. `give` is a bait (bait:id, n), or an upgrade (up:key). */
 export const RECIPES = [
+  { id: 'glass', name: 'Glass Panes (x2)', icon: 'glass', cost: { stone: 3, fibre: 1 }, mat: 'glass', n: 2, blurb: 'Crushed stone and a little fibre ash, melted down and poured flat. Every aquarium needs it. (A campfire can do it too.)' },
   { id: 'ironaxe', name: 'Iron Axe', icon: 'axe', cost: { iron: 6, wood: 4 }, up: 'axe', blurb: 'An iron head on an ash haft. Every swing does twice the work.' },
   { id: 'ironpick', name: 'Iron Pickaxe', icon: 'pick', cost: { iron: 6, wood: 4 }, up: 'pick', blurb: 'Tempered iron. Rock comes apart in half the blows.' },
   { id: 'crystallure', name: 'Crystal Lures (x3)', icon: 'glow', cost: { crystal: 2, fibre: 2 }, bait: 'glow', n: 3, blurb: 'A chip of reef crystal tied into a fibre fly. It glows like Glow Bait - because it is.' },
@@ -226,6 +318,7 @@ export const BLUEPRINTS = [
   { id: 'watchtower', name: 'Watchtower', icon: 'eye', foot: 1.9, parts: watchtower(),
     blurb: 'Four tall legs, a platform six metres up and a ladder. You can see a long way from up there.', use: 'Climb the ladder (E) and look out from the top (E) to chart the sea for a kilometre around.' },
 ];
+BLUEPRINTS.push(...AQUARIUMS);
 export const BP_BY_ID = Object.fromEntries(BLUEPRINTS.map(b => [b.id, b]));
 
 /** The materials a blueprint needs in all. */

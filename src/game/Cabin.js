@@ -11,6 +11,7 @@ import * as THREE from '../../lib/three.module.js';
 import { MeshBuilder, shadeHex } from '../art/Geo.js';
 import { MAT } from '../art/Materials.js';
 import { fishMesh } from '../art/FishArt.js';
+import { catchMesh } from '../art/CatchArt.js';
 import { buildRod } from '../art/RodArt.js';
 import { buildLeviathan } from '../art/CreatureArt.js';
 import { FISH_BY_ID } from '../data/FishData.js';
@@ -134,7 +135,7 @@ export class Cabin {
       } else {
         const sp = FISH_BY_ID[it.sp];
         if (!sp) return;
-        const m = fishMesh(sp, Math.min(it.cm / 100, 4.5));
+        const m = catchMesh(sp, Math.min(it.cm / 100, sp.beast ? 6 : 4.5));
         m.position.copy(spot.pos).add(new THREE.Vector3(0, 0.5 + Math.min(it.cm / 100, 4.5) * 0.1, 0));
         m.rotation.set(0, 0.3 + i * 0.4, Math.PI / 2 * 0.2);
         this.group.add(m);

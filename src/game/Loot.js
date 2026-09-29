@@ -22,6 +22,8 @@
 import * as THREE from '../../lib/three.module.js';
 import { FISH_BY_ID, fishValue } from '../data/FishData.js';
 import { fishMesh, buildJunk, isUpright } from '../art/FishArt.js';
+import { catchMesh } from '../art/CatchArt.js';
+import '../data/BeastCatch.js';
 import { MAT } from '../art/Materials.js';
 import { MeshBuilder } from '../art/Geo.js';
 import { clamp, uid } from '../core/Util.js';
@@ -31,6 +33,36 @@ const G = 9.8;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 let chestGeo = null, starGeo = null;
 /** Is this boat-local point inside the ship's hold (below deck)? */
+/* A living thing (as opposed to a boot, a chest or a relic): it can be alive or dead. */
+export const LIFE = { air: 300, cooler: 3 * 3600, beast: 3 * 3600 };
+export const livesSp = sp => !!sp && !sp.junk && !sp.relic && !['mimic', 'chest', 'bottle', 'map', 'coins', 'page', 'salvage', 'curio', 'strongbox'].includes(sp.beh);
+/* How a catch is carried, by weight: in your hands, hugged to your chest,
+   over your shoulder, or - a sea beast, a giant - dragged along the ground
+   behind you. Nothing is too heavy; the heavy things are just slow. */
+export function carryStyle(it) {
+  const sp = FISH_BY_ID[it.sp];
+  if (sp?.beast || it.kg > 1500) return 'drag';
+  if (it.kg > 250) return 'shoulder';
+  if (it.kg > 40) return 'hug';
+  return 'hands';
+}
+export const CARRY_SPEED = { hands: 99, hug: 2.6, shoulder: 1.8, drag: 1.15 };
+const _f = new THREE.Vector3(), _rt = new THREE.Vector3();
+/** Where it sits for someone at pos/eye facing yaw (world). */
+export function carryPose(it, pos, eye, yaw, pitch, world) {
+  const f = _f.set(-Math.sin(yaw), 0, -Math.cos(yaw)), rt = _rt.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  const st = carryStyle(it), sp = FISH_BY_ID[it.sp];
+  if (st === 'hands') {
+    const p = eye.clone().add(new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch) * 0.75, Math.sin(pitch) * 0.75 - 0.35, -Math.cos(yaw) * Math.cos(pitch) * 0.75)).addScaledVector(rt, 0.12);
+    return { pos: p, yaw: yaw + Math.PI / 2, roll: 0.3, style: st };
+  }
+  if (st === 'hug') return { pos: pos.clone().addScaledVector(f, 0.55 + it.r * 0.35).setY(pos.y + 0.95), yaw: yaw, roll: Math.PI / 2, style: st };
+  if (st === 'shoulder') return { pos: eye.clone().addScaledVector(rt, 0.32).addScaledVector(f, -it.r * 0.25).add(new THREE.Vector3(0, -0.02, 0)), yaw: yaw + Math.PI / 2, roll: Math.PI / 2, style: st };
+  // dragged: along the ground behind, by the tail
+  const p = pos.clone().addScaledVector(f, -(it.r * 1.0 + 0.7));
+  p.y = Math.max(world.ground(p.x, p.z), world.waterAt(p.x, p.z) > -Infinity ? world.sea(p.x, p.z) - it.r * 0.1 : -1e9) + it.r * (sp?.beast ? 0.35 : 0.25);
+  return { pos: p, yaw: yaw + Math.PI / 2, roll: sp?.beast ? 0 : Math.PI / 2, style: st };
+}
 const inHold = (b, L) => { const H = b.hull.hold; return !!H && L.y > H.floor - 0.4 && L.y < b.deck && Math.abs(L.x) < H.hw && L.z > H.z0 && L.z < H.z1; };
 
 export class Loot {
@@ -53,8 +85,11 @@ export class Loot {
       boat: null, local: new THREE.Vector3(), held: null, state: 'free', t: 0, flop: o.flop ?? (sp.junk ? 0 : 22),
       inWater: 0, fuse: -1, puff: 0, mimic: sp.beh === 'mimic', opened: false, shockT: 0, stunned: !!o.stunned,
       caughtBy: o.by || null, grounded: false, owner: o.owner || null, v: o.v || null, zone: o.zone || 0, fav: !!o.fav,
+      // alive or dead: five minutes out of the water, three hours in a cooler (a sea beast is tougher)
+      alive: livesSp(sp) && o.alive !== false, air: o.air ?? (sp.beast ? LIFE.beast : LIFE.air), cool: o.cool ?? LIFE.cooler,
     };
-    it.r = sp.junk ? 0.3 : clamp(it.cm / 200, 0.12, 2.5);
+    if (!it.alive) it.flop = 0;
+    it.r = sp.junk ? 0.3 : clamp(it.cm / 200, 0.12, sp.beast ? 7 : 2.5);
     this._mesh(it);
     this.items.set(it.id, it);
     if (o.boat) this._attach(it, o.boat);
@@ -74,7 +109,7 @@ export class Loot {
       m.add(c);
       m.scale.setScalar(0.75);
     } else {
-      m = fishMesh(sp, it.cm / 100, { variant: it.v });
+      m = catchMesh(sp, it.cm / 100, { variant: it.v });
     }
     it.mesh = m;
     it.baseScale = m.scale.x;
@@ -111,7 +146,7 @@ export class Loot {
 
   massOn(boat) {
     let kg = 0;
-    for (const it of this.items.values()) if (it.boat === boat) kg += it.kg;
+    for (const it of this.items.values()) if (it.boat === boat && !FISH_BY_ID[it.sp]?.beast) kg += Math.min(it.kg, 2000);
     return kg;
   }
   onBoat(boat, includeCooler = true) {
@@ -139,7 +174,7 @@ export class Loot {
   /* ---------------- actions (host) ---------------- */
   pickUp(it, pid) {
     if (!it || it.held) return false;
-    if (it.kg > 450) return false;
+    // no catch is too heavy to pick up - the biggest just get dragged
     it.held = pid;
     it.puff = Math.min(it.puff, 0.5);
     return true;
@@ -157,11 +192,27 @@ export class Loot {
   toCooler(it, boat) {
     const cap = [6, 12, 24, 48][boat.cfg.parts?.storage || 0];
     if (this.coolerCount(boat) >= cap) return false;
-    if (it.kg > 60) return false;
+    if (it.kg > 150 || FISH_BY_ID[it.sp]?.beast) return false;
     it.held = null; it.boat = boat; it.state = 'cooler';
     boat.toLocal(boat.toWorld(_v.set(...boat.hull.cooler)), it.local);
     it.mesh.visible = false;
     return true;
+  }
+
+  /** Out of the cooler: it keeps whatever life it had left. */
+  fromCooler(it, pos) {
+    if (!it || it.state !== 'cooler') return false;
+    const b = it.boat;
+    it.state = 'free'; it.mesh.visible = true;
+    it.pos.copy(pos); it.vel.set(0, 1.5, 0);
+    if (b) this._attach(it, b);
+    return true;
+  }
+  /** A fish dies: no more flopping, and no aquarium will take it. */
+  kill(it, why = '') {
+    if (!it || !it.alive) return;
+    it.alive = false; it.flop = 0;
+    Bus.emit('loot:died', { it, why });
   }
 
   /* ---------------- simulation ---------------- */
@@ -170,6 +221,10 @@ export class Loot {
     for (const it of [...this.items.values()]) {
       it.t += dt;
       it.shockT = Math.max(0, it.shockT - dt);
+      if (host && it.alive) {
+        if (it.state === 'cooler') it.cool -= dt; else it.air -= dt;
+        if (it.air <= 0 || it.cool <= 0) this.kill(it, it.state === 'cooler' ? 'cooler' : 'air');
+      }
       this._star(it);
       if (it.held) { this._held(it); continue; }
       if (it.state === 'cooler') { it.mesh.visible = false; continue; }
@@ -190,7 +245,10 @@ export class Loot {
     it.yaw = hp.yaw;
     it.boat = null;
     it.mesh.position.copy(it.pos);
-    it.mesh.rotation.set(0, it.yaw, hp.roll || 0);
+    it.mesh.rotation.set(0, it.yaw, 0);
+    if (!FISH_BY_ID[it.sp]?.beast) it.mesh.rotateX(hp.roll || 0);
+    // a big one sways as you stagger along with it
+    if (hp.style === 'drag' || hp.style === 'shoulder') it.mesh.rotateZ(Math.sin(it.t * 5) * 0.04);
     it.mesh.visible = !hp.hidden;
   }
 
@@ -264,7 +322,7 @@ export class Loot {
     }
     if (inWater) {
       it.inWater += dt;
-      const floaty = sp.junk || it.stunned || sp.beh === 'puffer' || sp.beh === 'bomb';
+      const floaty = sp.junk || it.stunned || sp.beh === 'puffer' || sp.beh === 'bomb' || !it.alive || sp.beast;
       V.y += (floaty ? (sea - P.y) * 25 - V.y * 4 : -2) * dt;
       V.x *= Math.exp(-2 * dt); V.z *= Math.exp(-2 * dt);
       if (it.inWater < dt * 1.5 && Math.abs(V.y) > 2) this.game.fx.splash(P.x, sea, P.z, clamp(it.kg / 20, 0.4, 3));
@@ -296,14 +354,14 @@ export class Loot {
       }
     }
     // cap lifetime of items abandoned on land far from anyone
-    if (it.t > 900 && !it.boat) this.remove(it);
+    if (it.t > 900 && !it.boat && !sp.beast) this.remove(it);
   }
 
   _behave(it, dt) {
     const sp = FISH_BY_ID[it.sp];
     const G2 = this.game;
     // flopping
-    if (it.flop > 0 && !sp.junk && !(it.mimic && !it.opened) && !it.stunned) {
+    if (it.flop > 0 && it.alive && !sp.junk && !sp.beast && !(it.mimic && !it.opened) && !it.stunned) {
       it.flop -= dt;
       if (Math.random() < dt * (0.9 + it.flop * 0.05) && it.kg < 300) {
         const f = clamp(4 / Math.sqrt(it.kg + 1), 0.4, 3.2);
@@ -356,7 +414,7 @@ export class Loot {
     m.rotateX(0);
     m.rotateZ(0);
     // lie on the side: rotate about the fish's own long axis (local X)
-    if (!sp.junk && !(it.mimic && !it.opened) && !isUpright(sp)) m.rotateX(it.roll);
+    if (!sp.junk && !sp.beast && !(it.mimic && !it.opened) && !isUpright(sp)) m.rotateX(it.roll);
     const s = it.baseScale * (sp.beh === 'puffer' ? 1 + it.puff * 0.9 : 1);
     m.scale.setScalar(s);
   }
@@ -366,14 +424,14 @@ export class Loot {
     const out = [];
     for (const it of this.items.values()) {
       out.push([it.id, it.sp, +it.kg.toFixed(2), Math.round(it.cm), +it.pos.x.toFixed(2), +it.pos.y.toFixed(2), +it.pos.z.toFixed(2), +it.yaw.toFixed(2), +it.roll.toFixed(2),
-        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone, it.fav ? 1 : 0]);
+        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone, it.fav ? 1 : 0, it.alive ? 1 : 0, Math.round(it.state === 'cooler' ? it.cool : it.air)]);
     }
     return out;
   }
   applySnapshot(arr) {
     const seen = new Set();
     for (const a of arr) {
-      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone, fav] = a;
+      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone, fav, alive, left] = a;
       seen.add(id);
       let it = this.items.get(id);
       if (!it) it = this.spawn({ id, sp, kg, cm, pos: _v.set(x, y, z), flop: 0, v: v || null, mult: mult || 1, zone: zone || 0 });
@@ -381,6 +439,7 @@ export class Loot {
       it.pos.lerp(_w.set(x, y, z), 0.5);
       it.yaw = yaw; it.roll = roll; it.boat = boatId ? this.game.boatById(boatId) : null;
       it.held = held || null; it.state = cool ? 'cooler' : 'free'; it.puff = puff; it.stunned = !!stunned; it.fav = !!fav;
+      it.alive = !!alive; if (cool) it.cool = left; else it.air = left;
       if (!!opened !== it.opened) { it.opened = !!opened; this._mesh(it); }
       if (fuse && Math.random() < 0.5) this.game.fx.sparks(x, y + 0.2, z, 1, 0xffd24a);
     }
@@ -389,11 +448,11 @@ export class Loot {
 
   /* ---------------- persistence (host) ---------------- */
   saveOnBoat(boat) {
-    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0, d: it.dried ? 1 : 0 }));
+    return this.onBoat(boat).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, x: +it.local.x.toFixed(2), y: +it.local.y.toFixed(2), z: +it.local.z.toFixed(2), c: it.state === 'cooler' ? 1 : 0, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0, d: it.dried ? 1 : 0, a: it.alive ? 1 : 0, ar: Math.round(it.air), cl: Math.round(it.cool) }));
   }
   loadOnBoat(boat, list) {
     for (const o of list || []) {
-      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f, dried: !!o.d });
+      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: boat.toWorld(_v.set(o.x, o.y, o.z)), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f, dried: !!o.d, alive: o.a === undefined ? false : !!o.a, air: o.ar, cool: o.cl });
       if (!it) continue;
       it.boat = boat; it.local.set(o.x, Math.max(o.y, boat.deck + 0.05), o.z); it.vel.set(0, 0, 0);
       if (o.c) { it.state = 'cooler'; it.mesh.visible = false; }

@@ -7,6 +7,7 @@
 
 import * as THREE from '../../lib/three.module.js';
 import { fishMesh } from '../art/FishArt.js';
+import { catchMesh } from '../art/CatchArt.js';
 import { buildRod } from '../art/RodArt.js';
 import { buildBoat } from '../art/BoatArt.js';
 import { buildLeviathan } from '../art/CreatureArt.js';
@@ -66,7 +67,7 @@ export function fishThumb(id, known = true) {
   if (!sp) return '';
   if (!init()) return '';
   const len = sp.junk ? 1 : Math.min(1.2, (sp.cm[0] + sp.cm[1]) / 200);
-  const m = fishMesh(sp, len);
+  const m = sp.beast ? catchMesh(sp, 1.2) : fishMesh(sp, len);
   m.rotation.set(0, 0, 0);
   m.rotation.y = -0.2;
   // flat things (stars, rays, crabs) read best from above, not edge-on

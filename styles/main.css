@@ -577,3 +577,11 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .cost { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 13px; padding: 2px 8px 2px 3px; border-radius: 10px; background: rgba(160, 60, 40, 0.18); }
 .cost.ok { background: rgba(60, 140, 60, 0.2); }
 .cost .gi { font-size: 18px; }
+
+/* ---------- living catches ---------- */
+.catchcard .life { font-weight: 800; font-size: 12px; letter-spacing: 0.06em; color: #2a8a5a; margin: 4px 0; }
+.catchcard .life.dead { color: #8a4a3a; }
+.hand-label.dying { color: #ff8a6a; animation: dyingPulse 0.8s ease-in-out infinite alternate; }
+@keyframes dyingPulse { from { opacity: 0.6; } to { opacity: 1; } }
+.card.dim { opacity: 0.6; }
+.card .note { font-size: 12px; color: var(--ink2); }

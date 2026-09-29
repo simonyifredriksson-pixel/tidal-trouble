@@ -25,6 +25,7 @@ import { LEVIATHANS, LEV_BY_ID, BOTTLES, STORY } from '../data/LeviathanData.js'
 import { REGIONS, PLACES, WORLD, ZONES, MAX_ZONE, HOME_CENTRE, currentAt } from '../world/MapData.js';
 import { CHART_N, CHART_CELL } from '../game/IslandLife.js';
 import { ISLAND_INFO } from '../data/IslandData.js';
+import { livesSp } from '../game/Loot.js';
 import { MATS, MAT_BY_ID, BLUEPRINTS, BP_BY_ID, bpCost, RECIPES } from '../data/BuildData.js';
 import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
@@ -33,6 +34,13 @@ import { worldMapCanvas, mapView, fogCanvas } from './MapArt.js';
 import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js';
 
 const $ = (s, r = document) => r.querySelector(s);
+/** "  -  alive, 4:12 left" / "  -  dead" for a catch (nothing for a boot). */
+const clock = sec => { sec = Math.max(0, Math.round(sec)); return sec >= 3600 ? Math.floor(sec / 3600) + 'h ' + String(Math.floor(sec % 3600 / 60)).padStart(2, '0') + 'm' : Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+function lifeText(it, sp) {
+  if (!sp || !livesSp(sp)) return '';
+  if (!it.alive) return '  -  dead';
+  return '  -  alive, ' + clock(it.state === 'cooler' ? it.cool : it.air) + ' left';
+}
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const EVENT_NAME = { storm: 'Storm', migration: 'Fish Migration', giant: 'Giant Creature', thief: 'Boat Thief', whirlpool: 'Whirlpool', meteor: 'Meteor' };
 const EVENT_SUB = { storm: 'Waves are building. Get back to shore.', migration: 'Thousands of fish. Everyone fish like crazy.', giant: 'Something massive is nearby. Run - or try to catch it.', thief: 'Someone is taking your boat!', whirlpool: 'The ocean is spinning. We should probably leave.', meteor: 'A new, very rare fishing spot just appeared.' };
@@ -228,7 +236,9 @@ export class UI {
     const bait = BAIT_BY_ID[s.bait];
     this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(bait.icon || s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
     this.el('.baitchip').classList.toggle('hide', P.tool !== 'rod');
-    this.el('.hand-label').textContent = P.held ? (FISH_BY_ID[G.loot.get(P.held)?.sp]?.name || '') : s.upg?.[P.tool] ? (P.tool === 'axe' ? 'Iron Axe' : 'Iron Pickaxe') : TOOL_BY_ID[P.tool]?.name || '';
+    const hIt = P.held ? G.loot.get(P.held) : null;
+    this.el('.hand-label').textContent = hIt ? (FISH_BY_ID[hIt.sp]?.name || '') + lifeText(hIt, FISH_BY_ID[hIt.sp]) : s.upg?.[P.tool] ? (P.tool === 'axe' ? 'Iron Axe' : 'Iron Pickaxe') : TOOL_BY_ID[P.tool]?.name || '';
+    this.el('.hand-label').classList.toggle('dying', !!hIt && hIt.alive && hIt.state !== 'cooler' && hIt.air < 60);
     // boat
     const b = P.boat;
     const bp = this.el('.boatpanel');
@@ -395,6 +405,7 @@ export class UI {
       <div class="ztag" style="color:${ZONES[c.zone || 0].css}">${esc(ZONES[c.zone || 0].name)}  -  depth x${ZONES[c.zone || 0].value}</div>
       <h3>${esc(catchName(sp, c.v))}${c.isNew ? '<span class="new">NEW</span>' : c.record ? '<span class="new" style="background:#3a8a3a">RECORD</span>' : ''}</h3>
       <div class="meta"><span>${ic('fish')} <b>${fmtKg(c.kg)}</b></span><span><b>${fmtCm(c.cm)}</b></span><span>${ic('coin')} <b>${fmtInt(c.value)}</b></span></div>
+      ${c.alive === false ? '<div class="life dead">Dead - it can still be sold</div>' : c.alive ? '<div class="life">ALIVE - five minutes to get it into a cooler or an aquarium</div>' : ''}
       <div class="blurb">${esc(sp.blurb || '')}</div>`;
     el.classList.add('on');
     clearTimeout(this._ccT);
@@ -730,7 +741,8 @@ export class UI {
     let body = '';
     if (t.cur === 'rods') {
       const cur = ROD_BY_ID[s.rod];
-      body = `<div class="grid">${order(RODS, 'rod').map(R => {
+      // only the rods this shop actually sells
+      body = `<div class="grid">${order(RODS, 'rod').filter(R => here(R, 'rod')).map(R => {
         const own = s.rods.includes(R.id), eq = s.rod === R.id;
         const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
         return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
@@ -1307,6 +1319,38 @@ export class UI {
         <div class="row">${owned ? '<span class="price">Yours</span>' : `<button class="btn gold" data-act="craft" data-arg="${R.id}" ${can ? '' : 'disabled'}>${ic('hammer')} Make it</button>`}</div></div>`;
     }).join('');
     return this._wrap(`${this._head('hammer', 'The Workbench', 'Iron from the black rock, crystal from the reef, fibre from the bush.', false)}<div class="sbody"><div class="grid">${cards}</div></div>`);
+  }
+
+  /* ---------- an aquarium ---------- */
+  _tank(d) {
+    const G = this.game, s = G.state.s, S = (s.builds || []).find(b => b.id === d.site);
+    const site = S && G.build.sites.get(S.id);
+    if (!site) return this._wrap('<div class="sbody"><div class="empty">Gone.</div></div>');
+    const T = site.bp.tank, list = S.store || [];
+    const len = cm => cm >= 100 ? (cm / 100).toFixed(1) + ' m' : Math.round(cm) + ' cm';
+    const inside = list.map(x => { const sp = FISH_BY_ID[x.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(x.sp)}" alt=""><h3>${esc(catchName(sp, x.v))}</h3><p>${fmtKg(x.kg)}  -  ${len(x.cm)}</p><button class="btn" data-act="tankTake" data-arg="${S.id}|${x.id}">Take it out</button></div>`; }).join('');
+    // living fish you could put in: in your hands, lying near you, on your boat, in its cooler
+    const P = G.player, cands = [];
+    for (const it of G.loot.items.values()) {
+      const sp = FISH_BY_ID[it.sp];
+      if (!livesSp(sp) || !it.alive) continue;
+      if (it.held && it.held !== P.id) continue;
+      if (it.held !== P.id && it.pos.distanceTo(P.pos) > 40) continue;
+      cands.push(it);
+    }
+    cands.sort((a, b) => (b.held === P.id) - (a.held === P.id) || b.cm - a.cm);
+    const avail = cands.slice(0, 24).map(it => { const sp = FISH_BY_ID[it.sp], why = G.build.tankRefuses(site, it); return `<div class="card ${why ? 'dim' : ''}"><img class="thumb" src="${fishThumb(it.sp)}" alt=""><h3>${esc(catchName(sp, it.v))}</h3><p>${len(it.cm)}  -  ${esc(lifeText(it, sp).replace('  -  ', ''))}${it.state === 'cooler' ? ' (in the cooler)' : it.held === P.id ? ' (in your hands)' : ''}</p>${why ? `<p class="note">${esc(why)}</p>` : `<button class="btn gold" data-act="tankPut" data-arg="${S.id}|${it.id}">Put it in</button>`}</div>`; }).join('');
+    return this._wrap(`${this._head('fish', site.bp.name, `${list.length} of ${T.n}  -  catches up to ${len(T.cm)}. Only living fish go in, and in here they live for good.`, false)}
+      <div class="sbody"><h3 style="margin:0 0 8px">In the aquarium</h3>${inside ? `<div class="grid">${inside}</div>` : '<div class="empty">Empty water. Bring it something alive.</div>'}
+      <h3 style="margin:16px 0 8px">Living fish near you</h3>${avail ? `<div class="grid">${avail}</div>` : '<div class="empty">Nothing alive near you. A fish lasts five minutes out of the water - three hours in the boat cooler.</div>'}</div>`);
+  }
+
+  /* ---------- the boat cooler ---------- */
+  _cooler() {
+    const G = this.game, b = G.player.boat || G.boats[0];
+    const list = b ? G.loot.onBoat(b).filter(x => x.state === 'cooler') : [];
+    const rows = list.map(it => { const sp = FISH_BY_ID[it.sp]; return `<div class="card"><img class="thumb" src="${fishThumb(it.sp)}" alt=""><h3>${esc(catchName(sp, it.v))}</h3><p>${fmtKg(it.kg)}${esc(lifeText(it, sp))}</p><button class="btn" data-act="coolTake" data-arg="${it.id}">Take it out</button></div>`; }).join('');
+    return this._wrap(`${this._head('box', 'The Cooler', 'Ice and sea water. A living fish in here stays alive for three hours.', false)}<div class="sbody">${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">Empty.</div>'}</div>`);
   }
 
   /* ---------- a storage chest ---------- */

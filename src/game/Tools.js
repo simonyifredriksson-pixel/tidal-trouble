@@ -140,7 +140,7 @@ export class Tools {
           const hit = G.creatures?.spearHit(prev, S.pos, S);
           if (hit) { S.back = true; S.hit = hit; G.fx.splash(S.pos.x, Math.max(sea, S.pos.y - 0.5), S.pos.z, 1.2); G.audio.thunk(); }
           const it = !hit && G.loot.nearest(S.pos, 1.0, it => !it.held);
-          if (it) { S.back = true; S.carry = it; G.audio.thunk(); }
+          if (it) { S.back = true; S.carry = it; G.audio.thunk(); G.act({ t: 'spearKill', id: it.id }); }
           const npc = !hit && G.events?.spearHitThief(S.pos);
           if (npc) S.back = true;
         }

@@ -31,15 +31,21 @@ function partBuilder(p, seed = 1) {
       break;
     }
     case 'plank': {
-      const c = p.soil ? 0x3a2a1c : p.m === 'iron' ? 0x4a4644 : PLANK;
+      const c = p.soil ? 0x3a2a1c : p.sand ? 0xd8c890 : p.m === 'iron' ? 0x4a4644 : p.m === 'stone' ? 0x8e8e88 : PLANK;
       b.color(c, 0.08).box(w, h, d, 0, 0, 0);
       b.color(shadeHex(c, p.m === 'iron' ? 1.4 : 0.8)).box(w * 1.001, h * 0.2, d * 0.04, 0, h * 0.5, 0);
       break;
     }
-    case 'post':
+    case 'glass':
+      // a pane: thin, with a faint edge so you can see where it is
+      b.color(0xdff4ff).box(w, h, d, 0, 0, 0);
+      break;
+    case 'post': {
+      if (p.m === 'iron') { b.color(0x3e4246, 0.05).box(w * 2, h, w * 2, 0, h / 2, 0); b.color(0x5a5e64).box(w * 2.4, 0.06, w * 2.4, 0, h - 0.03, 0).box(w * 2.4, 0.06, w * 2.4, 0, 0.03, 0); break; }
       b.color(WOOD, 0.08).cyl(w, w * 0.9, 0, h, 6, true);
       b.color(BARK).cyl(w * 1.04, w * 1.04, h * 0.1, h * 0.2, 6, false);
       break;
+    }
     case 'stake':
       b.color(WOOD2, 0.08).cyl(w, w * 0.95, 0, h, 6, false);
       b.color(0xd0a870).cone(w, h, h + w * 2.4, 6);
@@ -62,12 +68,14 @@ function partBuilder(p, seed = 1) {
 
 const geoCache = new Map();
 export function partGeo(p) {
-  const key = [p.k, p.w, p.h, p.d, p.m === 'iron' ? 'i' : '', p.soil ? 's' : ''].join(':');
+  const key = [p.k, p.w, p.h, p.d, p.m, p.soil ? 's' : '', p.sand ? 'd' : ''].join(':');
   if (!geoCache.has(key)) geoCache.set(key, partBuilder(p, key.length).build());
   return geoCache.get(key);
 }
 
 /** The ghost: pale blue where it is waiting for you, gold where you are about to put the next piece. */
+/** Aquarium glass: clear, faintly blue, with a hard highlight. */
+export const GLASS = new THREE.MeshPhongMaterial({ color: 0xcfefff, transparent: true, opacity: 0.16, shininess: 120, specular: 0xffffff, depthWrite: false, side: THREE.DoubleSide });
 export const GHOST = {
   wait: new THREE.MeshBasicMaterial({ color: 0x8ad8ff, transparent: true, opacity: 0.42, depthWrite: false }),
   locked: new THREE.MeshBasicMaterial({ color: 0x8ad8ff, transparent: true, opacity: 0.16, depthWrite: false }),

@@ -21,10 +21,13 @@
 
 import * as THREE from '../../lib/three.module.js';
 import { BLUEPRINTS, BP_BY_ID, MATS, MAT_BY_ID, bpCost, WORMS } from '../data/BuildData.js';
-import { partGeo, GHOST, pieceMesh } from '../art/BuildArt.js';
+import { FISH_BY_ID } from '../data/FishData.js';
+import { partGeo, GHOST, GLASS, pieceMesh } from '../art/BuildArt.js';
 import { MAT } from '../art/Materials.js';
 import { MeshBuilder } from '../art/Geo.js';
 import { rng } from '../core/Util.js';
+import { Aquariums } from './Aquarium.js';
+import { uid as uid2 } from '../core/Util.js';
 import { heightAt } from '../world/Terrain.js';
 import { uid, clamp } from '../core/Util.js';
 
@@ -50,6 +53,7 @@ export class Build {
     this.flyers = [];
     this.syncT = 0;
     this.lampT = 0;
+    this.aq = new Aquariums(game);
   }
 
   /* ---------------- the save <-> the world ---------------- */
@@ -96,11 +100,12 @@ export class Build {
   _setPart(site, i, done, fly) {
     const G = this.game, P = site.parts[i], p = P.p;
     P.done = done;
-    P.mesh.material = done ? (p.m === 'crystal' ? MAT.glow : MAT.solid) : GHOST.wait;
-    P.mesh.castShadow = done; P.mesh.receiveShadow = done;
+    P.mesh.material = done ? (p.k === 'glass' ? GLASS : p.m === 'crystal' ? MAT.glow : MAT.solid) : GHOST.wait;
+    P.mesh.castShadow = done && p.k !== 'glass'; P.mesh.receiveShadow = done && p.k !== 'glass';
+    P.mesh.renderOrder = done && p.k === 'glass' ? 3 : 0;
     for (const c of P.cols) G.world.colliders.remove(c);
     P.cols = [];
-    if (done && (p.solid || p.floor)) {
+    if (done && (p.solid || p.floor || p.k === 'glass')) {
       const S = site.S, ca = Math.cos(S.r), sa = Math.sin(S.r);
       const wx = S.x + p.x * ca + p.z * sa, wz = S.z - p.x * sa + p.z * ca;
       const y0 = S.y + p.y;
@@ -307,6 +312,11 @@ export class Build {
       if (P) { this._setPart(site, e.i, true, true); }
       if (e.by === G.player.id && this.held && !((G.state.s.mats || {})[this.held] > (G.isHost ? 0 : 1))) { this.held = null; G.vm.heldMat = null; }
     }
+    if (e.k === 'tank' && site) {
+      const c = site.group.position, T = site.bp.tank;
+      G.fx.splash(c.x, c.y + T.y0 + T.h, c.z, 0.8); G.audio.splash(0.8, c);
+      if (e.by === G.player.id || e.by === G.net?.selfId) G.ui.toast((FISH_BY_ID[e.sp]?.name || 'It') + ' is in the ' + site.bp.name + '. It will live there as long as you like.', 'good');
+    }
     if (e.k === 'done' && site) {
       const c = site.group.position;
       G.fx.confetti(c.x, c.y + 2, c.z, 60);
@@ -320,6 +330,7 @@ export class Build {
     const G = this.game, P = G.player;
     this.syncT -= dt;
     if (this.syncT <= 0) { this.syncT = 0.5; this._sync(); this._racks(); }
+    this.aq.update(dt, this.sites);
     // pieces in the air
     for (let i = this.flyers.length - 1; i >= 0; i--) {
       const F = this.flyers[i];
@@ -453,6 +464,57 @@ export class Build {
         return m;
       });
     }
+  }
+
+  /** The finished aquarium you are standing at (for E), measured from its glass, not its middle. */
+  tankNear(pos, r = 2.2) {
+    let best = null, bd = r;
+    for (const site of this.sites.values()) {
+      const T = site.bp.tank;
+      if (!T || !site.complete) continue;
+      const S = site.S, dx = pos.x - S.x, dz = pos.z - S.z, ca = Math.cos(S.r), sa = Math.sin(S.r);
+      const lx = dx * ca - dz * sa, lz = dx * sa + dz * ca;
+      const d = T.round ? Math.abs(Math.hypot(lx, lz) - T.r) : Math.hypot(Math.max(0, Math.abs(lx) - T.w / 2), Math.max(0, Math.abs(lz) - T.d / 2));
+      if (d < bd) { bd = d; best = site; }
+    }
+    return best;
+  }
+  /** Can this catch go in this aquarium? null if it can, otherwise why not. */
+  tankRefuses(site, it) {
+    const T = site.bp.tank, sp = FISH_BY_ID[it.sp];
+    if (!T) return 'That is not an aquarium.';
+    if (!sp || it.alive === false) return 'It is dead. Only living fish go in an aquarium.';
+    if ((site.S.store || []).length >= T.n) return 'This aquarium is full (' + T.n + ').';
+    if (it.cm > T.cm) return `Too big for the ${site.bp.name} - it takes catches up to ${T.cm >= 100 ? (T.cm / 100).toFixed(1) + ' m' : T.cm + ' cm'}.`;
+    return null;
+  }
+  hostTankPut(c, from) {
+    const G = this.game, s = G.state.s, P = G.playerById(from) || G.player;
+    const S = (s.builds || []).find(b => b.id === c.site), site = S && this.sites.get(S.id);
+    const it = G.loot.get(c.id);
+    if (!site || !it) return;
+    const why = this.tankRefuses(site, it);
+    if (why) { G.tell(from, why, 'warn'); return; }
+    if (it.held && it.held !== from) { G.tell(from, 'Someone else has that one.', 'warn'); return; }
+    if (it.pos.distanceTo(new THREE.Vector3(S.x, S.y, S.z)) > 60 && it.held !== from) { G.tell(from, 'Bring it closer first.', 'warn'); return; }
+    S.store = S.store || [];
+    S.store.push({ id: uid2('q'), sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav });
+    if (P.held === it.id) P.held = null;
+    G.loot.remove(it, 'splash');
+    G._saveDirty = true;
+    G._everyone({ t: 'build', k: 'tank', id: S.id, sp: it.sp, by: from });
+    s.stats.tanked = (s.stats.tanked || 0) + 1;
+  }
+  hostTankTake(c, from) {
+    const G = this.game, s = G.state.s, P = G.playerById(from) || G.player;
+    const S = (s.builds || []).find(b => b.id === c.site);
+    const i = S?.store?.findIndex(x => x.id === c.fid);
+    if (!S || i < 0) return;
+    const x = S.store.splice(i, 1)[0];
+    const it = G.loot.spawn({ ...x, id: undefined, alive: true, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), vel: new THREE.Vector3(0, 1, 0), flop: 6 });
+    if (it && !P.held && G.loot.pickUp(it, from)) P.held = it.id;
+    G._saveDirty = true;
+    G._everyone({ t: 'build', k: 'tankOut', id: S.id });
   }
 
   /** Is there a lit campfire within r of a point? (warmth at Frostfall) */

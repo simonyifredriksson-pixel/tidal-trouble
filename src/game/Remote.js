@@ -10,6 +10,7 @@ import { Character, PLAYER_LOOKS } from '../art/Character.js';
 import { buildRod, buildBobber } from '../art/RodArt.js';
 import { ROD_BY_ID } from '../data/GearData.js';
 import { damp, dampAngle } from '../core/Util.js';
+import { carryPose } from './Loot.js';
 
 const COLORS = ['#ffd27a', '#8af0ff', '#b8f08a', '#f0a8ff'];
 const _v = new THREE.Vector3();
@@ -86,6 +87,9 @@ export class Remote {
     else if (f && f.s !== 'idle' && this.anim === 'idle') anim = 'fish';
     if (this.anim === 'fall') { if (!this.c.fallT) this.c.knock(); anim = 'idle'; }
     if (this.anim === 'cheer') anim = 'cheer';
+    this._carryT = (this._carryT || 0) - dt;
+    if (this._carryT <= 0) { this._carryT = 0.25; this.holding = [...G.loot.items.values()].some(x => x.held === this.id); }
+    if (this.holding && (anim === 'idle' || anim === 'walk')) anim = this.carry === 'drag' && anim === 'walk' ? 'walk' : 'carry';
     this.c.update(dt, anim, this.anim === 'walk' ? 2 : this.anim === 'run' ? 5 : 0);
     this.rod.group.visible = this.tool === 'rod' && this.mode !== 'swim';
     // their line
@@ -100,12 +104,7 @@ export class Remote {
     }
   }
 
-  holdPoint(it) {
-    const f = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-    const heavy = it.kg > 40;
-    const p = heavy ? this.pos.clone().addScaledVector(f, 1.1).setY(this.pos.y + 0.2) : this.pos.clone().addScaledVector(f, 0.45).setY(this.pos.y + 1.1);
-    return { pos: p, yaw: this.yaw + Math.PI / 2, roll: heavy ? Math.PI / 2 : 0.3 };
-  }
+  holdPoint(it) { const eye = this.pos.clone().setY(this.pos.y + 1.55); const hp = carryPose(it, this.pos, eye, this.yaw, 0, this.game.world); this.carry = hp.style; return hp; }
 
   dispose() {
     this.game.scene.remove(this.c.root, this.bob, this.line);

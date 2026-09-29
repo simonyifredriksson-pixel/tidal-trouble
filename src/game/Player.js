@@ -19,6 +19,7 @@ import * as THREE from '../../lib/three.module.js';
 import { clamp, damp, lerp, wrapAngle } from '../core/Util.js';
 import { Bus } from '../core/Bus.js';
 import { WORLD, HOME_CENTRE } from '../world/MapData.js';
+import { carryStyle, carryPose, CARRY_SPEED } from './Loot.js';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -146,9 +147,10 @@ export class Player {
       dive = input.held('KeyQ');
     }
     this.sprint = sprint;
-    const heavy = this.held && G.loot.get(this.held)?.kg > 40;
+    const heldIt = this.held && G.loot.get(this.held), carry = heldIt ? carryStyle(heldIt) : 'hands';
+    this.carry = carry;
     let spd = this.mode === 'swim' ? (G.state.has('wreckdiver') ? 3.6 : G.state.has('diving') ? 3.1 : 2.1) * (this.exhausted ? 0.22 : 1) : (sprint ? 6.2 : 3.7) * (1 - this.wade * 0.45);
-    if (heavy) spd = Math.min(spd, 1.8);
+    spd = Math.min(spd, CARRY_SPEED[carry]);
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
@@ -457,18 +459,13 @@ export class Player {
   applyCamera(cam) {
     cam.position.copy(this.eye);
     cam.rotation.order = 'YXZ';
-    cam.rotation.set(clamp(this.pitch + (this.pitchOff || 0), -1.5, 1.5), this.yaw, this.roll + Math.sin(this.bob) * 0.006 * this.bobAmt);
+    const strain = this.carry === 'drag' ? 1 : this.carry === 'shoulder' ? 0.6 : 0;
+    const heave = strain * (this.speed > 0.2 ? 1 : 0.3) * Math.sin(this.game.world.time * 3.2);
+    cam.rotation.set(clamp(this.pitch + (this.pitchOff || 0) - strain * 0.04 + heave * 0.012, -1.5, 1.5), this.yaw, this.roll + Math.sin(this.bob) * 0.006 * this.bobAmt + heave * 0.02);
   }
 
   /** Where a held item sits (world). */
-  holdPoint(it) {
-    const f = this.flatForward(new THREE.Vector3());
-    const heavy = it.kg > 40;
-    const p = heavy
-      ? this.pos.clone().addScaledVector(f, 1.1 + it.r * 0.4).setY(this.pos.y + 0.2)
-      : this.eye.clone().addScaledVector(this.forward(new THREE.Vector3()), 0.75).add(new THREE.Vector3(0, -0.35, 0)).addScaledVector(new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)), 0.12);
-    return { pos: p, yaw: this.yaw + Math.PI / 2, roll: heavy ? Math.PI / 2 : 0.3 };
-  }
+  holdPoint(it) { return carryPose(it, this.pos, this.eye, this.yaw, this.pitch, this.game.world); }
 
   snapshot() {
     return {

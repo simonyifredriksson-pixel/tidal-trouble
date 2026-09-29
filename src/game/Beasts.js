@@ -22,13 +22,7 @@ import { clamp, damp, wrapAngle, lerp, smoothstep } from '../core/Util.js';
 
 const _v = new THREE.Vector3(), _e = new THREE.Euler();
 
-for (const D of BEASTS) {
-  FISH_BY_ID['beast:' + D.id] = {
-    id: 'beast:' + D.id, name: D.name, rarity: 'legendary', great: D.id, beast: true, beh: null, where: [], water: 'any', time: 'any', bait: {},
-    kg: [1, 1], cm: [D.size * 100, D.size * 100], value: D.reward, fight: { power: 5, stamina: 9, erratic: 0.9, jump: 0 },
-    art: { h: 0.2, w: 0.12, back: 0x3a3e44, belly: 0xa8a8a8, fin: 0x2a2e34, pat: 'none', patCol: 0xffffff, tail: 'fork', extras: [] }, blurb: D.blurb,
-  };
-}
+import '../data/BeastCatch.js';     // the beasts' species: what the fight is against, and the catch it leaves
 
 /* The cycle each beast runs: [phase, seconds, how high it rides (x size, 0 = at the surface)]. */
 const CYCLE = {
@@ -343,7 +337,7 @@ export class Beasts {
     this.b = null; this.cool = 600;
     G.award('beast:' + D.id, from);
     const pay = first ? D.reward : Math.round(D.reward * 0.35);
-    G.state.earn(pay, 'beast');
+    G.landBeast('beast:' + D.id, from, first);
     G._everyone({ t: 'greatCaught', id: D.id, beast: true, first, by: G.playerById(from)?.name || 'Someone', reward: pay });
     G._changed();
   }

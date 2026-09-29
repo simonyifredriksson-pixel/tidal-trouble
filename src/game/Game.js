@@ -217,12 +217,12 @@ export class Game {
         if (it && it.held === from) { this.loot.drop(it, new THREE.Vector3(...c.pos), new THREE.Vector3(...c.vel)); if (me) P.held = null; else P.held = null; }
         break;
       case 'cooler':
-        if (it && boat && this.loot.toCooler(it, boat)) { P.held = null; this.tell(from, 'Stored in the cooler.', 'good'); }
-        else this.tell(from, it && it.kg > 60 ? 'Far too big for the cooler.' : 'The cooler is full. The rest goes on the deck.', 'warn');
+        if (it && boat && this.loot.toCooler(it, boat)) { P.held = null; this.tell(from, it.alive ? 'In the cooler: it will stay alive for three hours.' : 'Stored in the cooler.', 'good'); }
+        else this.tell(from, it && (it.kg > 150 || FISH_BY_ID[it.sp]?.beast) ? 'Far too big for the cooler.' : 'The cooler is full. The rest goes on the deck.', 'warn');
         break;
       case 'mount': {
         if (!it || c.slot == null) break;
-        s.cabin.slots[c.slot] = { sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm) };
+        s.cabin.slots[c.slot] = { sp: it.sp, kg: +it.kg.toFixed(2), cm: Math.round(it.cm), real: 1, v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav };
         this.loot.remove(it); P.held = null;
         this.tell(from, 'Mounted on the wall. Beautiful.', 'good');
         this.fx.confetti(P.pos.x, P.pos.y + 1.5, P.pos.z, 30);
@@ -233,7 +233,7 @@ export class Game {
         if (!it) break;
         const i = s.cabin.yard.findIndex(x => !x);
         if (i < 0) { this.tell(from, 'The trophy yard is full.', 'warn'); break; }
-        s.cabin.yard[i] = { sp: it.sp, kg: +it.kg.toFixed(1), cm: Math.round(it.cm) };
+        s.cabin.yard[i] = { sp: it.sp, kg: +it.kg.toFixed(1), cm: Math.round(it.cm), real: 1, v: it.v || null, zone: it.zone || 0, mult: it.mult || 1, fav: !!it.fav };
         this.loot.remove(it); P.held = null;
         this.tell(from, 'Hauled to your trophy yard.', 'good');
         this._changed();
@@ -245,7 +245,7 @@ export class Game {
       case 'netFish': {
         const sp = FISH_BY_ID[c.c.sp];
         const pos = P.pos.clone().add(new THREE.Vector3(0, 1.4, 0));
-        this.landCatch({ sp: sp.id, kg: c.c.kg, cm: c.c.cm, pos, vel: new THREE.Vector3(0, 2, 0), by: from, size: c.c.size, v: c.c.v, zone: c.c.zone, mult: c.c.mult });
+        this.landCatch({ sp: sp.id, kg: c.c.kg, cm: c.c.cm, pos, vel: new THREE.Vector3(0, 2, 0), by: from, size: c.c.size, v: c.c.v, zone: c.c.zone, mult: c.c.mult, alive: !c.spear });
         if (c.thief) { const n = 4 + Math.floor(Math.random() * 5); S.addBait(c.thief, n); S.addBait(BAITS[Math.floor(Math.random() * BAITS.length)].id, 3); this.tell(from, `The thief's hoard: ${n} ${BAIT_BY_ID[c.thief].name} and more!`, 'good'); }
         break;
       }
@@ -326,7 +326,7 @@ export class Game {
         else {
           const g = this.creatures.giants.get(c.id);
           if (g) {
-            g.stun = 3;
+            g.stun = 3; g.harpooned = true;
             this.fx.splash(g.pos.x, 0, g.pos.z, 2);
             if (g.hooked) this._staminaHit(g.hooked, c.dmg * 0.9);
             else g.state = 'charge';
@@ -383,6 +383,46 @@ export class Game {
       }
       case 'buy': this._buy(c, from); break;
       case 'heldGiant': break;
+      case 'spearKill': if (it) this.loot.kill(it, 'harpoon'); break;
+      case 'tankPut': this.build.hostTankPut(c, from); break;
+      case 'tankTake': this.build.hostTankTake(c, from); break;
+      case 'glassMake': {
+        s.mats = s.mats || {};
+        if ((s.mats.stone || 0) < 3 || (s.mats.fibre || 0) < 1) { this.tell(from, 'Glass takes 3 stone and 1 fibre.', 'warn'); break; }
+        s.mats.stone -= 3; s.mats.fibre -= 1; s.mats.glass = (s.mats.glass || 0) + 2;
+        this.tell(from, 'You melt it down in the embers: 2 glass panes.', 'good');
+        this._saveDirty = true;
+        break;
+      }
+      case 'coolTake': {
+        const x = this.loot.get(c.id);
+        if (!x || x.state !== 'cooler') break;
+        this.loot.fromCooler(x, P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)));
+        if (!P.held && this.loot.pickUp(x, from)) P.held = x.id;
+        this.tell(from, 'Out of the cooler' + (x.alive ? ' - still alive.' : '.'), 'good');
+        break;
+      }
+      case 'unmount': {
+        const m = s.cabin.slots[c.slot];
+        if (!m) break;
+        if (!m.real) { s.cabin.slots[c.slot] = null; this.tell(from, 'You take the replica down.', 'info'); this._changed(); break; }
+        s.cabin.slots[c.slot] = null;
+        const x = this.loot.spawn({ sp: m.sp, kg: m.kg, cm: m.cm, v: m.v, zone: m.zone, mult: m.mult, fav: m.fav, alive: false, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), flop: 0 });
+        if (x && !P.held && this.loot.pickUp(x, from)) P.held = x.id;
+        this.tell(from, 'You take it down off the wall.', 'good');
+        this._changed();
+        break;
+      }
+      case 'yardTake': {
+        const m = s.cabin.yard[c.i];
+        if (!m || !m.sp) break;
+        s.cabin.yard[c.i] = null;
+        const x = this.loot.spawn({ sp: m.sp, kg: m.kg, cm: m.cm, v: m.v, zone: m.zone, mult: m.mult, fav: m.fav, alive: false, pos: P.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), flop: 0 });
+        if (x && !P.held && this.loot.pickUp(x, from)) P.held = x.id;
+        this.tell(from, 'You take it off its plinth.', 'good');
+        this._changed();
+        break;
+      }
       // gathering and building
       case 'hit': this.gather.hostHit(c, from); break;
       case 'mpick': this.gather.hostPick(c, from); break;
@@ -446,6 +486,7 @@ export class Game {
         for (const [k, n] of Object.entries(R.cost)) s.mats[k] -= n;
         if (R.up) { (s.upg = s.upg || {})[R.up] = 1; this._everyone({ t: 'toolUp' }); }
         if (R.bait) S.addBait(R.bait, R.n);
+        if (R.mat) s.mats[R.mat] = (s.mats[R.mat] || 0) + R.n;
         this.tell(from, R.name + ' - made.', 'good');
         this._saveDirty = true;
         break;
@@ -581,9 +622,10 @@ export class Game {
 
   /* ================= catching ================= */
   landCatch(o) {
-    if (!this.isHost) { this.net.sendAction({ t: 'catch', sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos.toArray(), vel: o.vel.toArray(), slap: o.slap, size: o.size, v: o.v, zone: o.zone, mult: o.mult, ashore: o.ashore }); return; }
+    if (!this.isHost) { this.net.sendAction({ t: 'catch', sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos.toArray(), vel: o.vel.toArray(), slap: o.slap, size: o.size, v: o.v, zone: o.zone, mult: o.mult, ashore: o.ashore, alive: o.alive }); return; }
     const sp = FISH_BY_ID[o.sp];
-    const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by, v: o.v || null, zone: o.zone || 0, mult: o.mult || 1 });
+    // a fish on a hook comes up alive; a harpooned one does not
+    const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by, v: o.v || null, zone: o.zone || 0, mult: o.mult || 1, alive: o.alive !== false });
     if (it && o.ashore) { it.ashore = new THREE.Vector3(...o.ashore); it.ashoreT = 12; }
     if (!it) return;
     // record first, announce second
@@ -653,8 +695,26 @@ export class Game {
     const pos = (g ? g.pos.clone() : P.pos.clone()).setY(1);
     const target = P.pos.clone();
     const vel = new THREE.Vector3((target.x - pos.x) / 1.2, 7, (target.z - pos.z) / 1.2);
-    this.landCatch({ sp: c.sp, kg: c.kg, cm: c.cm, pos, vel, by: from, size: 1 });
+    this.landCatch({ sp: c.sp, kg: c.kg, cm: c.cm, pos, vel, by: from, size: 1, alive: !(g && g.harpooned) });
     this.fx.eruption(pos.x, 0, pos.z, 5);
+  }
+
+  /** Host: a sea beast has been landed. It is lying in the water next to whoever caught it - theirs to drag home, sell or keep. */
+  landBeast(id, from, first) {
+    const sp = FISH_BY_ID[id];
+    if (!sp) return null;
+    const P = this.playerById(from) || this.player;
+    const L = sp.cm[0] / 100;
+    let pos;
+    if (P.boat) {
+      const b = P.boat, side = new THREE.Vector3(Math.cos(b.heading), 0, -Math.sin(b.heading));
+      pos = b.pos.clone().addScaledVector(side, b.hull.hw + L * 0.5 + 1.5);
+    } else pos = P.pos.clone().addScaledVector(P.flatForward(new THREE.Vector3()), L * 0.5 + 2.5);
+    pos.y = Math.max(this.world.ground(pos.x, pos.z), this.world.sea(pos.x, pos.z)) + 0.5;
+    const it = this.loot.spawn({ sp: id, kg: sp.kg[0], cm: sp.cm[0], pos, vel: new THREE.Vector3(0, 2, 0), by: from, zone: 0, mult: first ? 1 : 0.35, alive: true, flop: 0 });
+    this.fx.eruption(pos.x, this.world.sea(pos.x, pos.z), pos.z, L * 1.5);
+    this.tell(from, 'It is yours. Drag it home (F) - sell it to a fish seller, or keep it in a big enough aquarium.', 'good');
+    return it;
   }
 
   /** Run something on every peer (and here). */
@@ -929,15 +989,16 @@ export class Game {
     const m = at || this.world.settlement.anchors.market.pos;
     if (it.held) return true;
     if (it.boat && this.boatAtMarket(m)) return true;
-    return m && it.pos.distanceTo(m) < 9;
+    return m && it.pos.distanceTo(m) < 9 + (it.r || 0);
   }
-  sellable(at = null, withFavs = false, by = null) {
+  sellable(at = null, withFavs = false, by = null, withBeasts = false) {
     const out = [];
     for (const it of this.loot.items.values()) {
       const sp = FISH_BY_ID[it.sp];
       if (!sp || sp.beh === 'chest' || sp.beh === 'strongbox' || (sp.beh === 'mimic' && !it.opened)) continue;
       if (it.fav && !withFavs) continue;
       if (it.held && by && it.held !== by) continue;       // never sell a fish out of a crewmate's hands
+      if (sp.beast && !withBeasts) continue;               // a sea beast is only ever sold on purpose
       if (this._canSell(it, at)) out.push(it);
     }
     return out.sort((a, b) => this.loot.value(b) - this.loot.value(a));
@@ -1324,8 +1385,8 @@ export class Game {
         const at = P.eye.clone().addScaledVector(f, 1.3);
         const it = this.loot.nearest(at, 1.8) || this.loot.nearest(P.pos, 1.6);
         if (it) {
-          if (it.kg > 450) this.ui.toast('Way too heavy to move. Sell it where it lies.', 'warn');
-          else { this.act({ t: 'pickup', id: it.id }); this._predictT = 0.4; }
+          this.act({ t: 'pickup', id: it.id }); this._predictT = 0.4;
+          if (it.kg > 400 || FISH_BY_ID[it.sp]?.beast) this.ui.toast('You get a grip on it and start to drag. Slowly.', 'info');
         }
       }
     }
@@ -1381,6 +1442,12 @@ export class Game {
         if (slot !== null && P.pos.distanceTo(this.world.settlement.anchors.cabinInside) < 5) opt.push({ label: 'Mount it on the wall', run: () => this.act({ t: 'mount', id: it.id, slot }) });
         const yard = this.world.settlement.cabin.yard.find(y => y.pos.distanceTo(P.pos) < 3);
         if (yard && it.kg > 20) opt.push({ label: 'Put it on display in the trophy yard', run: () => this.act({ t: 'yardPut', id: it.id }) });
+      } else {
+        // empty hands: open the cooler, take a fish down off the wall or out of the yard
+        const slot = this.cabin.nearestSlot(look, 1.2);
+        if (slot !== null && s.cabin.slots[slot] && P.pos.distanceTo(this.world.settlement.anchors.cabinInside) < 5) opt.push({ label: s.cabin.slots[slot].real ? 'Take it down off the wall' : 'Take the replica down', icon: 'fish', run: () => this.act({ t: 'unmount', slot }) });
+        const yi = this.world.settlement.cabin.yard.findIndex(y => y.pos.distanceTo(P.pos) < 2.6);
+        if (yi >= 0 && s.cabin.yard[yi]?.sp) opt.push({ label: 'Take the ' + (FISH_BY_ID[s.cabin.yard[yi].sp]?.name || 'catch') + ' off its plinth', icon: 'fish', run: () => this.act({ t: 'yardTake', i: yi }) });
       }
       // loot to open
       const lo = this.loot.nearest(look, 1.6, x => FISH_BY_ID[x.sp].beh === 'chest' || FISH_BY_ID[x.sp].beh === 'strongbox' || (FISH_BY_ID[x.sp].beh === 'mimic' && !x.opened));
@@ -1417,6 +1484,8 @@ export class Game {
           }
         }
         if (dM >= dA) gun();
+        // the cooler, last: the helm and the anchor come first when they are right there too
+        if (!P.held && Math.hypot(L.x - b.hull.cooler[0], L.z - b.hull.cooler[2]) < 1.4) { const n = this.loot.coolerCount(b); if (n) opt.push({ label: `Open the cooler (${n} inside)`, icon: 'box', run: () => this.ui.open('cooler', {}) }); }
       }
       // a blueprint piece in front of you
       const BA = !b && this.build.aim;
@@ -1431,6 +1500,7 @@ export class Game {
       if (site) {
         const id = site.bp.id;
         if (id === 'campfire') opt.push({ label: this.isNight() ? 'Rest by the fire until morning' : 'Sit by the fire a while', icon: 'fire', run: () => this.act({ t: 'restFire' }) });
+        if (id === 'campfire' && !it) opt.push({ label: 'Melt glass in the embers (3 stone, 1 fibre)', icon: 'glass', run: () => this.act({ t: 'glassMake' }) });
         if (id === 'chest') {
           if (it) opt.push({ label: `Put it in the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.act({ t: 'chestPut', site: site.S.id, id: it.id }) });
           else opt.push({ label: `Open the chest (${(site.S.store || []).length} of 16)`, icon: 'chest', run: () => this.ui.open('chest', { site: site.S.id }) });
@@ -1446,6 +1516,13 @@ export class Game {
         if (id === 'baitstation' && it) opt.push({ label: 'Cut it up for bait', icon: 'pieces', run: () => { this.act({ t: 'baitMake', id: it.id }); this.audio.chopWood(); } });
         if (id === 'shelter') opt.push({ label: this.tod > 0.72 || this.tod < 0.2 ? 'Sleep in your shelter' : 'Your shelter (you will wake up here)', icon: 'bed', run: () => this.act({ t: 'sleepShelter', site: site.S.id }) });
         if (id === 'bench') opt.push({ label: 'Sit and watch the water', icon: 'seat', run: () => this.ui.subtitle('You sit a while. The sea goes on and on, further than anyone has ever sailed and come back.', 5) });
+      }
+      // an aquarium: put in the living fish in your hands, or look after what is in there
+      const tank = !b && this.build.tankNear(P.pos);
+      if (tank) {
+        const T = tank.bp.tank, n = (tank.S.store || []).length;
+        if (it) { const why = this.build.tankRefuses(tank, it); opt.unshift({ label: why ? why : `Put the ${FISH_BY_ID[it.sp].name} in the ${tank.bp.name}`, icon: 'fish', run: () => { if (!why) this.act({ t: 'tankPut', site: tank.S.id, id: it.id }); } }); }
+        else opt.push({ label: `The ${tank.bp.name} (${n} of ${T.n})`, icon: 'fish', run: () => this.ui.open('tank', { site: tank.S.id }) });
       }
       // the watchtower: a ladder up, and the view from the top
       for (const S2 of this.build.sites.values()) {
@@ -1663,6 +1740,14 @@ export class Game {
       { label: 'View fishing rods', icon: 'rod', cb: () => this._dRods(n) },
     ];
     if (d.extra) opts.push({ label: d.extra.label, icon: d.extra.icon, cb: () => this.ui.open(d.extra.arg, { shop: d.shop }) });
+    // a sea beast at their feet: they want it, and they say so
+    for (const x of this.sellable(n.pos, false, this.player.id, true).filter(x => FISH_BY_ID[x.sp].beast).slice(0, 2)) {
+      const v = this.loot.value(x), nm = FISH_BY_ID[x.sp].name;
+      opts.unshift({ label: `About the ${nm}...`, icon: 'coin', cb: () => this.ui.dialogue(n, `Is that - that is ${nm}. I have heard the stories my whole life. I will give you ${fmtInt(v)} coins for it, right now, and I will not be the last to ask.`, [
+        { label: `Sell it (${fmtInt(v)} coins)`, icon: 'coin', cb: () => { this._pendingSale = { npc: d.id, favs: 0 }; this.act({ t: 'sell', id: x.id, at: d.id }); } },
+        { label: 'No. I am keeping it.', icon: 'heart', cb: () => this._sellerMenu(n, 'Keeping it? I would too. Mind you find a tank big enough.') },
+      ]) });
+    }
     if (d.lore) opts.push({ label: 'Tell me more', icon: 'ear', cb: () => this._sellerMenu(n, this.npcs.talk(n)) });
     opts.push({ label: 'Never mind', bye: true, line: pick(say.bye) });
     this.ui.dialogue(n, line, opts);
@@ -2056,8 +2141,8 @@ export class Game {
         break;
       }
       case 'greatCaught': {
-        if (e.beast) { const D = BEAST_BY_ID[e.id]; this.ui.worldEvent(D.name.toUpperCase() + ' HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  ' + fmtInt(e.reward) + ' coins', D.title, true); this.audio.fanfare(3); break; }
-        this.ui.worldEvent(e.id === 'kraken' ? 'THE KRAKEN HAS BEEN CAUGHT' : 'A LEVIATHAN HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  ' + fmtInt(e.reward) + ' coins', (GREAT_BY_ID[e.id] || KRAKEN).name, true);
+        if (e.beast) { const D = BEAST_BY_ID[e.id]; this.ui.worldEvent(D.name.toUpperCase() + ' HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  worth ' + fmtInt(e.reward) + ' coins', D.title, true); this.audio.fanfare(3); break; }
+        this.ui.worldEvent(e.id === 'kraken' ? 'THE KRAKEN HAS BEEN CAUGHT' : 'A LEVIATHAN HAS BEEN CAUGHT', e.by + (e.first ? ' did the impossible' : ' did it again') + '  -  worth ' + fmtInt(e.reward) + ' coins', (GREAT_BY_ID[e.id] || KRAKEN).name, true);
         this.audio.fanfare(3);
         for (let k = 0; k < 5; k++) this.fx.confetti(this.player.pos.x + (Math.random() - 0.5) * 6, this.player.pos.y + 2, this.player.pos.z + (Math.random() - 0.5) * 6, 80);
         break;
@@ -2121,6 +2206,9 @@ export class Game {
       case 'open': this.ui.open(arg, {}); if (arg === 'guild' && this.state.s.tut === 4) this._tut(5); break;
       case 'bpPick': this.ui.close(); this.build.choose(arg); break;
       case 'craft': this.act({ t: 'craft', id: arg }); break;
+      case 'tankPut': { const [site, id] = String(arg).split('|'); this.act({ t: 'tankPut', site, id }); break; }
+      case 'tankTake': { const [site, fid] = String(arg).split('|'); this.act({ t: 'tankTake', site, fid }); break; }
+      case 'coolTake': this.act({ t: 'coolTake', id: arg }); break;
       case 'chestTake': { const [site, i] = String(arg).split(':'); this.act({ t: 'chestTake', site, i: +i }); break; }
       case 'buyRod': buy('rod', arg); break;
       case 'equipRod': buy('equipRod', arg); break;

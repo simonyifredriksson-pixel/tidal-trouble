@@ -863,7 +863,6 @@ export async function runScripts(names, game) {
         const K = G.great.startKraken(b);
         ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
         step(2.5);
-        log('INFO kraken ' + (G.great.kraken === K) + ' ' + K.phase + ' arms ' + JSON.stringify(K.arms.map(A => [A.st, +A.t.toFixed(1)])) + ' meshes ' + G.great.m.arms.length + ' boat ' + !!G.boatById(K.boat) + ' crew ' + (P.boat === b));
         ok(K.arms.every(A => A.st === 'grip') && G.great.m.arms.length === 3, 'they grip the boat');
         { const T = G.great.m.arms[0]; const tip = T.tip.getWorldPosition(V()), root = T.group.getWorldPosition(V()); log('INFO arm curl seg5 ' + T.segs[5].rotation.z.toFixed(2) + ' tip-root ' + tip.clone().sub(root).toArray().map(v => v.toFixed(1)).join(',') + ' boat ' + b.pos.x.toFixed(0) + ',' + b.pos.z.toFixed(0)); }
         const v0 = b.speed();
@@ -1188,8 +1187,85 @@ export async function runScripts(names, game) {
             ok(tree && blows <= 3, 'with the iron axe a pine comes down in ' + blows + ' blows instead of six');
             G.act({ t: 'bdel', id: bench2.S.id }); step(0.3);
           } else ok(false, 'room for a workbench');
-          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 13, 'the blueprint book lists thirteen buildings'); G.ui.close();
+          G.ui.open('plans', {}); ok(document.querySelectorAll('.card.bp').length === 19, 'the blueprint book lists nineteen buildings, six of them aquariums'); G.ui.close();
         }
+      }
+      if (name === 'aquarium') {
+        const s = G.state.s, B = G.build, L = G.loot, bb = G.boats[0];
+        const Lm = await import('../game/Loot.js');
+        const land = (sp, cm = 40, kg = 2, alive = true) => G.landCatch({ sp, kg, cm, pos: P.pos.clone().add(V(0, 1, 1)), vel: V(0, 0, 0), by: P.id, size: 0.5, quiet: true, alive });
+        // 1. alive, and the clock runs
+        const a = land('bass');
+        ok(a.alive && Math.abs(a.air - 300) < 1, 'a hooked fish comes up alive, with five minutes out of the water');
+        a.air = 1.5; step(2);
+        ok(!a.alive, 'left out, it dies');
+        const hp = land('bass', 40, 2, false);
+        ok(!hp.alive, 'a harpooned fish is dead from the start');
+        const sk = land('perch', 25, 0.6); G.act({ t: 'spearKill', id: sk.id }); step(0.1);
+        ok(!sk.alive, 'a fish speared off the deck dies');
+        // 2. the cooler keeps it alive, and gives it back
+        bb.docked = false;
+        const c1 = land('bass');
+        G._do({ t: 'pickup', id: c1.id }, P.id); P.held = c1.id;
+        G._do({ t: 'cooler', id: c1.id, boat: bb.id }, P.id); step(0.1);
+        const air0 = c1.air; step(2);
+        ok(c1.state === 'cooler' && c1.alive && Math.abs(c1.air - air0) < 0.01 && c1.cool < Lm.LIFE.cooler, 'in the cooler it keeps its air and lives on the cooler\'s three hours');
+        P.attach(bb, V(bb.hull.cooler[0], bb.deck, bb.hull.cooler[2] + 0.6)); step(0.2);
+        G.ui.open('cooler', {}); const takeBtn = document.querySelector('[data-act="coolTake"]'); ok(!!takeBtn, 'the cooler screen lists it'); G.ui.close();
+        G.act({ t: 'coolTake', id: c1.id }); step(0.2);
+        ok(c1.state !== 'cooler' && P.held === c1.id && c1.alive, 'taken out of the cooler, into your hands, still alive');
+        G._do({ t: 'drop', id: c1.id, pos: P.pos.toArray(), vel: [0, 0, 0] }, P.id); P.held = null;
+        P.detach(); P.place(G.world.settlement.anchors.spawn.clone(), 0); step(0.3);
+        // 3. an aquarium: build one, put a live fish in, see it swim, take it out
+        s.mats = { wood: 50, stone: 50, glass: 20, iron: 10, crystal: 4, fibre: 5 };
+        let q = null;
+        for (let r = 6; r < 60 && !q; r += 2) for (let an = 0; an < 6.28 && !q; an += 0.4) { const x = P.pos.x + Math.cos(an) * r, z = P.pos.z + Math.sin(an) * r, y = G.world.ground(x, z); if (!B._why(BP_BY_ID.aq1, x, z, y, 0)) q = { x, y, z }; }
+        ok(!!q, 'room for a small aquarium');
+        G.act({ t: 'bnew', bp: 'aq1', x: q.x, y: q.y, z: q.z, r: 0 }); step(0.6);
+        const site = [...B.sites.values()].find(S => S.bp.id === 'aq1');
+        for (let i = 0; i < site.bp.parts.length; i++) { G.act({ t: 'bput', id: site.S.id, i }); step(0.05); }
+        step(0.8);
+        ok(site.complete && B.aq.tanks.has(site.S.id), 'built piece by piece with glass from the pack, and the water fills in');
+        P.place(V(q.x, q.y + 0.1, q.z + 1.2), 0); step(0.2);
+        ok(B.tankNear(P.pos) === site, 'standing at the glass');
+        const f1 = land('bass', 40, 2);
+        G._do({ t: 'pickup', id: f1.id }, P.id); P.held = f1.id;
+        G.act({ t: 'tankPut', site: site.S.id, id: f1.id }); step(1);
+        const A = B.aq.tanks.get(site.S.id);
+        ok(site.S.store.length === 1 && !L.get(f1.id) && A.fish.size === 1, 'the living bass goes in and is swimming there');
+        const F = [...A.fish.values()][0], p0 = F.pos.clone(); step(2);
+        ok(F.pos.distanceTo(p0) > 0.05, 'it swims about (' + F.pos.distanceTo(p0).toFixed(2) + ' m in 2 s)');
+        const big = land('pike', 95, 9);
+        ok(/Too big/.test(B.tankRefuses(site, big) || ''), 'a 95 cm pike is too big for the small one: ' + B.tankRefuses(site, big));
+        const dead = land('bass', 40, 2, false);
+        ok(/dead/.test(B.tankRefuses(site, dead) || ''), 'a dead fish is refused');
+        land('perch', 22, 0.4);
+        G.ui.open('tank', { site: site.S.id });
+        ok(document.querySelectorAll('[data-act="tankTake"]').length === 1 && document.querySelectorAll('[data-act="tankPut"]').length >= 1, 'the aquarium screen shows what is inside and the living fish you could add');
+        G.ui.close();
+        G.act({ t: 'tankTake', site: site.S.id, fid: site.S.store[0].id }); step(0.5);
+        const back = L.get(P.held);
+        ok(back && back.alive && back.sp === 'bass' && !site.S.store.length, 'taken back out: alive, in your hands');
+        G._do({ t: 'drop', id: back.id, pos: P.pos.toArray(), vel: [0, 0, 0] }, P.id); P.held = null;
+        // 4. the wall gives fish back
+        const w = land('bass', 40, 2); G._do({ t: 'pickup', id: w.id }, P.id); P.held = w.id;
+        G._do({ t: 'mount', id: w.id, slot: 0 }, P.id); step(0.1);
+        ok(s.cabin.slots[0]?.real && !L.get(w.id), 'mounted on the wall');
+        G._do({ t: 'unmount', slot: 0 }, P.id); step(0.1);
+        ok(!s.cabin.slots[0] && P.held && L.get(P.held)?.sp === 'bass', 'and taken back down into your hands');
+        G._do({ t: 'drop', id: P.held, pos: P.pos.toArray(), vel: [0, 0, 0] }, P.id); P.held = null;
+        // 5. a sea beast: a real catch
+        const kr = G.landBeast('great:kraken', P.id, true); step(0.5);
+        ok(kr && FISH_BY_ID[kr.sp].beast && kr.alive, 'the Kraken, landed, is lying there as a catch');
+        G._do({ t: 'pickup', id: kr.id }, P.id);
+        ok(kr.held === P.id && Lm.carryStyle(kr) === 'drag', 'you can pick it up - it is dragged behind you');
+        const bigFish = land('pike', 95, 300);
+        ok(Lm.carryStyle(bigFish) === 'shoulder' && Lm.carryStyle(land('pike', 60, 60)) === 'hug', 'a 300 kg fish goes over your shoulder, a 60 kg one in your arms');
+        ok(!G.sellable(null, true, P.id).includes(kr) && G.sellable(kr.pos, true, P.id, true).includes(kr) && Math.abs(L.value(kr) - 40000) < 1, 'sell all never sells it; on purpose it is worth ' + L.value(kr));
+        const a5 = { bp: BP_BY_ID.aq5, S: { store: [] } }, a6 = { bp: BP_BY_ID.aq6, S: { store: [] } };
+        ok(!B.tankRefuses(a5, kr) && /Too big/.test(B.tankRefuses(a5, { sp: 'beast:cthulhu', cm: FISH_BY_ID['beast:cthulhu'].cm[0], alive: true }) || '') && !B.tankRefuses(a6, { sp: 'beast:cthulhu', cm: FISH_BY_ID['beast:cthulhu'].cm[0], alive: true }), 'the Kraken fits the Massive aquarium; Cthulhu needs the Oceanarium');
+        G._do({ t: 'drop', id: kr.id, pos: P.pos.toArray(), vel: [0, 0, 0] }, P.id); P.held = null;
+        ok(Lm.carryStyle({ sp: 'bass', kg: 2 }) === 'hands', 'a bass is simply in your hands');
       }
       if (name === 'edgebtn') {
         G.ui.open('admin', {}); const btn = document.querySelector('[data-arg="edgeTest"]'); ok(!!btn, 'the admin panel has the edge-of-the-world button');
