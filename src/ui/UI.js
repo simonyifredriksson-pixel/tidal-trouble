@@ -942,6 +942,9 @@ export class UI {
           ${btn('Give 5 random fish from this area', 'areaFish', 'gold')}${btn('Fill the journal for this area', 'dexFill:area')}${btn('Fill the whole journal', 'dexFill:all')}${btn('Clear the journal', 'dexClear', 'red')}</div>
           <p class="note">Journal: ${pr.got} of ${pr.of} discovered.  ${areaRows}</p></section>
         <section><h3>${ic('coin')}Money</h3><div class="row"><input id="admMoney" type="number" value="10000" min="0" step="1000">${btn('Add', 'moneyAdd', 'gold')}${btn('Set', 'moneySet')}<span class="note">You have ${fmtInt(s.money)}.</span></div></section>
+        <section><h3>${ic('log')}Materials</h3><div class="row">${MATS.map(M => `<button class="btn" data-act="adm" data-arg="matGive:${M.id}">${ic(M.icon)} Give ${esc(M.name)}</button>`).join('')}</div>
+          <div class="row"><span class="note">Amount</span><input id="admMatN" type="number" value="100" min="1" step="10">${btn('Give that much of everything', 'matGive:all', 'gold')}${btn('Empty the pack', 'matGive:none', 'red')}</div>
+          <p class="note">In the pack: ${MATS.map(M => esc(M.name) + ' ' + ((s.mats || {})[M.id] || 0)).join('  -  ')}</p></section>
         <section><h3>${ic('boat')}The ship</h3><div class="row">${HULLS.map(H => btn(H.name + (H.hold ? ' (with hold)' : ''), 'giveHull:' + H.id, s.boat.hull === H.id ? 'gold' : '')).join('')}${btn('Put me in the hold', 'hold', 'dark')}</div>
           <div class="row">${['rail', 'wheel', 'engine', 'mount'].map(k => btn('Break the ' + k, 'breakPart:' + k, 'red')).join('')}${btn('Break everything', 'breakPart:all', 'red')}</div>
           <div class="row">${btn('Small hole', 'hole', 'red')}${btn('Big hole', 'bigHole', 'red')}${btn('Flood +30%', 'flood:0.3', 'red')}${btn('Flood to the brim', 'flood:0.9', 'red')}${btn('Start a fire', 'fire', 'red')}${btn('Repair everything', 'repairAll', 'gold')}</div>
@@ -949,6 +952,7 @@ export class UI {
         <section><h3>${ic('eye')}Hidden places</h3><div class="row">${btn('Reveal them all', 'secretsAll', 'gold')}${btn('Refill every cache', 'refill')}${btn('Forget them all', 'secretsReset', 'dark')}</div>
           <p class="note">${SECRETS.map(D => `${esc(D.name)}: ${s.secrets?.[D.id] ? 'found day ' + s.secrets[D.id] : 'not found'}${s.caches?.[D.id] !== undefined ? ', cache opened day ' + s.caches[D.id] : ''}`).join('<br>')}<br>Teleports to each are in the list below.</p></section>
         <section><h3>${ic('map')}Teleport</h3><div class="row">${G.constructor.TELEPORTS.map(T => btn(T.name, 'tp:' + T.id)).join('')}</div>
+          <div class="row">${['pass', 'bump', 'ram', 'breach', 'drag', 'coil', 'glimpse', 'behind', 'lunge'].map(k => btn('Deep: ' + k, 'deepNow:' + k, 'dark')).join('')}</div>
           <div class="row">${btn('The edge of the world: get chased by the Warden', 'edgeTest', 'red')}${btn('Chart the whole sea', 'chartAll', 'gold')}${btn('Discover every island', 'islesAll', 'gold')}${btn('Forget the chart and the islands', 'chartReset', 'dark')}</div>
           <p class="note">${G.isles ? Math.round(G.isles.chartedFraction() * 100) + '% charted. ' : ''}Islands found: ${Object.keys(s.found || {}).length} / 12.</p></section>
         <section><h3>${ic('wrench')}World</h3><div class="row">${btn('Reset boat', 'resetBoat')}${btn('Reset character', 'resetChar')}${btn('Every tool and gear', 'tools')}${btn('Earn and place all trophies', 'allTrophies')}${btn('Clear trophies', 'clearTrophies', 'dark')}</div>

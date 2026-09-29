@@ -153,7 +153,7 @@ export class Net {
     const id = conn.peer;
     if (d.t === 'hello') {
       if (d.v !== BUILD) { conn.send({ t: 'version', v: BUILD }); return; }
-      const prof = { name: clean(d.name) || 'Fisher', look: (d.look | 0) % 4 };
+      const prof = { name: clean(d.name) || 'Fisher', look: (d.look | 0) % 4, key: String(d.key || id).replace(/[^a-z0-9]/gi, '').slice(0, 32) || id };
       this.profiles.set(id, prof);
       const everyone = [{ id: this.selfId, ...this.profile, host: true }, ...[...this.profiles].map(([pid, p]) => ({ id: pid, ...p }))];
       conn.send({ t: 'welcome', id, players: everyone, save: this._emitGet('getSave') });
@@ -182,7 +182,7 @@ export class Net {
       p.on('error', e => fail(e.type === 'peer-unavailable' ? 'No room with that code.' : 'Network error (' + (e.type || 'unknown') + ').'));
       p.on('open', () => {
         const conn = p.connect(PREFIX + c, { reliable: true });
-        conn.on('open', () => conn.send({ t: 'hello', name: profile.name, look: profile.look, v: BUILD }));
+        conn.on('open', () => conn.send({ t: 'hello', name: profile.name, look: profile.look, key: profile.key, v: BUILD }));
         conn.on('data', d => {
           if (!d || typeof d !== 'object') return;
           if (d.t === 'welcome') {

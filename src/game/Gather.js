@@ -108,6 +108,8 @@ export class Gather {
     this.cuts = new Map();         // host: tree id -> depth cut on each side of the trunk
     this.carved = new Map();       // everyone: tree id -> {mesh, mat, faces} (a tree with cuts in it)
     this.debris = [];              // chunks flying off
+    this.logs = new Map();         // host: felled trees still lying whole (id -> {dir})
+    this.fallen = new Map();       // everyone: the fallen trunk meshes (id -> {m, n, dx, dz})
     this.gone = new Set();         // node ids hidden on this screen
     this.cols = new Map();         // node id -> colliders taken away
     this.stumps = new Map();       // node id -> stump mesh
@@ -192,6 +194,8 @@ export class Gather {
     G.audio.swoosh();
     setTimeout(() => {
       if (!G.running) return;
+      const lg = tool === 'axe' && this.fallenNear(P);
+      if (lg) { G.act({ t: 'split', id: lg.id }); return; }
       const T = this.target(P, tool);
       this.hand = T;
       if (!T) {
@@ -255,12 +259,37 @@ export class Gather {
         this.spawn(m, p, new THREE.Vector3((Math.random() - 0.5) * 2, 2 + Math.random() * 2, (Math.random() - 0.5) * 2));
       }
     }, delay);
-    if (n.def.fall) {
-      // the logs lie along where the trunk came down
-      const len = 6 * n.it[3];
-      drop(1900, (k, q) => new THREE.Vector3(n.it[0] + dir[0] * len * (0.2 + 0.7 * k / Math.max(1, q)), n.it[1] + 0.6, n.it[2] + dir[1] * len * (0.2 + 0.7 * k / Math.max(1, q))));
-    } else drop(60, () => at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 0.2, (Math.random() - 0.5) * 0.8)));
+    if (n.def.fall) this.logs.set(c.id, { dir, t: G.world.time });
+    else drop(60, () => at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 0.2, (Math.random() - 0.5) * 0.8)));
     if (Object.keys(s.felled).length >= 25) G.award('woodsman', from);
+  }
+
+  /** Host: one blow on a fallen tree and it comes apart into logs. */
+  hostSplit(c, from) {
+    const G = this.game, L = this.logs.get(c.id), n = this.node(c.id);
+    if (!L || !n) return;
+    this.logs.delete(c.id);
+    const dir = L.dir, len = 6 * n.it[3];
+    G._everyone({ t: 'gather', k: 'split', id: c.id, dir });
+    setTimeout(() => {
+      for (const [m, q] of n.def.give) for (let k = 0; k < q; k++) {
+        const f = 0.15 + 0.75 * k / Math.max(1, q - 1);
+        const p = new THREE.Vector3(n.it[0] + dir[0] * len * f, n.it[1] + 0.7, n.it[2] + dir[1] * len * f);
+        this.spawn(m, p, new THREE.Vector3((Math.random() - 0.5) * 3, 3 + Math.random() * 2.5, (Math.random() - 0.5) * 3));
+      }
+    }, 120);
+  }
+  /** The fallen tree in front of you, if any: the trunk lies from its stump along where it fell. */
+  fallenNear(P) {
+    let best = null, bd = 2.2;
+    for (const [id, Fl] of this.fallen) {
+      const n = Fl.n, bx = n.it[0], bz = n.it[2], L = 7 * n.it[3];
+      const ex = P.pos.x - bx, ez = P.pos.z - bz;
+      const u = clamp(ex * Fl.dx + ez * Fl.dz, 0.4, L);
+      const d = Math.hypot(ex - Fl.dx * u, ez - Fl.dz * u);
+      if (d < bd && Math.abs(P.pos.y - n.it[1]) < 3) { bd = d; best = { id, Fl, u }; }
+    }
+    return best;
   }
 
   /** A loose piece of material in the world (host). */
@@ -335,6 +364,24 @@ export class Gather {
         n.shrink = k;
         this._setInst(n, this._matrix(n.it, 0, 0, 0, k));
       } else this.wobbles.push({ n, t: 0, dx, dz, a: tree ? 0.06 : 0.12 });
+    }
+    if (e.k === 'split') {
+      const Fl = this.fallen.get(e.id);
+      const len = 6 * n.it[3];
+      const mid = new THREE.Vector3(n.it[0] + dx * len * 0.45, n.it[1] + 0.5, n.it[2] + dz * len * 0.45);
+      G.audio.chopWood(mid); G.audio.crack(); G.audio.timber(mid);
+      G.fx.chips(mid.x, mid.y + 0.3, mid.z, CHIP.axe, 34, 0, 0);
+      G.fx.dust(mid.x, n.it[1], mid.z, 26, 1.8);
+      if (LEAF[n.key]) G.fx.leaves(mid.x, mid.y + 1, mid.z, 18, LEAF[n.key]);
+      for (let k = 0; k < 7; k++) { const f = k / 6; this._chunk(new THREE.Vector3(n.it[0] + dx * len * f, n.it[1] + 0.6, n.it[2] + dz * len * f), Math.random() * 6.28, 'wood'); }
+      if (G.player.pos.distanceTo(mid) < 20) G.addShake(0.45);
+      if (Fl) {
+        // it jumps apart as it goes
+        this.splitting = this.splitting || [];
+        this.splitting.push({ m: Fl.m, t: 0, base: Fl.m.matrix.clone(), carved: Fl.carved });
+        this.fallen.delete(e.id);
+      }
+      return;
     }
     if (e.k === 'fell') { if (e.cut) this._carve(n, e.cut); this._gone(e.id, { dx, dz }); }
     if (e.k === 'break') { this._gone(e.id, null); G.fx.dust(n.it[0], n.it[1], n.it[2], 12, Math.min(2, n.it[3])); if (!wood) G.audio.crack(); }
@@ -445,6 +492,8 @@ export class Gather {
     const G = this.game, n = this.node(id);
     this.gone.delete(id);
     this.cuts.delete(id);
+    this.logs.delete(id);
+    const fl = this.fallen.get(id); if (fl) { G.scene.remove(fl.m); this.fallen.delete(id); }
     if (!n) return;
     this._carve(n, null);
     this._setInst(n, this._matrix(n.it));
@@ -504,8 +553,16 @@ export class Gather {
       }
       this._matrix(it, a, F.dx, F.dz);
       F.m.matrix.copy(_m);
-      if (t > 2.4) { F.m.position.set(0, -0.5 * (t - 2.4), 0); F.m.matrix.elements[13] -= (t - 2.4) * 1.5; }
-      if (t > 3.1) { G.scene.remove(F.m); if (F.carved) { F.carved.mat.dispose(); if (F.carved.faces) F.carved.faces.geometry.dispose(); } this.falling.splice(i, 1); }
+      if (t > 1.9) { this.falling.splice(i, 1); this.fallen.set(F.n.id, { m: F.m, n: F.n, dx: F.dx, dz: F.dz, carved: F.carved, t: G.world.time }); }
+    }
+    for (let i = (this.splitting || []).length - 1; i >= 0; i--) {
+      const S2 = this.splitting[i];
+      S2.t += dt;
+      const k = S2.t / 0.35, s = Math.max(0.001, 1 - k);
+      S2.m.matrix.copy(S2.base);
+      S2.m.matrix.elements[13] += Math.sin(Math.min(1, k) * Math.PI) * 0.35;
+      const sc = new THREE.Matrix4().makeScale(1, s, 1); S2.m.matrix.multiply(sc);
+      if (k >= 1) { G.scene.remove(S2.m); if (S2.carved) { S2.carved.mat.dispose(); if (S2.carved.faces) S2.carved.faces.geometry.dispose(); } this.splitting.splice(i, 1); }
     }
     // chunks knocked off: fly, bounce, lie there a while, sink into the ground
     for (let i = this.debris.length - 1; i >= 0; i--) {
@@ -569,6 +626,7 @@ export class Gather {
     return h;
   }
   _hint(P, tool) {
+    if (tool === 'axe' && this.fallenNear(P)) return { T: null, text: 'Split the fallen tree - one good blow' };
     const T = this.target(P, tool);
     if (!T) return null;
     if (T.def.fall) {

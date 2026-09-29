@@ -27,7 +27,7 @@ import { heightAt } from '../world/Terrain.js';
 import { clamp, dampAngle, lerp, smoothstep, rng } from '../core/Util.js';
 
 export const INTRO_SEA = { x: 1900, z: 1200 };
-const T = { rise1: 10, look: 16, sink1: 19, say: 23.5, rise2: 28.5, arms: 32.5, smash: 33.6, black: 35.2, wake: 38.2, up: 43.5, done: 46.5 };
+const T = { rise1: 10, look: 16, sink1: 19, say: 23.5, away: 24.6, rise2: 27.2, back: 28.4, shock: 30.6, arms: 30.6, smash: 31.4, black: 33.0, wake: 36.0, up: 41.3, done: 44.3 };
 export const INTRO_T = T;
 
 function debrisGeo(seed) {
@@ -100,10 +100,7 @@ export class Intro {
     const G = this.game;
     this.t = this.hold !== undefined ? this.hold : this.t + dt;
     const t = this.t;
-    // look around
-    const look = input.look();
-    this.yaw -= look.x;
-    this.pitch = clamp(this.pitch - look.y, -1.2, 1.2);
+    void input;
     if (t < T.black) this._sea(dt, t);
     else if (t < T.wake) { this.black = 1; if (!this.onBeach) this._toBeach(); }
     else this._wake(dt, t);
@@ -194,8 +191,11 @@ export class Intro {
     if (!this._smashed) {
       const local = new THREE.Vector3(-0.5, this.deck + 1.62, -2.6);
       this.eye = B.localToWorld(local.clone());
-      this.camRoll = roll * 0.8;
-      this.camPitch = pitch * 0.6;
+      // the sea throws you about: the boat's own pitch and roll, and a stagger of your own on top
+      const wob = 1 + (t > T.rise2 ? 0.8 : 0);
+      this.camRoll = roll * 0.9 + (Math.sin(t * 1.3) * 0.03 + Math.sin(t * 2.9 + 1) * 0.012) * wob;
+      this.camPitch = pitch * 0.7 + (Math.sin(t * 1.7 + 0.5) * 0.02 + Math.sin(t * 3.6) * 0.008) * wob;
+      this._direct(dt, t, g, side, fx, fz);
     } else {
       const F = this.fly;
       F.v.y -= 9.8 * dt;
@@ -211,6 +211,32 @@ export class Intro {
       this.said = true;
       this._say('You', 'What the hell was that?', 3.6);
     }
+  }
+
+  /* Where the camera looks: at the sea, at the thing, away when it has gone,
+     then back - to find it right there - with a jolt, up and down, of fright. */
+  _direct(dt, t, g, side, fx, fz) {
+    const e = this.eye, A = INTRO_SEA;
+    const yawTo = p => Math.atan2(-(p.x - e.x), -(p.z - e.z));
+    const pitchTo = (p, h) => Math.atan2(h - e.y, Math.hypot(p.x - e.x, p.z - e.z));
+    const sea1 = new THREE.Vector3(A.x, 0, A.z).addScaledVector(side, 88).addScaledVector(new THREE.Vector3(fx, 0, fz), 8);
+    let yaw, pitch, rate = 1.6;
+    if (t < T.rise1 - 1) { yaw = yawTo(sea1) + Math.sin(t * 0.35) * 0.35; pitch = -0.04; rate = 0.8; }
+    else if (t < T.away) { yaw = yawTo(g.position); pitch = clamp(pitchTo(g.position, g.position.y + 12), -0.1, 0.35); rate = 1.2; }
+    else if (t < T.back) {
+      // it has gone: look away across the deck, to the other side of the boat
+      yaw = yawTo(sea1) + Math.PI * 0.95; pitch = -0.02; rate = 0.9;
+    } else {
+      // turn back... and it is there
+      yaw = yawTo(g.position); pitch = clamp(pitchTo(g.position, g.position.y + 19), 0, 0.72);
+      rate = t < T.shock ? 1.25 : 4;
+    }
+    this.yaw = dampAngle(this.yaw, yaw, rate, dt);
+    this.pitch += (pitch - this.pitch) * Math.min(1, dt * rate);
+    // the fright: a quick look up and back down, a fraction of a second, as you see it
+    const s = t - T.shock;
+    if (s > 0 && s < 0.5) this.camPitch += Math.sin(s / 0.5 * Math.PI) * 0.16 - (s > 0.3 ? Math.sin((s - 0.3) / 0.2 * Math.PI) * 0.05 : 0);
+    if (s > 0 && !this._gasp) { this._gasp = true; this.game.audio.ouch(); this.game.addShake(0.5); }
   }
 
   _arms(t, curl, wave, reach = false) {

@@ -220,6 +220,10 @@ export class Audio {
   timber(pos) { const a = this._att(pos, 60); this.noise(0.8, 0.45 * a, 'lowpass', 500, 0.8, 0.3); this.tone(55, 0.6, 'triangle', 0.35 * a, 0.004, 0.4); this.noise(0.9, 0.12 * a, 'highpass', 2500, 1, 0.2, 0.05); }
   place(wood = true) { if (wood) { this.tone(260, 0.08, 'triangle', 0.2, 0.001, 0.5); this.noise(0.08, 0.15, 'bandpass', 700, 2); } else { this.tone(180, 0.1, 'square', 0.1, 0.002, 0.4); this.noise(0.12, 0.2, 'lowpass', 1400, 1); } }
   pickup() { this.tone(700, 0.05, 'triangle', 0.08, 0.002, 0.5); this.tone(1050, 0.07, 'triangle', 0.06, 0.002, 0, 0.04); }
+  /** An old radio: crackle and hiss, `v` loud, for `dur` seconds. */
+  staticNoise(dur = 1, v = 1) { this.noise(dur, 0.09 * v, 'bandpass', 2600, 0.7, 1.2); this.noise(dur * 0.7, 0.05 * v, 'highpass', 4200, 1); for (let i = 0; i < 6 * dur; i++) this.noise(0.03, 0.08 * v * Math.random(), 'bandpass', 1500 + Math.random() * 2500, 4, 1, i / 6 + Math.random() * 0.1); }
+  /** A frightened voice through a bad speaker: a murmur shaped like the words (there is no real speech). */
+  radioVoice(words = 4, v = 1) { for (let i = 0; i < words; i++) { const d = i * 0.28 + Math.random() * 0.06; this.tone(140 + Math.random() * 60, 0.2, 'sawtooth', 0.02 * v, 0.02, 0.9 + Math.random() * 0.2, d); this.noise(0.22, 0.03 * v, 'bandpass', 900 + Math.random() * 500, 3, 1, d); } }
   bubble() { this.tone(400 + Math.random() * 500, 0.06, 'sine', 0.04, 0.002, 1.8); }
 
   /* ---------------- continuous: ambience, engine, music ---------------- */
@@ -228,11 +232,13 @@ export class Audio {
     const t = ctx.currentTime;
     const k = 1 - Math.exp(-dt * 3);
     const set = (g, v) => { g.gain.value += (v - g.gain.value) * k; };
-    set(this.sea.g, (env.nearWater ? 0.16 : 0.05) + env.storm * 0.18);
+    const hush = 1 - (env.hush || 0) * 0.92;
+    this.music.gain.value += ((this.musicVol * 0.5) * (1 - (env.hush || 0)) - this.music.gain.value) * k;
+    set(this.sea.g, ((env.nearWater ? 0.16 : 0.05) + env.storm * 0.18) * hush);
     this.sea.f.frequency.value = 380 + Math.sin(t * 0.3) * 120 + env.storm * 300;
-    set(this.wind.g, 0.02 + env.storm * 0.12 + (env.frost ? 0.04 : 0) + (env.height > 25 ? 0.05 : 0));
+    set(this.wind.g, (0.02 + env.storm * 0.12 + (env.frost ? 0.04 : 0) + (env.height > 25 ? 0.05 : 0)) * hush);
     this.wind.f.frequency.value = 700 + Math.sin(t * 0.17) * 300;
-    set(this.rain.g, env.storm * 0.12);
+    set(this.rain.g, env.storm * 0.12 * hush);
     // Vigil's End: the wind drops to a low hum and the fog swallows the birds
     const mist = env.mist || 0;
     if (!this.drone) {
@@ -252,7 +258,7 @@ export class Audio {
     this.engFilter.frequency.value = 300 + th * 700;
     // critters
     if (!env.underwater) {
-      if (!env.night && env.nearLand && (env.mist || 0) < 0.4 && Math.random() < dt * 0.35) this._bird();
+      if (!env.night && env.nearLand && (env.mist || 0) < 0.4 && !env.hush && Math.random() < dt * 0.35) this._bird();
       if (env.night && env.nearLand && Math.random() < dt * 2) this.tone(4200 + Math.random() * 400, 0.04, 'sine', 0.012);
       if (env.fire && Math.random() < dt * 8) this.flame();
     }

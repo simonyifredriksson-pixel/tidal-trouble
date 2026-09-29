@@ -37,6 +37,7 @@ const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Eule
 import '../data/BeastCatch.js';
 
 const PHASES = { deep: [12, 22], rise: [10, 16], breach: [5, 5], dive: [4, 4] };
+const GLIMPSE = 5.2;      // seconds each arm stands out of the sea before the Kraken shows itself
 
 export class Great {
   constructor(game) {
@@ -70,9 +71,11 @@ export class Great {
     const H = boat.hull;
     const zs = n === 3 ? [-0.5, 0.1, 0.6] : [-0.6, -0.15, 0.3, 0.65];
     const arms = zs.map((f, i) => ({ id: i, side: i % 2 ? -1 : 1, z: f * H.hl, hp: KRAKEN.armHp, st: 'rise', t: 0, recoil: 0, slam: 0 }));
-    this.kraken = { phase: 'attack', boat: boat.id, arms, t: 0, slamT: 3.5, spot: null, hooked: null };
+    // the glimpses: where each arm comes up, relative to the boat (angle, distance)
+    const glimpses = [[0.6 + Math.random() * 0.4, 60], [-1.9 - Math.random() * 0.6, 48], [2.6, 34]];
+    this.kraken = { phase: 'glimpse', boat: boat.id, arms, t: 0, slamT: 3.5, spot: null, hooked: null, glimpses, first };
     G.state.s.kraken.met++;
-    G._everyone({ t: 'krakenAttack', first });
+    G._everyone({ t: 'krakenGlimpse' });
     return this.kraken;
   }
 
@@ -153,6 +156,11 @@ export class Great {
     K.t += dt;
     const b = G.boatById(K.boat);
     const crewed = b && G.allPlayers().some(p => p.boat === b);
+    if (K.phase === 'glimpse') {
+      if (!b || b.sinking) { this.kraken = null; return; }
+      if (K.t > GLIMPSE * K.glimpses.length + 1.5) { K.phase = 'attack'; K.t = 0; G._everyone({ t: 'krakenAttack', first: K.first }); }
+      return;
+    }
     if (K.phase === 'attack') {
       if (!b || b.sinking || (!crewed && K.t > 6)) { this._krakenLeave('The arms slide back into the sea. It has lost interest.'); return; }
       // it holds the boat
@@ -321,6 +329,22 @@ export class Great {
     // --- the kraken ---
     const K = this.kraken;
     const b = K ? G.boatById(K.boat) : null;
+    if (K && b && K.phase === 'glimpse') {
+      if (!this.m.glimpse) { const T = buildTentacle(34, 9); T.group.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); G.scene.add(T.group); this.m.glimpse = T; }
+      const T = this.m.glimpse, i = Math.min(K.glimpses.length - 1, Math.floor(K.t / GLIMPSE)), u = (K.t - i * GLIMPSE) / GLIMPSE;
+      const [a, d] = K.glimpses[i];
+      const ga = b.heading + a, x = b.pos.x + Math.sin(ga) * d, z = b.pos.z + Math.cos(ga) * d;
+      // up slowly, stand there, go back down
+      const k = u < 0.4 ? smoothstep(0, 0.4, u) : u < 0.7 ? 1 : 1 - smoothstep(0.7, 1, u);
+      const sea = G.world.sea(x, z);
+      T.group.visible = k > 0.01 && K.t < GLIMPSE * K.glimpses.length;
+      T.group.position.set(x, sea - 34 + k * 30, z);
+      T.group.rotation.set(0, Math.atan2(b.pos.x - x, b.pos.z - z) + Math.PI / 2, 0);
+      for (let s = 0; s < T.segs.length; s++) { const f = s / T.segs.length; T.segs[s].rotation.z = -(0.02 + f * f * 0.12) * (0.4 + k) + Math.sin(t * 0.9 + s * 0.5) * 0.02 * f; T.segs[s].rotation.x = Math.sin(t * 0.6 + s * 0.4) * 0.03; }
+      if (k > 0.05 && k < 0.99 && Math.random() < dt * 10) G.fx.splash(x + (Math.random() - 0.5) * 4, sea, z + (Math.random() - 0.5) * 4, 2.2);
+      if (u < 0.4 && Math.random() < 0.5) G.fx.water(x, sea + k * 28, z, 0, -1, 0);
+      if (i !== this._glimpseI) { this._glimpseI = i; if (G.player.boat === b) { G.audio.groan(0.8); if (i === 0) G.ui.toast('Something is out there.', 'warn'); if (i === 1) G.ui.toast('What is that?', 'warn'); } }
+    } else if (this.m.glimpse) { G.scene.remove(this.m.glimpse.group); this.m.glimpse = null; this._glimpseI = -1; }
     if (K && b && K.phase === 'attack') {
       while (this.m.arms.length < K.arms.length) {
         const T = buildTentacle(8 + b.hull.hw * 1.6, this.m.arms.length + 1);

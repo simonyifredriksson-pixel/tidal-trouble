@@ -568,7 +568,7 @@ export async function runScripts(names, game) {
         const box = [...G.loot.items.values()].find(it => it.sp === 'strongbox');
         ok(box && G.loot.items.size > n0 && s.caches.castaway === s.day && !cs.full[0].visible, 'dug up a strongbox, the X is gone');
         if (box) G.loot.remove(box);
-        ok(prompt().includes('(empty for now)'), 'dig again: empty for now');
+        ok(prompt().includes('(you have had yours)'), 'dig again: you have had yours');
         // the grotto: a boat fits inside and the walls are solid
         G.teleport('grotto'); step(0.5);
         const gd = () => Math.hypot(b.pos.x - GROTTO.x, b.pos.z - GROTTO.z);
@@ -607,7 +607,13 @@ export async function runScripts(names, game) {
         G.ui.open('map'); G.ui.render(); step(0.1);
         ok(!!document.querySelector('canvas.worldmap'), 'the map draws with the hidden places on it');
         G.ui.close();
-        ok(G.cacheFull('castaway') === false && (s.day += 7, G.cacheFull('castaway')), 'caches refill after a few days');
+        s.day += 30;
+        ok(G.cacheFull('castaway') === false, 'a secret cache never refills for you - not even a month later');
+        const wasNet = G.net; G.net = { isOnline: true, selfId: P.id, profiles: new Map([['guest-b', { key: 'pguestb' }]]), sendEvent() {} };
+        ok(G.cacheFull('castaway', 'guest-b'), 'but a crewmate who has not opened it can still have theirs');
+        G._do({ t: 'plunder', id: 'castaway' }, 'guest-b');
+        ok(!G.cacheFull('castaway', 'guest-b') && G.claimed('secret:castaway', 'guest-b'), 'and then it is theirs, once');
+        G.net = wasNet;
         s.day -= 7;
         G.teleport('home'); step(0.5);
       }
@@ -866,7 +872,14 @@ export async function runScripts(names, game) {
         const { zoneAt } = await import('../world/MapData.js');
         ok(P.boat === b && zoneAt(b.pos.x, b.pos.z) === 2 && heightAt(b.pos.x, b.pos.z) < -12, 'on the boat in the Offshore zone (zone ' + (zoneAt(b.pos.x, b.pos.z) + 1) + ', depth ' + (-heightAt(b.pos.x, b.pos.z)).toFixed(0) + ' m)');
         const K = G.great.startKraken(b);
-        ok(K && K.arms.length === 3, 'no warning: three arms come over the rail');
+        ok(K && K.phase === 'glimpse', 'first, only arms: a tentacle rises out of the sea, far off');
+        step(3); ok(G.great.m.glimpse && G.great.m.glimpse.group.visible, 'it towers over the water');
+        const g1 = G.great.m.glimpse.group.position.clone(); step(5.5);
+        ok(G.great.m.glimpse && G.great.m.glimpse.group.position.distanceTo(g1) > 20, 'it sinks, and another rises somewhere else (' + (G.great.m.glimpse ? G.great.m.glimpse.group.position.distanceTo(g1).toFixed(0) : 0) + ' m away)');
+        let offAt = -1; for (let i = 0; i < 20 * 30 && K.phase === 'glimpse'; i++) { G.update(1 / 30); if (offAt < 0 && P.boat !== b) offAt = i / 30; }
+        if (offAt >= 0) log('INFO knocked off the boat during the glimpses at ' + offAt.toFixed(1) + ' s');
+        if (P.boat !== b) P.attach(b, V(0, b.deck, 0));
+        ok(K.phase === 'attack' && K.arms.length === 3, 'then three arms come over the rail');
         step(2.5);
         ok(K.arms.every(A => A.st === 'grip') && G.great.m.arms.length === 3, 'they grip the boat');
         { const T = G.great.m.arms[0]; const tip = T.tip.getWorldPosition(V()), root = T.group.getWorldPosition(V()); log('INFO arm curl seg5 ' + T.segs[5].rotation.z.toFixed(2) + ' tip-root ' + tip.clone().sub(root).toArray().map(v => v.toFixed(1)).join(',') + ' boat ' + b.pos.x.toFixed(0) + ',' + b.pos.z.toFixed(0)); }
@@ -876,14 +889,15 @@ export async function runScripts(names, game) {
         // walk up to each arm and chop it
         let chops = 0;
         for (const A of K.arms) {
+          if (P.boat !== b) { log('INFO off the boat before chopping arm ' + A.id); P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; }
           const L = b.toLocal(A._grip, V());
           P.local.set(Math.sign(L.x) * (b.hull.hw - 0.4), b.deck, Math.max(-b.hull.hl + 0.4, Math.min(b.hull.hl - 0.4, L.z))); step(0.1);
           if (A === arm0) { const hint = G.great.armNear(P.pos); ok(!!hint, 'standing next to an arm, E offers to chop it'); }
           P.tool = 'axe'; G.vm.setTool('axe');
-          for (let k = 0; k < 2; k++) { G.vm.play('chop'); G._do({ t: 'chop', arm: A.id }, P.id); step(0.5); chops++; }
+          for (let k = 0; k < 2; k++) { G.vm.play('chop'); G._do({ t: 'chop', arm: A.id }, P.id); step(0.5, () => { if (P.boat !== b) { P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; } }); chops++; }
         }
         ok(K.arms.every(A => A.hp <= 0), 'two axe blows each and all ' + K.arms.length + ' arms let go (' + chops + ' chops)');
-        step(1);
+        step(1, () => { if (P.boat !== b) { P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; } });
         ok(G.great.kraken?.phase === 'dive' || G.great.kraken?.phase === 'window', 'it screams and dives -> ' + G.great.kraken?.phase);
         ok(G.state.s.trophies.got.survivor, 'Kraken Survivor trophy earned');
         step(6);
@@ -1074,10 +1088,17 @@ export async function runScripts(names, game) {
           for (let k = 0; k < 6 && !Ga.gone.has(tree.k + '#' + tree.i); k++) { const a = k / 6 * Math.PI * 2; G.act({ t: 'hit', id: tree.k + '#' + tree.i, tool: 'axe', dir: [-Math.sin(a), -Math.cos(a)], at: [x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5] }); step(0.2); hits++; }
           ok(Ga.gone.has(tree.k + '#' + tree.i) && !!s.felled[tree.k + '#' + tree.i], 'cut all the way round, it came down (' + hits + ' blows)');
           ok(Ga.falling.length > 0 || true, 'and it falls');
-          await new Promise(r => setTimeout(r, 2200));
+          step(2.5);
+          const tid = tree.k + '#' + tree.i;
+          ok(Ga.fallen.has(tid) && ![...Ga.pieces.values()].some(m => m.k === 'wood'), 'the whole tree lies there on the ground - no wood yet');
+          P.place(V(x + (Ga.fallen.get(tid).dx) * 3, y + 0.1, z + (Ga.fallen.get(tid).dz) * 3 + 1.2), 0); step(0.2);
+          ok(!!Ga.fallenNear(P), 'standing by the fallen trunk');
+          G.act({ t: 'split', id: tid });
+          await new Promise(r => setTimeout(r, 300));
           step(1.2);
+          ok(!Ga.fallen.has(tid), 'one blow and it splits apart');
           const logs = [...Ga.pieces.values()].filter(m => m.k === 'wood');
-          ok(logs.length >= 3, logs.length + ' logs lying where it fell');
+          ok(logs.length + (s.mats.wood || 0) - before >= 3, (logs.length + (s.mats.wood || 0) - before) + ' logs out of it');
           for (const L of logs) { P.place(L.pos.clone(), P.yaw); step(0.2); }
           step(0.3);
           ok((s.mats.wood || 0) - before >= 3, 'walking over them puts them in the pack: wood ' + (s.mats.wood || 0));
@@ -1306,6 +1327,31 @@ export async function runScripts(names, game) {
           P.detach();
         }
       }
+      if (name === 'deep') {
+        // out in the deep in a sturdy boat: every kind of thing that can happen under it
+        const D = G.deep, bb = G.boats[0];
+        G.state.s.boat.hull = 'trawler'; G._boatChanged();
+        G.teleport('offshore'); step(0.5);
+        if (P.boat !== bb) P.attach(bb, V(0, bb.deck, 0));
+        const fresh = () => { bb.hp = bb.stats.hp; bb.leaks = []; bb.breaks = []; bb.water = 0; bb.sinking = 0; if (P.boat !== bb) { P.attach(bb, V(0, bb.deck, 0)); } P.mode = 'walk'; };
+        const run = (k, sec) => { fresh(); D.acts = []; D.quiet = 0; D._start(k, P, 4); const hp0 = bb.hp; const h0 = bb.heading; let seen = false; for (let i = 0; i < sec * 30; i++) { G.update(1 / 30); if (D.acts.some(a => a.k === k && a.m.visible)) seen = true; } return { hp: hp0 - bb.hp, holes: bb.leaks.length, water: bb.water, turn: Math.abs(bb.heading - h0), seen }; };
+        let r = run('pass', 10); ok(r.seen && r.hp === 0, 'a shape much bigger than the boat passes underneath - and does nothing');
+        r = run('bump', 4); ok(r.hp > 0, 'a big fish hits the hull: -' + Math.round(r.hp) + ' hull');
+        r = run('ram', 7); ok(r.hp > 20 && r.holes >= 1, 'something rams it on purpose: -' + Math.round(r.hp) + ' hull, ' + r.holes + ' hole(s)');
+        r = run('breach', 5); ok(r.water > 0.1, 'something breaches beside you and the sea comes over the rail (water ' + Math.round(r.water * 100) + '%)');
+        r = run('coil', 10); ok(r.turn > 0.3, 'a long body circles under it and the boat turns with it (' + r.turn.toFixed(2) + ' rad)');
+        fresh();
+        // it is rare: an hour out there, not a storm of them
+        D.acts = []; D.quiet = 0; let n = 0; const on = D.onEvent.bind(D); D.onEvent = e => { n++; on(e); };
+        for (let i = 0; i < 20 * 60; i++) { D._host(1 / 60 * 60); if (D.acts.length) { for (const A of D.acts) G.scene.remove(A.m); D.acts = []; } }
+        D.onEvent = on;
+        ok(n >= 3 && n <= 16, 'in twenty minutes offshore it happened ' + n + ' times - never back to back');
+        // swimming in the deep gets darker and quieter
+        P.detach(); P.mode = 'swim'; P.pos.y = -1; step(3);
+        ok(D.dread > 0.2, 'swimming out here, the light goes (dread ' + D.dread.toFixed(2) + ')');
+        P.attach(bb, V(0, bb.deck, 0)); P.mode = 'walk';
+        G.state.s.boat.hull = 'dinghy'; G._boatChanged();
+      }
       if (name === 'edgebtn') {
         G.ui.open('admin', {}); const btn = document.querySelector('[data-arg="edgeTest"]'); ok(!!btn, 'the admin panel has the edge-of-the-world button');
         btn && btn.click(); G.ui.close(); step(2);
@@ -1371,6 +1417,15 @@ export async function runScripts(names, game) {
         const p1 = at(7520); bb.pos.set(p1.x, 0, p1.z); bb._updateMatrix();
         step(1.5);
         ok(E.E && E.E.ph === 'omen', 'past it, the sea goes quiet: ' + (E.E ? E.E.ph : 'nothing'));
+        // the first time it lets you know: silence, a shape in the water, the radio, a shadow under the boat, then it rises
+        const seen = new Set(), rlines = [];
+        const oradio = G.ui.radio.bind(G.ui); G.ui.radio = t2 => { rlines.push(t2); oradio(t2); };
+        let hushMax = 0;
+        for (let i = 0; i < 60 * 30 && E.E && E.E.ph !== 'hunt'; i++) { G.update(1 / 30); seen.add(E.E.ph); hushMax = Math.max(hushMax, G.edge.hush || 0); }
+        G.ui.radio = oradio;
+        ok(['signs', 'radio', 'still', 'under', 'rise'].every(p => seen.has(p)), 'the first time, it builds: ' + [...seen].join(' > '));
+        ok(rlines.some(l => /turn around/.test(l)) && rlines.some(l => /let it see/.test(l)), 'the radio: ' + rlines.length + ' lines, from "turn around" to "let it see y-"');
+        ok(hushMax > 0.8, 'and the sea went silent (hush ' + hushMax.toFixed(2) + ')');
         const d0 = E.E ? Math.hypot(E.E.x - bb.pos.x, E.E.z - bb.pos.z) : 0;
         // full speed back toward home: it does not matter
         let caught = false, fastest = 0, t = 0;

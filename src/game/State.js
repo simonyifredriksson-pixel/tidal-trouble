@@ -41,7 +41,8 @@ export function freshSave() {
     found: {}, chart: '', notes: {}, farthest: 0, salvaged: {},
     // gathering and building: the crew's pack, what has been cut down (id -> day), and every blueprint laid out
     mats: {}, felled: {}, builds: [],
-    boatPlans: ['dinghy'],                 // boat blueprints you own (the rowboat's are Old Gus's gift)
+    boatPlans: ['dinghy'],
+    claims: {},                            // secret rewards claimed: reward id -> { player key: day }                 // boat blueprints you own (the rowboat's are Old Gus's gift)
   };
 }
 /* The islands everyone already knows about (their shops can be named from the start). */
@@ -80,6 +81,7 @@ export class State {
     s.tools.axe = true; s.tools.pick = true; s.tools.plans = true;
     s.mats = s.mats || {}; s.felled = s.felled || {}; s.builds = s.builds || [];
     s.boatPlans = s.boatPlans || [...new Set(['dinghy', ...(s.hulls || [])])];
+    s.claims = s.claims || {};
     // a save from before the storm on the first night has already been through it
     if (s.flags && s.flags.intro === undefined && (s.stats.caught > 0 || s.tut > 0)) s.flags.intro = 1;
     s.trophies = Object.assign(f.trophies, s.trophies || {});
@@ -120,6 +122,11 @@ export class State {
   loadSettings() {
     try { const r = localStorage.getItem(SETTINGS_KEY); if (r) this.settings = Object.assign(defaultSettings(), JSON.parse(r)); } catch (e) { /* */ }
     return this.settings;
+  }
+  /** This player's own permanent key: who claimed which secret, across rejoins and reloads. */
+  playerKey() {
+    if (!this.settings.key) { this.settings.key = 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); this.saveSettings(); }
+    return this.settings.key;
   }
   saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch (e) { /* */ } }
 

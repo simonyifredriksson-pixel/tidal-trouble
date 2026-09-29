@@ -448,8 +448,8 @@ export class IslandLife {
       const nSalv = Object.keys(s.salvaged).length;
       if (nSalv >= 10) G.award('salvage');
     } else if (X.kind === 'cache') {
-      const last = s.caches[X.id];
-      if (last && s.day - last < 5) { G.ui.toast('Someone has dug here recently. Maybe you.', 'info'); return; }
+      if (G.claimed('cairn:' + X.id, P.id)) { G.ui.toast('You have already taken what was left under this cairn.', 'info'); return; }
+      G.claim('cairn:' + X.id, P.id);
       s.caches[X.id] = s.day;
       const coins = 100 + Math.floor(Math.random() * 500);
       G.state.earn(coins, 'cache');

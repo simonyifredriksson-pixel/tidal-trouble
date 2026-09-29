@@ -49,9 +49,10 @@ import { ISLAND_TELEPORTS, ISLAND_INFO } from '../data/IslandData.js';
 import { IslandLife } from './IslandLife.js';
 import { Intro } from './Intro.js';
 import { Edge } from './Edge.js';
+import { Deep } from './Deep.js';
 import { Gather } from './Gather.js';
 import { Build } from './Build.js';
-import { MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID, bpCost, planPrice } from '../data/BuildData.js';
+import { MATS, MAT_BY_ID, BP_BY_ID, RECIPE_BY_ID, bpCost, planPrice } from '../data/BuildData.js';
 import { GUS_INTRO } from '../data/NPCData.js';
 import { SECTIONS, sectionEntries } from '../data/JournalData.js';
 import { mistAt, VIGIL, WORLD, HOME_CENTRE, distHome, stormAt, fogAt, gloomAt, styleWeights } from '../world/MapData.js';
@@ -114,6 +115,7 @@ export class Game {
     this.isles = new IslandLife(this);
     this.intro = new Intro(this);
     this.edge = new Edge(this);
+    this.deep = new Deep(this);
     this.gather = new Gather(this);
     this.build = new Build(this);
     this.admin = this.admin || { autoCatch: false, autoCast: false };
@@ -184,6 +186,14 @@ export class Game {
     }
     return null;
   }
+  /** The permanent key of a player in this room (yours, or a guest's from their hello). */
+  keyOf(id) {
+    if (id === this.player.id || id === this.net?.selfId || !this.net?.isOnline) return this.state.playerKey();
+    return this.net.profiles.get(id)?.key || id;
+  }
+  /** Has this player already had this one-time reward? */
+  claimed(reward, pid) { return !!this.state.s.claims?.[reward]?.[this.keyOf(pid)]; }
+  claim(reward, pid) { const c = this.state.s.claims = this.state.s.claims || {}; (c[reward] = c[reward] || {})[this.keyOf(pid)] = this.state.s.day; this._saveDirty = true; }
   playerById(id) { if (id === this.player.id || id === this.net?.selfId) return this.player; return this.remotes.get(id) || null; }
   allPlayers() { return [this.player, ...this.remotes.values()]; }
   focusPlayer() { const all = this.allPlayers(); return all[Math.floor(Math.random() * all.length)]; }
@@ -441,6 +451,7 @@ export class Game {
       // gathering and building
       case 'hit': this.gather.hostHit(c, from); break;
       case 'mpick': this.gather.hostPick(c, from); break;
+      case 'split': this.gather.hostSplit(c, from); break;
       case 'bnew': this.build.hostNew(c, from); break;
       case 'bput': this.build.hostPut(c, from); break;
       case 'bdel': this.build.hostDel(c, from); break;
@@ -558,10 +569,7 @@ export class Game {
   }
   /* ================= the hidden places ================= */
   /** Is there something in this place's cache right now? */
-  cacheFull(id) {
-    const s = this.state.s, D = SECRET_BY_ID[id], d = s.caches?.[id];
-    return !!D && (d === undefined || s.day - d >= D.refill);
-  }
+  cacheFull(id, pid = this.player.id) { return !!SECRET_BY_ID[id] && !this.claimed('secret:' + id, pid); }
   /** Host: somebody found a hidden place. */
   _discover(id, from) {
     const s = this.state.s, D = SECRET_BY_ID[id];
@@ -575,8 +583,9 @@ export class Game {
   _plunder(id, from) {
     const s = this.state.s, D = SECRET_BY_ID[id], site = this.world.secrets.byId[id];
     if (!D || !site) return;
-    if (!this.cacheFull(id)) { this.tell(from, 'Empty. Somebody has been here recently - give it a few days.', 'info'); return; }
-    const first = s.caches[id] === undefined;
+    if (!this.cacheFull(id, from)) { this.tell(from, 'You have already taken what was here. Whatever is left is for someone else.', 'info'); return; }
+    const first = true;
+    this.claim('secret:' + id, from);
     s.caches[id] = s.day;
     if (!s.secrets[id]) this._discover(id, from);
     const at = site.cache.clone().add(new THREE.Vector3(0, 0.4, 0));
@@ -1209,6 +1218,7 @@ export class Game {
     this.isles.update(dt, host);
     this.events.update(dt, host);
     this.edge.update(dt, host);
+    this.deep.update(dt, host);
     this.gather.update(dt, host);
     this.build.update(dt, I, blocked);
     this.intro.update(dt, I);
@@ -1282,7 +1292,7 @@ export class Game {
     this.localStorm = localStorm;
     const sw = styleWeights(P.pos.x, P.pos.z);
     const introSea = cine && this.intro.t < 35.2;
-    const env = { tod: this.tod, storm: introSea ? 1 : Math.max(this.world.storm, localStorm), dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0, gloom, this.edge.dark, introSea ? 0.2 : 0), frost: sw.frost || 0, underwater: P.underwater, lights, edge, mist: Math.max(mist, fog * 0.8, introSea ? 0.55 : 0) * (this.state.has('foglamp') ? 0.45 : 1) };
+    const env = { tod: this.tod, storm: introSea ? 1 : Math.max(this.world.storm, localStorm), dark: Math.max(reg.black * 0.95, this.beasts.dark, this.world.secrets.inCave(P.pos) ? 0.42 : 0, gloom, this.edge.dark, introSea ? 0.2 : 0, this.deep.dread || 0), frost: sw.frost || 0, underwater: P.underwater, lights, edge, mist: Math.max(mist, fog * 0.8, introSea ? 0.55 : 0) * (this.state.has('foglamp') ? 0.45 : 1) };
     // how far out you have ever been (the map and the charts use it)
     if (dh > (this.state.s.farthest || 0)) this.state.s.farthest = Math.round(dh);
     // the first time anyone reaches Vigil's End
@@ -1326,7 +1336,7 @@ export class Game {
       engine: !!(b && (b.driver || b.autopilot)), throttle: b ? b.throttle : 0, speed: b ? b.speed() : 0,
       night: this.isNight(), nearLand: this.world.height(P.pos.x, P.pos.z) > -5, underwater: P.underwater,
       fire: b && b.fires.length > 0, tense: !!this.creatures.lev || this.creatures.giants.size > 0 || (this.fishing.fish && this.fishing.fish.giant) || this.great.kraken?.phase === 'attack' || (!!this.great.lev && this.mist > 0.3),
-      mist: this.mist,
+      mist: this.mist, hush: Math.max(this.edge?.hush || 0, (this.deep?.dread || 0) * 0.6),
     });
 
     // networking
@@ -1595,7 +1605,7 @@ export class Game {
     // a hidden place's cache - on a ledge, in the sand, or on the sea floor while you swim
     if (P.mode !== 'drive' && P.mode !== 'mount') {
       const cs = this.world.secrets.cacheNear(P.pos) || this.world.secrets.cacheNear(look);
-      if (cs) opt.unshift({ label: cs.D.cache + (this.cacheFull(cs.id) ? '' : ' (empty for now)'), icon: cs.D.icon, run: () => { this.act({ t: 'plunder', id: cs.id }); this.vm.play('throw'); } });
+      if (cs) opt.unshift({ label: cs.D.cache + (this.cacheFull(cs.id) ? '' : ' (you have had yours)'), icon: cs.D.icon, run: () => { this.act({ t: 'plunder', id: cs.id }); this.vm.play('throw'); } });
     }
     const o = opt[0];
     // nothing to press E for: tell them what the axe, pick or book would do here
@@ -1960,8 +1970,8 @@ export class Game {
       case 'repairAll': if (b) { b.leaks = []; b.breaks = []; b.fires = []; b.water = 0; b.hp = b.stats.hp; } break;
       // the hidden places
       case 'secretsAll': for (const D of SECRETS) this._discover(D.id, P.id); break;
-      case 'secretsReset': s.secrets = {}; s.caches = {}; this._changed(); break;
-      case 'refill': s.caches = {}; this._changed(); break;
+      case 'secretsReset': s.secrets = {}; s.caches = {}; s.claims = {}; this._changed(); break;
+      case 'refill': s.caches = {}; s.claims = {}; this._changed(); break;
       // the chart and the islands
       case 'edgeTest': {
         // past the edge of the charts, at the helm, heading home - it is coming
@@ -1978,6 +1988,15 @@ export class Game {
         this.tell(P.id, 'You are past the edge of every chart. Full throttle (W) for home - see if you can outrun it.', 'warn');
         break;
       }
+      case 'mats': {
+        s.mats = s.mats || {};
+        if (c.id === 'none') { s.mats = {}; this.tell(P.id, 'Pack emptied.', 'info'); break; }
+        const ids = c.id === 'all' ? MATS.map(M => M.id) : [c.id];
+        for (const id of ids) if (MAT_BY_ID[id]) s.mats[id] = (s.mats[id] || 0) + c.n;
+        this.tell(P.id, `+${c.n} ${c.id === 'all' ? 'of every material' : MAT_BY_ID[c.id]?.name || c.id}`, 'good');
+        break;
+      }
+      case 'deepNow': { this.deep.quiet = 0; this.deep.acts = []; const z = 4; this.deep._start(c.id || 'ram', P, z); break; }
       case 'chartAll': this.isles.chartAll(); break;
       case 'islesAll': for (const I of ISLAND_INFO) this.isles._discover(I, P); break;
       case 'chartReset': this.isles.chartReset(); s.found = {}; s.sighted = {}; break;
@@ -2191,6 +2210,7 @@ export class Game {
         for (let k = 0; k < 5; k++) this.fx.confetti(this.player.pos.x + (Math.random() - 0.5) * 6, this.player.pos.y + 2, this.player.pos.z + (Math.random() - 0.5) * 6, 80);
         break;
       }
+      case 'krakenGlimpse': this.audio.groan(0.6); this.addShake(0.2); break;
       case 'krakenAttack': {
         this.ui.banner('THE BOAT IS BEING ATTACKED', e.first ? 'Something has grabbed the boat. Get your axe out (0) and chop the arms - walk up and press E!' : 'IT IS BACK. Axe out - chop the arms!', 'tentacle', 5);
         this.audio.shriek(0.8); this.addShake(1); this.audio.crash();
@@ -2217,6 +2237,7 @@ export class Game {
       case 'toolUp': this.vm?.retool(this.state.s.upg || {}); this.ui.hotbar(); break;
       case 'build': this.build?.onEvent(e); break;
       case 'edge': this.edge?.onEvent(e); break;
+      case 'deep': this.deep?.onEvent(e); break;
       case 'edgeWake': this._edgeWake(); break;
       case 'intro': this.intro?.sync(e.at); break;
     }
@@ -2294,6 +2315,7 @@ export class Game {
           const area = a === 'all' ? 'all' : (this.ui._adm?.area || document.getElementById('admArea')?.value || 'home');
           this.act({ t: 'admin', cmd, area, zone: this.zone || 0 });
         }
+        else if (cmd === 'matGive') this.act({ t: 'admin', cmd: 'mats', id: a, n: Math.max(0, Math.round(+(document.getElementById('admMatN')?.value || 100))) });
         else if (cmd === 'moneyAdd' || cmd === 'moneySet') this.act({ t: 'admin', cmd: 'money', set: cmd === 'moneySet', n: +(document.getElementById('admMoney')?.value || 0) });
         else if (cmd === 'tod') send({ v: +a });
         else if (cmd === 'event') send({ id: a });

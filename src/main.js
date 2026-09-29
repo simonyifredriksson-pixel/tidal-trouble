@@ -166,7 +166,7 @@ async function joinRoom(code) {
   net._status('Connecting...');
   ui.render();
   try {
-    await net.join(code, { name: state.settings.name || 'Fisher', look: state.settings.look });
+    await net.join(code, { name: state.settings.name || 'Fisher', look: state.settings.look, key: state.playerKey() });
   } catch (e) { net._status(e.message); ui.render(); }
 }
 
@@ -387,6 +387,17 @@ function stage(name) {
       G.tod = +(Q.get('tod') || 0.5);
     } else window.__log && window.__log('no room for the yard');
   }
+  // something under the boat: ?stage=deep:KIND:SECONDS
+  if (name.startsWith('deep:')) {
+    const [, k = 'pass', sec = '4.5'] = name.split(':');
+    G.teleport('offshore');
+    P.attach(b, new THREE.Vector3(0.6, b.deck, 0)); P.yaw = b.heading + Math.PI / 2 * -1; P.pitch = -0.55;
+    G.tod = 0.5; G.deep.quiet = 0; G.deep._start(k, P, 4);
+    const A = G.deep.acts[0];
+    if (A) { A.a = b.heading; A.side = 1; const lk = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)); A.x += lk.x * 14; A.z += lk.z * 14; }
+    advance(+sec);
+    game.frozen = true;
+  }
   // a boat going up on its blueprint: ?stage=boatbuild:HULL:FRACTION
   if (name.startsWith('boatbuild')) {
     const [, hull = 'seafarer', fr = '0.55'] = name.split(':');
@@ -463,6 +474,7 @@ function stage(name) {
       const nc = Q.has('cuts') ? +Q.get('cuts') : 6;
       for (let h = 0; h < nc && !G.gather.gone.has(tree.id); h++) { const a = Math.atan2(P.pos.x - x, P.pos.z - z) + (h - (nc - 1) / 2) * 0.9; G._do({ t: 'hit', id: tree.id, tool: 'axe', dir: [-Math.sin(a), -Math.cos(a)], at: [x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5] }, P.id); }
       advance(sec);
+      if (Q.has('split')) { G._do({ t: 'split', id: tree.id }, P.id); advance(+Q.get('split')); }
       game.frozen = true;
     }
   }

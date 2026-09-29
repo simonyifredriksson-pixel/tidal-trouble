@@ -77,7 +77,7 @@ function lakeGLSL() {
   return s;
 }
 
-const WAVE_GLSL = `
+export const WAVE_GLSL = `
 uniform float uTime;
 uniform float uStorm;
 uniform vec4 uWp;
