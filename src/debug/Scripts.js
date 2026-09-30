@@ -1412,6 +1412,87 @@ export async function runScripts(names, game) {
         btn && btn.click(); G.ui.close(); step(2);
         ok(P.boat && P.mode === 'drive' && G.edge.E, 'you are at the helm past the edge, and it has noticed you: ' + (G.edge.E ? G.edge.E.ph : 'nothing'));
       }
+      if (name === 'guns') {
+        // the kick, the flash, the rattle gun, sending people flying; pirates shooting boats; swimming; blacking out
+        const SH = G.ships, s = G.state.s, GD = await import('../data/GearData.js');
+        SH.clear(); G.teleport('offshore'); step(0.5);
+        if (P.boat !== b) P.attach(b, V(0, b.deck, 0));
+        for (const id of ['pin', 'cutlass', 'pistol', 'blunder', 'rattle']) s.tools[id] = true;
+        step(0.4);
+        ok(G.state.equippables().includes('rattle') && GD.TOOL_BY_ID.rattle.auto, 'the Rattletrap Gun: a machine gun you can own');
+        P.tool = 'pistol'; G.vm.setTool('pistol'); step(0.4);
+        const p0 = P.pitch; G.tools.cool = 0; G.tools._weapon(GD.TOOL_BY_ID.pistol); step(1 / 30);
+        ok(G.vm.recoil > 0.5 && G.vm.flashT > 0 && P.pitch > p0, 'the flintlock kicks: recoil ' + G.vm.recoil.toFixed(2) + ', a muzzle flash, the aim climbs ' + (P.pitch - p0).toFixed(3));
+        step(0.7); ok(G.vm.recoil < 0.2, 'and it settles (' + G.vm.recoil.toFixed(2) + ')');
+        P.tool = 'rattle'; G.vm.setTool('rattle'); step(0.3); P.pitch = 0;
+        let shots = 0; const w0 = G.tools._weapon.bind(G.tools); G.tools._weapon = W => { shots++; w0(W); };
+        I.fakeBtn(0, true); step(0.1); const early = shots; step(1.5); I.fakeBtn(0, false); step(0.1);
+        G.tools._weapon = w0;
+        ok(early === 0 && shots >= 12, 'hold the trigger: it spins up, then rattles off ' + shots + ' rounds in 1.5 s');
+        P.tool = 'none'; G.vm.setTool('none');
+        // flinging, and juggling
+        const F = SH.spawn('fisher', b.pos.x + b.forward().z * 9, b.pos.z - b.forward().x * 9, b.heading); SH._stop(F); F.st = 'fish'; F.fishT = 99; step(0.5);
+        P.detach(); P.attach(F.boat, V(0, F.boat.deck, 0)); P.mode = 'walk'; step(0.2);
+        const C = F.crew[1]; C.local.set(0.3, F.boat.deck, 1.2); step(0.05);
+        G.act({ t: 'strike', w: 'pin', crew: C.id }); step(0.05);
+        ok(C.st === 'fly' && C.vel.y > 2, 'a belaying pin sends a deckhand flying (' + C.st + ')');
+        let top = 0; for (let k = 0; k < 8; k++) { G.act({ t: 'strike', w: 'rattle', crew: C.id }); step(0.12); top = Math.max(top, C.pos.y); }
+        ok(C.st === 'fly', 'the rattle gun keeps him in the air (' + C.st + ', up to ' + top.toFixed(1) + ' m)');
+        step(5); ok(C.st === 'down' || C.st === 'swim', 'and down he comes: ' + C.st);
+        // a pirate galley carries its corvus stood up against the pole
+        const PS = SH.spawn('pirate', b.pos.x + 150, b.pos.z, 0); step(0.2);
+        ok(PS.bridgeMesh && PS.bridgeMesh.visible && PS.drop === 0 && PS.rope && PS.dress.userData.corvus, 'a pirate galley carries its corvus stood up against the pole');
+        SH.clear();
+        // pirates shoot your boat, not you
+        P.detach(); P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; P.hp = 100; b.hp = b.stats.hp; b.leaks = [];
+        const PS2 = SH.spawn('pirate', b.pos.x + b.forward().z * 20, b.pos.z - b.forward().x * 20, b.heading); step(0.1);
+        const gunner = PS2.crew.find(X => X.W.ranged);
+        for (let k = 0; k < 5; k++) SH._crewShoot(gunner, P, 20);
+        step(0.1);
+        ok(P.hp === 100 && b.hp < b.stats.hp, 'pirate pistols shoot up your boat, not you (you ' + Math.round(P.hp) + ', hull -' + Math.round(b.stats.hp - b.hp) + ')');
+        SH._ballHit({ p: P.pos.clone().add(V(1, 0.5, 0)), s: PS2.id }, b); step(0.3);
+        ok(P.hp === 100 && P.mode !== 'down', 'a cannonball on your deck shoves you, it does not hurt you (' + P.mode + ')');
+        SH.clear();
+        // swimming: as long as you like; ten seconds under
+        ok(P.maxBreath === 10, 'ten seconds of air under the water');
+        P.detach(); P.place(V(60, -1, 300), 0); P.mode = 'swim'; P.hp = 100;
+        step(25, () => { P.vel.y = Math.max(P.vel.y, 0); });
+        ok(P.mode === 'swim' && !P.exhausted && P.hp >= 99 && !G.passing, 'twenty-five seconds of swimming and you are fine (' + P.mode + ', hp ' + Math.round(P.hp) + ')');
+        // passing out: black, no words, two seconds
+        G.passing = false; G.passOut(P, 'drown'); step(0.1);
+        const fd = document.querySelector('.fade');
+        ok(fd.classList.contains('on') && !fd.textContent.trim(), 'passing out: just black, no words');
+        await new Promise(r => setTimeout(r, 2300)); step(0.2);
+        ok(!fd.classList.contains('on') && !G.passing, 'for two seconds, and you are home');
+        b.leaks = []; b.breaks = []; b.fires = []; b.water = 0; b.hp = b.stats.hp;
+      }
+      if (name === 'shipspeed') {
+        // every ship out there is slower than you: you can always catch them (and outrun a pirate)
+        const SH = G.ships;
+        for (const hull of ['dinghy', 'motor', 'expedition']) {
+          SH.clear();
+          G._do({ t: 'admin', cmd: 'giveHull', id: hull }, P.id); step(0.3);
+          const b = G.boats[0];
+          G.teleport('offshore'); step(0.5);
+          if (P.boat !== b) P.attach(b, V(0, b.deck, 0));
+          b.leaks = []; b.breaks = []; b.fires = []; b.water = 0; b.hp = b.stats.hp;
+          // your own top speed, flat out for a while
+          b.autopilot = { x: b.pos.x, z: b.pos.z }; b.throttle = 1; b.steer = 0; step(14);
+          const mine = Math.hypot(b.vel.x, b.vel.y); b.throttle = 0; b.autopilot = null; b.vel.set(0, 0); step(0.5);
+          const res = [];
+          for (const [kind, st] of [['fisher', 'roam'], ['rich', 'flee'], ['guarded', 'flee'], ['explorer', 'flee'], ['pirate', 'chase']]) {
+            const spot = SH._openWater(b.pos.x, b.pos.z, 90, 160); if (!spot) { res.push(kind + ' no water'); continue; }
+            const S = SH.spawn(kind, spot.x, spot.z, Math.atan2(spot.x - b.pos.x, spot.z - b.pos.z));
+            S.st = st; S.fishT = 99; S.wp = { x: spot.x + (spot.x - b.pos.x) * 3, z: spot.z + (spot.z - b.pos.z) * 3 };
+            let top = 0; for (let i = 0; i < 12; i++) { step(1); if (st !== 'chase') S.st = st; top = Math.max(top, Math.hypot(S.boat.vel.x, S.boat.vel.y)); }
+            const lim = st === 'chase' ? 0.9 : st === 'flee' ? 0.75 : 0.5;
+            ok(top <= mine * lim + 0.3, hull + ' (' + mine.toFixed(1) + ' m/s): ' + S.K.name + ' ' + S.st + ' tops out at ' + top.toFixed(1) + ' m/s (' + Math.round(top / mine * 100) + '%)');
+            SH._remove(S);
+          }
+        }
+        SH.clear();
+        G._do({ t: 'admin', cmd: 'giveHull', id: 'dinghy' }, P.id); step(0.3);
+      }
       if (name === 'ships') {
         // other people's boats: out on open water, a fishing boat comes by, then a trader, then pirates
         const SH = G.ships, s = G.state.s;
@@ -1442,14 +1523,21 @@ export async function runScripts(names, game) {
         G._do({ t: 'pickup', id: theirs[0].id }, P.id); step(0.2);
         ok(F.hostile.has(P.id), 'you pick one up in front of them: "' + (F.crew.find(C => C.sayText)?.sayText || '?') + '"');
         for (let i = 0; i < 12 * 30 && P.hp >= hp0 && P.mode !== 'down'; i++) step(1 / 30);
-        ok(P.hp < hp0 || P.mode === 'down' || P.mode === 'swim', 'and they fight back (hp ' + Math.round(P.hp) + ', ' + P.mode + ')');
+        { let fell = false; for (let i = 0; i < 4 * 30; i++) { step(1 / 30); if (P.mode === 'down') fell = true; } ok(P.hp < hp0 && !fell, 'and they fight back (hp ' + Math.round(P.hp) + ') - a shove each time, and you stay on your feet (' + P.mode + ')'); }
         // knock them down, tie one up, throw one over the side
         G.dropHeld(P, true); P.hp = 1e4; P.mode = 'walk'; if (P.boat !== F.boat) P.attach(F.boat, V(0, F.boat.deck, 0));
         s.tools.pin = true; s.tools.pistol = true;
-        for (const C of F.crew) for (let k = 0; k < 4 && C.st !== 'down'; k++) { G.act({ t: 'strike', w: 'pistol', crew: C.id }); step(0.1); }
-        ok(F.crew.every(C => C.st === 'down' || C.st === 'swim'), 'four flintlock shots and they are all down: ' + F.crew.map(C => C.st).join(', '));
-        const C0 = F.crew.find(C => C.st === 'down');
-        if (C0) { G.act({ t: 'crewTie', id: C0.id, k: 'tie' }); step(0.1); ok(C0.bound, 'tied up'); G.act({ t: 'crewTie', id: C0.id, k: 'throw' }); step(0.1); ok(C0.st === 'swim' && !C0.on, 'and thrown over the side'); }
+        const flew = new Set();
+        for (const C of F.crew) for (let k = 0; k < 3; k++) { G.act({ t: 'strike', w: 'pistol', crew: C.id }); step(0.1); if (C.st === 'fly') flew.add(C.id); }
+        ok(flew.size === F.crew.length, 'every flintlock hit sends them flying (' + flew.size + ' of ' + F.crew.length + ' in the air)');
+        step(3);
+        ok(F.crew.every(C => C.st === 'down' || C.st === 'swim'), 'and they come down flat on a deck or in the sea: ' + F.crew.map(C => C.st).join(', '));
+        // one of them flat on their deck, to tie up
+        const C0 = F.crew[1];
+        if (C0.st === 'swim') { C0.on = F.boat; C0.st = 'fight'; C0.local.set(0.6, F.boat.deck, 0.5); C0.hp = 40; C0.ko = false; }
+        SH._crewHurt(C0, 999, P.pos, 0, P.id); step(0.1);
+        G.act({ t: 'crewTie', id: C0.id, k: 'tie' }); step(0.1); ok(C0.bound, 'tied up');
+        G.act({ t: 'crewTie', id: C0.id, k: 'throw' }); step(0.1); const hurled = C0.st === 'fly'; step(3); ok(hurled && C0.st === 'swim' && !C0.on, 'and hurled over the side (' + C0.st + ')');
         // crates
         const cg = F.cargo.find(c => !c.open);
         const n0 = G.loot.items.size;
@@ -1465,6 +1553,7 @@ export async function runScripts(names, game) {
         // back on our own boat: the pirates
         P.detach(); P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; P.hp = 100; b.hp = b.stats.hp; b.leaks = [];
         const f = b.forward();
+        const fades = [], f0 = G.ui.fade.bind(G.ui); G.ui.fade = (on, text = '') => { fades.push([on, text]); f0(on, text); };
         const PS = SH.spawn('pirate', b.pos.x + f.z * 70, b.pos.z - f.x * 70, b.heading);
         ok(PS && PS.crew.length === 6 && PS.dress && PS.dress.userData.flag, 'a pirate galley: six crew, six guns, and a skull flag');
         let cannon = 0, balls = 0; const on = SH.onEvent.bind(SH); SH.onEvent = e => { if (e.k === 'cannon') cannon++; on(e); };
@@ -1473,20 +1562,34 @@ export async function runScripts(names, game) {
         ok(PS.engaged, 'it has seen you and comes for you');
         ok(cannon > 0, 'it fires its guns: ' + cannon + ' shots' + (b.hp < hp1 ? ', your hull ' + Math.round(hp1 - b.hp) + ' down' : ''));
         if (!PS.bridge) { PS.boat.pos.set(b.pos.x + f.z * (b.hull.hw + PS.boat.hull.hw + 3), 0, b.pos.z - f.x * (b.hull.hw + PS.boat.hull.hw + 3)); PS.boat.heading = b.heading; PS.boat.vel.set(0, 0); b.vel.set(0, 0); step(0.2); SH.lowerBridge(PS, b); }
-        ok(!!PS.bridge, 'the spiked boarding bridge comes down on your rail');
-        P.hp = 1e4; if (P.boat !== b) { P.detach?.(); P.attach(b, V(0, b.deck, 0)); } P.mode = 'walk'; step(6);
+        ok(!!PS.bridge, 'the corvus is let go');
+        P.hp = 1e4; if (P.boat !== b) { P.detach?.(); P.attach(b, V(0, b.deck, 0)); } P.mode = 'walk';
+        step(0.35); const mid = PS.drop; step(0.6);
+        ok(mid > 0.1 && mid < 1 && PS.drop >= 1 && PS.bridge.t > 0.9, 'it swings down off its pole and bites into your deck (' + mid.toFixed(2) + ' -> ' + PS.drop.toFixed(2) + ')');
+        let across0 = 0, tied = false, hpP = P.hp, noShot = true;
+        for (let i = 0; i < 16 * 30 && !tied; i++) { step(1 / 30); across0 = Math.max(across0, PS.crew.filter(C => C.on === b).length); if ((SH.bound[P.id] || 0) > SH.t) tied = true; if (P.mode === 'down') noShot = false; }
+        ok(tied && P.boundT > 0, 'they come across it and tie you up (' + across0 + ' across, hp ' + Math.round(P.hp) + ' of ' + Math.round(hpP) + ')');
+        ok(noShot, 'and you never get knocked flat');
+        // hammer E: wriggle free before they get you off the boat
+        for (let i = 0; i < 3 * 30 && P.boundT > 0; i++) step(1 / 30, () => { if (i % 3 === 0) I.down.add('KeyE'); });
+        ok(!(P.boundT > 0) && !((SH.bound[P.id] || 0) > SH.t), 'hammer E and you wriggle free');
+        P.hp = 1e4; step(0.3);
         { const C = PS.crew[1], q = SH.crewPos(C); log('INFO foe ' + (SH._foe(PS, C)?.id || 'none') + ' d ' + q.distanceTo(P.pos).toFixed(1) + ' pb ' + (P.boat?.id) + ' to ' + PS.bridge?.to + ' bound ' + SH.bound[P.id] + ' t ' + SH.t.toFixed(1) + ' players ' + G.allPlayers().map(Q => Q.id).join(',')); }
         log('INFO pirates: ' + PS.crew.map(C => C.weapon + ':' + C.st + (C.on === b ? '@you' : C.on === PS.boat ? '@galley' : '@-')).join(' ') + ' hostile ' + [...PS.hostile].join(','));
-        const across = PS.crew.filter(C => C.on === b).length;
-        ok(across > 0, across + ' pirates across the bridge onto your deck');
+        ok(across0 > 0, across0 + ' pirates across the bridge onto your deck');
+        // a blunderbuss at point blank: off your deck and into the sea
+        const PB = PS.crew.find(C => C.on === b && C.st !== 'fly');
+        if (PB) { s.tools.blunder = true; G.act({ t: 'strike', w: 'blunder', crew: PB.id, mult: 7 }); step(0.1); const v0 = PB.vel ? Math.hypot(PB.vel.x, PB.vel.z) : 0; step(3); ok(v0 > 12 && PB.on !== b, 'a blunderbuss blast sends a pirate flying (' + v0.toFixed(0) + ' m/s, now ' + PB.st + ')'); }
         // kick it off
         G.act({ t: 'kickBridge', id: PS.id, n: 999 }); step(0.3);
         ok(!PS.bridge, 'you kick the bridge off: it drops into the sea');
         SH.onEvent = on;
-        // captured: everyone near is tied up
-        P.hp = 100; G.passing = false;
-        SH.captureAll(PS, [P]);
-        await new Promise(r => setTimeout(r, 7500)); step(0.5);
+        // captured: tied up and not fast enough - black for two seconds, no words, and a cage
+        P.hp = 100;
+        if (!G.passing && !G.state.captive) { SH._bindPlayer(PS, PS.crew[1], P); step(3.4); }
+        await new Promise(r => setTimeout(r, 2600)); step(0.5);
+        G.ui.fade = f0;
+        ok(fades.some(([on, t]) => on && !t) && fades.every(([, t]) => !t), 'still tied when they are done: everything goes black, with no words (' + fades.length + ' fades)');
         const PI = G.pirateIsle;
         ok(PI.cell >= 0 && PI.cageAt(P.pos) >= 0, 'CAPTURED: you wake up in a cage on Blackflag Isle (' + P.pos.x.toFixed(0) + ', ' + P.pos.z.toFixed(0) + ')');
         ok(G.state.hot.slots.every(k => !k) && P.tool === 'none', 'your hotbar is empty - they took everything');

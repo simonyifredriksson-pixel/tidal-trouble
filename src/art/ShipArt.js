@@ -137,6 +137,19 @@ export function galleyDress(H, D) {
   b.color(0x3a2a1c);
   G.userData.flag = flag;
   G.userData.castle = { z: zc, y: D + 1.52, hw: hw * 0.85, hd: 1.7 };
+  // the corvus pole, forward: a tall post with a pulley at the top, and the hinge block at its foot
+  const zp = hl - 2.6, pb = new MeshBuilder(rng(12));
+  pb.color(0x4a3222).cyl(0.16, 0.13, D, D + 7.6, 8, true, 0, zp);
+  pb.color(0x2a2a2e); for (const y of [D + 1.6, D + 4.2, D + 6.8]) pb.cyl(0.18, 0.18, y, y + 0.1, 8, false, 0, zp);
+  pb.color(0x3a2a1c).box(0.34, 0.2, 0.5, 0, D + 7.55, zp + 0.1);
+  pb.color(0x6a6a70).push(0, D + 7.5, zp + 0.3, 0, 0, Math.PI / 2); pb.cyl(0.13, 0.13, -0.06, 0.06, 8, true); pb.pop();
+  pb.color(0x3a2a1c).box(1.5, 0.5, 0.7, 0, D + 0.85, zp + 0.55);
+  pb.color(0x2a2a2e).push(0, D + 1.1, zp + 0.55, 0, 0, Math.PI / 2); pb.cyl(0.09, 0.09, -0.78, 0.78, 7, true); pb.pop();
+  // a winch for the rope
+  pb.color(0x5a3a22).box(0.7, 0.4, 0.4, 0, D + 0.3, zp - 0.9);
+  pb.color(0x7a5a3a).push(0, D + 0.5, zp - 0.9, 0, 0, Math.PI / 2); pb.cyl(0.14, 0.14, -0.3, 0.3, 8, true); pb.pop();
+  G.add(mesh(pb));
+  G.userData.corvus = { z: zp + 0.55, y: D + 1.1, top: D + 7.5, pz: zp + 0.3 };
   return G;
 }
 
@@ -164,18 +177,29 @@ export function cargoMesh(kind, seed = 1) {
   return m;
 }
 
-/** The boarding bridge: a plank walk `len` long along +Z with rails, and spikes hanging from the far end. */
-export function boardingBridge(len = 6) {
+/** The corvus: a boarding bridge `len` long along +Z from its hinge, with side rails, iron bands and a
+    great hooked spike under the far end that bites into your deck. */
+export function boardingBridge(len = 9) {
   const b = new MeshBuilder(rng(31));
-  const n = Math.max(4, Math.round(len / 0.5));
-  for (let i = 0; i < n; i++) b.color(shadeHex(0x5a3e28, 0.85 + (i % 3) * 0.08)).box(1.1, 0.08, len / n * 0.92, 0, 0, (i + 0.5) * len / n);
-  b.color(0x3a2a1c); for (const x of [-0.55, 0.55]) b.box(0.08, 0.1, len, x, 0.05, len / 2);
-  for (const x of [-0.52, 0.52]) { for (let k = 0; k <= 4; k++) b.box(0.05, 0.8, 0.05, x, 0.4, k * len / 4); b.box(0.05, 0.05, len, x, 0.8, len / 2); }
-  // the spikes: iron teeth that drop into your rail
+  const n = Math.max(6, Math.round(len / 0.38));
+  for (let i = 0; i < n; i++) b.color(shadeHex(0x6a4a2e, 0.82 + (i % 3) * 0.09)).box(1.24, 0.09, len / n * 0.9, 0, 0, (i + 0.5) * len / n);
+  b.color(0x3a2a1c); for (const x of [-0.64, 0.64]) b.box(0.12, 0.18, len, x, 0.02, len / 2);
+  // side walls of boards, like a trough, with a top rail
+  for (const x of [-0.66, 0.66]) {
+    for (let k = 0; k <= 6; k++) b.color(0x3a2a1c).box(0.07, 0.95, 0.07, x, 0.5, k * len / 6);
+    b.color(0x4a3424).box(0.05, 0.42, len, x, 0.36, len / 2);
+    b.color(0x2e2016).box(0.07, 0.07, len, x, 0.96, len / 2);
+  }
+  // iron bands
+  b.color(0x2a2a2e); for (let k = 1; k < 5; k++) b.box(1.4, 0.05, 0.08, 0, 0.07, k * len / 5);
+  b.color(0x2a2a2e).push(0, 0, 0.05, 0, 0, Math.PI / 2); b.cyl(0.08, 0.08, -0.7, 0.7, 7, true); b.pop();
+  // the beak: a heavy iron spike, curved, and a row of teeth either side of it
+  b.color(0x3a3a40).box(1.3, 0.14, 0.3, 0, -0.04, len - 0.2);
   b.color(0x2a2a2e);
-  for (let k = 0; k < 5; k++) { b.push(-0.44 + k * 0.22, -0.02, len - 0.1, Math.PI, 0, 0); b.cone(0.05, 0, 0.45, 4); b.pop(); }
-  b.color(0x6a6a70); b.box(1.1, 0.06, 0.12, 0, -0.02, len - 0.1);
-  return mesh(b);
+  b.push(0, -0.1, len - 0.2, Math.PI + 0.25, 0, 0); b.cone(0.13, 0, 1.0, 6); b.pop();
+  for (const x of [-0.45, -0.22, 0.22, 0.45]) { b.push(x, -0.08, len - 0.22, Math.PI + 0.15, 0, 0); b.cone(0.05, 0, 0.42, 4); b.pop(); }
+  b.color(0x8a8a90); b.blob(0.09, 0.09, 0.09, 0, 1.0, len - 0.25, 5, 3);
+  const m = mesh(b); m.castShadow = true; return m;
 }
 
 /** A cannonball. */

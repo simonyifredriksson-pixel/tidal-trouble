@@ -126,6 +126,13 @@ export class Audio {
   step(wood) { this.noise(0.06, wood ? 0.05 : 0.03, wood ? 'bandpass' : 'lowpass', wood ? 700 : 400, 2); }
   throw() { this.noise(0.3, 0.2, 'bandpass', 900, 1.5, 3); }
   swoosh() { this.noise(0.35, 0.15, 'bandpass', 600, 1.2, 3); }
+  /** A gun going off: k 1 a flintlock, 1.6 the blunderbuss, 0.5 one round of the rattle gun. */
+  gun(k = 1, pos = null) { const a = this._att(pos, 60); this.noise(0.1 + k * 0.2, 0.42 * a * Math.min(1.5, k + 0.2), 'lowpass', 2600 / k, 0.8, 0.25); this.tone(120 / k, 0.14 + k * 0.1, 'square', 0.2 * a * Math.min(1, k + 0.3), 0.001, 0.3); if (k >= 1) this.noise(0.6 * k, 0.07 * a, 'bandpass', 600, 0.6, 0.5, 0.06); }
+  /** Somebody sent flying. */
+  boing(pos = null) { const a = this._att(pos, 60); this.tone(170, 0.38, 'triangle', 0.24 * a, 0.004, 3.4); this.noise(0.25, 0.08 * a, 'bandpass', 900, 1, 3); }
+  yelp(pos = null) { const a = this._att(pos, 60); const f = 360 + Math.random() * 280; this.tone(f, 0.5, 'sawtooth', 0.06 * a, 0.02, 1.9); this.tone(f * 1.5, 0.45, 'sine', 0.05 * a, 0.02, 1.8); }
+  /** The hit marker: you got one. */
+  bonk() { this.tone(950, 0.07, 'square', 0.09, 0.001, 0.5); this.tone(1500, 0.05, 'sine', 0.07, 0.001, 0.6, 0.02); }
   thunk() { this.tone(140, 0.12, 'triangle', 0.25, 0.002, 0.5); this.noise(0.08, 0.15, 'lowpass', 800, 1); }
   drill() { if (Math.random() < 0.3) this.noise(0.1, 0.06, 'bandpass', 2400, 4); }
   hammer() { this.tone(420, 0.05, 'square', 0.1, 0.002, 0.5); this.noise(0.06, 0.1, 'bandpass', 1800, 3); }

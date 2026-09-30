@@ -22,6 +22,8 @@ import { WORLD, HOME_CENTRE } from '../world/MapData.js';
 import { carryStyle, carryPose, CARRY_SPEED } from './Loot.js';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
+// people hitting you only shove you a little: you never fall over for it
+const NUDGE = new Set(['crew', 'shot', 'pirate', 'guard', 'cannon']);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _w2 = new THREE.Vector3();
 
 export class Player {
@@ -55,7 +57,7 @@ export class Player {
 
   get maxStamina() { return this.game.state.has('diving') ? 16 : 10; }
 
-  get maxBreath() { return this.game.state.has('wreckdiver') ? 180 : this.game.state.has('diving') ? 90 : 20; }
+  get maxBreath() { return this.game.state.has('wreckdiver') ? 180 : this.game.state.has('diving') ? 90 : 10; }
 
   forward(out = _v) { return out.set(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)); }
   flatForward(out = _v) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
@@ -84,7 +86,16 @@ export class Player {
   }
 
   /** Knocked over. `dir` is a world push; strong pushes near the rail go overboard. */
+  /** A little shove (a punch, a shot, a cannonball close by): you slide a step, you keep your feet. */
+  nudge(dir, force = 3) {
+    const f = Math.min(force, 7) * 1.1;
+    const l = Math.hypot(dir.x, dir.z) || 1;
+    this.push = this.push || new THREE.Vector3();
+    this.push.x += dir.x / l * f; this.push.z += dir.z / l * f;
+    if (this.onGround !== false && !this.boundT) this.vel.y = Math.max(this.vel.y, 1.2);
+  }
   knock(dir, force = 4, why = '') {
+    if (NUDGE.has(why)) return this.nudge(dir, force);
     if (this.mode === 'down' && this.downT < 1.2) return;
     if (this.mode === 'drive' || this.mode === 'mount') { if (this.boat) this.boat.driver = null; this.mode = 'walk'; }
     this.game.dropHeld(this, true);
@@ -162,6 +173,12 @@ export class Player {
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
+    // a shove slides you along for a moment, on top of whatever you are doing
+    if (this.push && (this.push.x || this.push.z) && this.mode !== 'drive' && this.mode !== 'mount' && spd > 0.1) {
+      wx += this.push.x / spd; wz += this.push.z / spd;
+      const k = Math.exp(-dt * 7); this.push.x *= k; this.push.z *= k;
+      if (Math.hypot(this.push.x, this.push.z) < 0.05) this.push.set(0, 0, 0);
+    }
 
     if (this.mode === 'down') {
       this.downT += dt;
@@ -195,28 +212,11 @@ export class Player {
     }
     if (this.boat) this.boat.toWorld(this.local, this.pos);
 
-    // swimming stamina: roughly ten seconds, then you are spent. Within about
-    // fifteen metres of the beach you are safe: an exhausted swimmer there is
-    // carried in by the surf and never passes out or drowns.
+    // within about fifteen metres of the beach you are safe: out of breath
+    // there, your body just bobs back up and you never drown.
     const safe = this.mode === 'swim' && this._nearShore(dt);
-    if (this.mode === 'swim') {
-      this.stamina = Math.max(0, this.stamina - dt * (sprint ? 1.5 : 1) * (this.exhausted ? 0 : 1));
-      if (this.stamina <= 0 && !this.exhausted) { this.exhausted = true; this.exhaustT = 0; Bus.emit('player:exhausted', { p: this, safe }); }
-      if (this.exhausted) {
-        if (safe) {
-          // the surf takes you in, gently
-          this.exhaustT = Math.max(0, this.exhaustT - dt);
-          const s = this._shore;
-          const dx = s.x - this.pos.x, dz = s.z - this.pos.z, d = Math.hypot(dx, dz) || 1;
-          this.vel.x += dx / d * 1.1 * dt; this.vel.z += dz / d * 1.1 * dt;
-        } else this.exhaustT += dt;
-        if (this.exhaustT > 12) { this.exhausted = false; this.stamina = this.maxStamina; G.passOut(this, 'exhausted'); }
-      }
-    } else {
-      this.stamina = Math.min(this.maxStamina, this.stamina + dt * (this.boat ? 4 : 3));
-      if (this.exhausted && this.stamina > 3) this.exhausted = false;
-      this.exhaustT = 0;
-    }
+    // (you can swim as long as you like: the only limit is your breath, under the water)
+    this.stamina = this.maxStamina; this.exhausted = false; this.exhaustT = 0;
     // breath
     const head = this.pos.y + EYE - 0.05;
     const sea = world.waterAt(this.pos.x, this.pos.z);

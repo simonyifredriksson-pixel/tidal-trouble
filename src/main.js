@@ -25,6 +25,7 @@ import { U } from './art/Materials.js';
 import { BP_BY_ID } from './data/BuildData.js';
 import { FISH_BY_ID } from './data/FishData.js';
 import { HULL_BY_ID } from './data/BoatData.js';
+import { TOOL_BY_ID } from './data/GearData.js';
 
 const Q = new URLSearchParams(location.search);
 if (Q.has('debug')) {
@@ -645,6 +646,17 @@ function stage(name) {
     const at = S.boat.pos.clone().add(new THREE.Vector3(0, 3.2, 0));
     P.yaw = Math.atan2(-(at.x - P.pos.x), -(at.z - P.pos.z)); P.pitch = +(Q.get('pitch') || 0.05);
   }
+  // a weapon in your hands: ?stage=gun:<id>[:fire-after-seconds]  (fire shows the kick and the flash)
+  if (name.startsWith('gun:')) {
+    const [, id, fire] = name.split(':');
+    G.tod = +(Q.get('tod') || 0.45);
+    G.state.s.tools[id] = true;
+    G.teleport('offshore'); advance(0.3);
+    P.attach(b, new THREE.Vector3(0, b.deck, -0.5));
+    P.tool = id; G.vm.setTool(id); advance(0.8);
+    P.pitch = +(Q.get('pitch') || 0.02);
+    if (id === 'rattle') G.vm.spinV = 1;
+    if (fire !== undefined) G.vm.freeze = { recoil: +fire || 1, fireT: +(Q.get('ft') || 0.03) };  }
   // Blackflag Isle: ?stage=isle:harbour | isle:camp | isle:cage | isle:lake | isle:vault
   if (name.startsWith('isle:')) {
     const w = name.split(':')[1], I = world.settlement.isle.pirate;

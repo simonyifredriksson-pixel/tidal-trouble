@@ -232,7 +232,8 @@ export class UI {
     // hint line
     const hint = this.el('.hint');
     let ht = '';
-    if (F.state === 'fight') ht = `Hold <span class="key">LMB</span> to lift the zone and reel  -  let go to drop it  -  keep the fish inside`;
+    if (P.boundT > 0) ht = `Tied up!  Hammer <span class="key">E</span> to wriggle free`;
+    else if (F.state === 'fight') ht = `Hold <span class="key">LMB</span> to lift the zone and reel  -  let go to drop it  -  keep the fish inside`;
     else if (F.state === 'bite') ht = `<span class="key">CLICK</span> NOW to strike!`;
     else if (F.state === 'wait' || F.state === 'nibble') ht = `Wait for the bobber to go under...  <span class="key">Hold LMB</span> reel in`;
     else if (F.state === 'charge') ht = `Release to cast`;
@@ -322,7 +323,7 @@ export class UI {
     this.el('.underwater').classList.toggle('on', !!P.underwater);
     const sw = this.el('.swimring');
     const sf = P.stamina / P.maxStamina;
-    sw.classList.toggle('hide', P.mode !== 'swim' && sf > 0.99);
+    sw.classList.toggle('hide', true);
     sw.classList.toggle('low', sf < 0.3 || P.exhausted);
     sw.querySelector('.fg').style.strokeDashoffset = String(157 * (1 - sf));
     sw.querySelector('b').textContent = P.exhausted ? 'EXHAUSTED' : P.mode === 'swim' ? 'SWIM' : '';
@@ -435,6 +436,12 @@ export class UI {
   eventBanner(k) { this.banner(EVENT_NAME[k].toUpperCase(), EVENT_SUB[k], EVENT_ICON[k]); }
   flashBite() { const f = this.el('.flash'); f.style.opacity = 0.18; setTimeout(() => f.style.opacity = 0, 80); }
   photoFlash() { const f = this.el('.flash'); f.style.transition = 'none'; f.style.opacity = 0.9; requestAnimationFrame(() => { f.style.transition = 'opacity 0.5s'; f.style.opacity = 0; }); }
+  /** You hit someone: a quick X round the crosshair. */
+  hitmark() {
+    let h = this._hm;
+    if (!h) { h = this._hm = document.createElement('div'); h.className = 'hitmark'; h.innerHTML = '<i></i><i></i><i></i><i></i>'; this.el('.cross').parentNode.appendChild(h); }
+    h.classList.remove('on'); void h.offsetWidth; h.classList.add('on');
+  }
   hurt() { const f = this.el('.hurtflash'); f.style.transition = 'none'; f.style.opacity = 1; requestAnimationFrame(() => { f.style.transition = 'opacity 0.6s'; f.style.opacity = 0; }); }
   fade(on, text = '') { const f = this.el('.fade'); f.classList.toggle('on', on); f.textContent = text; }
   subtitle(text, t = 4) { const s = this.el('.sub'); s.textContent = text; s.classList.remove('hide'); clearTimeout(this._subT); this._subT = setTimeout(() => s.classList.add('hide'), t * 1000); }

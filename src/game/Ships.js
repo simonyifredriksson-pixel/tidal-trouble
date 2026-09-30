@@ -42,6 +42,8 @@ const V3 = () => new THREE.Vector3();
 const _v = V3(), _w = V3(), _a = V3(), _b = V3();
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const MAX_SHIPS = 4;
+// top speed by what a ship is doing, as a share of your own boat's top speed
+const SPEED_FRAC = { roam: 0.4, patrol: 0.45, flee: 0.65, retreat: 0.65, chase: 0.8, respond: 0.75 };
 const HP = 100;
 
 /* ---------------- speech bubbles ---------------- */
@@ -132,6 +134,8 @@ export class Ships {
     const c = d.userData.castle;
     b.obstacles.push({ x: 0, z: c.z, hw: c.hw, hd: c.hd });
     for (const g of d.userData.guns) b.obstacles.push({ x: g.x - g.side * 0.75, z: g.z, hw: 0.35, hd: 0.3 });
+    const cv = d.userData.corvus;
+    if (cv) b.obstacles.push({ x: 0, z: cv.z - 0.4, hw: 0.75, hd: 0.55 });
   }
   /** Walkable deck points of a boat (local), clear of obstacles. */
   _deckPoint(b, r = Math.random) {
@@ -217,6 +221,13 @@ export class Ships {
     if (host) for (let i = this.timers.length - 1; i >= 0; i--) { const T = this.timers[i]; T.t -= dt; if (T.t <= 0) { this.timers.splice(i, 1); T.fn(); } }
     for (const S of [...this.list.values()]) {
       const b = S.boat;
+      if (host && S.bridge) {
+        const t0 = S.bridge.t || 0; S.bridge.t = t0 + dt;
+        if (t0 < 0.7 && S.bridge.t >= 0.7) {
+          const E = this.bridgeEnds(S);
+          if (E) { E.T.damage(6, 'corvus'); for (const P of G.allPlayers()) { const d = P.pos.distanceTo(E.B); if (d < 2.2) G.knockPlayer(P, P.pos.clone().sub(E.B).setY(0).normalize(), 4, 'cannon'); } }
+        }
+      }
       if (host) { this._shipAI(S, dt); b.simulate(dt, G.world); this._crewHost(S, dt); }
       b.visuals(dt, G.fx, G.world, G._night?.() || 0);
       if (S.dress) waveFlag(S.dress.userData.flag, this.t + S.id.length, 1 + G.world.storm);
@@ -224,7 +235,7 @@ export class Ships {
       if (host && (S.gone || (b.sinking > 0 && b.sinking > 14))) this._remove(S);
     }
     this._balls(dt, host);
-    this._bridgesDraw();
+    this._bridgesDraw(dt);
     if (host) this._collideBoats(dt);
   }
   _hostSpawn(dt) {
@@ -259,6 +270,7 @@ export class Ships {
     for (const P of G.allPlayers()) if (P.boat === S.boat) P.detach?.();
     G.scene.remove(S.boat.group);
     if (S.bridgeMesh) { this.group.remove(S.bridgeMesh); S.bridgeMesh = null; }
+    if (S.rope) { this.group.remove(S.rope); S.rope.geometry.dispose(); S.rope = null; }
     // what was lying on its deck goes into the sea with it
     for (const it of [...G.loot.items.values()]) if (it.boat === S.boat) G.loot._detach(it);
     this.list.delete(S.id);
@@ -268,7 +280,17 @@ export class Ships {
   clear() { for (const S of [...this.list.values()]) this._remove(S); }
 
   /* ================= how a ship sails (host) ================= */
-  _steerTo(S, x, z, throttle) {
+  /** How fast this ship may go right now, in m/s: always well under your own boat's top speed,
+      so you can catch anyone out here (and outrun pirates if you are quick about it). */
+  _vmax(S, frac) {
+    const G = this.game;
+    let ref = 0;
+    for (const P of G.allPlayers()) if (P.boat && !P.boat.npc) ref = Math.max(ref, P.boat.stats.speed);
+    if (!ref) ref = G.boats[0]?.stats.speed || 8;
+    if (frac === undefined) frac = SPEED_FRAC[S.st] ?? 0.4;
+    return Math.max(2.5, ref * frac);
+  }
+  _steerTo(S, x, z, throttle, frac) {
     const b = S.boat;
     const want = Math.atan2(x - b.pos.x, z - b.pos.z);
     let err = wrapAngle(want - b.heading);
@@ -285,6 +307,10 @@ export class Ships {
     b.autopilot.x = x; b.autopilot.z = z;
     b.steer = clamp(err * 2, -1, 1);
     b.throttle = throttle * clamp(1.2 - Math.abs(err) * 0.4, 0.35, 1);
+    // held to a speed you can match; eased down rather than braked if it is over
+    const vmax = this._vmax(S, frac), v = Math.hypot(b.vel.x, b.vel.y);
+    b.throttle = Math.min(b.throttle, vmax / Math.max(1, b.stats.speed) * 1.15);
+    if (v > vmax) { const k = Math.max(vmax / v, 0.97); b.vel.x *= k; b.vel.y *= k; }
   }
   _stop(S) { const b = S.boat; b.autopilot = b.autopilot || { x: b.pos.x, z: b.pos.z }; b.throttle = 0; b.steer = 0; }
   _nearestPlayerBoat(S, range) {
@@ -307,7 +333,8 @@ export class Ships {
     if (b.driver) b.driver = null;
     const helmsman = S.crew.find(C => C.helm && C.on === b && C.st !== 'down' && !C.bound && C.st !== 'swim');
     if (!helmsman || K.derelict) { this._stop(S); return; }
-    const alive = S.crew.filter(C => C.on === b && C.st !== 'down' && !C.bound && C.st !== 'swim').length;
+    // still on their feet somewhere (their own deck, or yours: a boarder is not a loss)
+    const alive = S.crew.filter(C => C.on && C.st !== 'down' && !C.bound && C.st !== 'swim' && C.st !== 'fly').length;
     const beaten = alive <= Math.ceil(S.crew.length * 0.34);
     const threat = this._nearestPlayerBoat(S, K.pirate ? (fogAt(b.pos.x, b.pos.z) > 0.4 || G.isNight() ? 380 : 720) : 90);
     // pirates
@@ -387,7 +414,7 @@ export class Ships {
         this._alongside(S, tb, dt, false);
         const rel = Math.hypot(tb.vel.x - b.vel.x, tb.vel.y - b.vel.y);
         const gap = d - tb.hull.hw - b.hull.hw;
-        if (gap < 4.2 && rel < 4.5 && S.t > 3) this.lowerBridge(S, tb);
+        if (gap < 5.5 && rel < 4.5 && S.t > 3) this.lowerBridge(S, tb);
       } else {
         // run a line to pass them broadside in gun range, then cut in
         const side = bearing > 0 ? 1 : -1;
@@ -418,7 +445,7 @@ export class Ships {
       return;
     }
     const ahead = Math.hypot(T.vel.x, T.vel.y);
-    this._steerTo(S, tx + f.x * (4 + ahead * 1.5), tz + f.z * (4 + ahead * 1.5), clamp(0.4 + Math.hypot(dx, dz) * 0.05 + ahead / Math.max(4, b.stats.speed), 0.3, 1));
+    this._steerTo(S, tx + f.x * (4 + ahead * 1.5), tz + f.z * (4 + ahead * 1.5), clamp(0.4 + Math.hypot(dx, dz) * 0.05 + ahead / Math.max(4, b.stats.speed), 0.3, 1), 1.02);
   }
   /** Ships do not pass through each other (yours included): a push apart and a bump. */
   _collideBoats(dt) {
@@ -507,7 +534,7 @@ export class Ships {
     for (const it of G.loot.items.values()) if (it.boat === bt && it.pos.distanceTo(B.p) < 4) { it.vel.y += 4; it.vel.x += (Math.random() - 0.5) * 5; it.vel.z += (Math.random() - 0.5) * 5; }
     for (const P of G.allPlayers()) {
       const d = P.pos.distanceTo(B.p);
-      if (d < 3.5) { G.hurtPlayer(P, 22 * (1 - d / 4), 'cannon'); G.knockPlayer(P, P.pos.clone().sub(B.p).setY(0).normalize(), 6 * (1 - d / 4), 'cannon'); }
+      if (d < 3.5) G.knockPlayer(P, P.pos.clone().sub(B.p).setY(0).normalize(), 4 * (1 - d / 4), 'cannon');      // a shove, no more: it is the boat they are after
     }
     for (const S of this.list.values()) for (const C of S.crew) if (C.on === bt && this.crewPos(C).distanceTo(B.p) < 3) this._crewHurt(C, 40, B.p, 5, null);
     G._everyone({ t: 'ship', k: 'hit', p: B.p.toArray(), b: bt.id });
@@ -536,29 +563,55 @@ export class Ships {
   bridgeEnds(S) {
     const G = this.game, T = S.bridge && G.boatById(S.bridge.to);
     if (!T) return null;
-    const b = S.boat;
+    const b = S.boat, cv = S.dress?.userData.corvus;
     const Lt = b.toLocal(_a.copy(T.pos), V3()), sideA = Math.sign(Lt.x) || 1;
-    const za = clamp(Lt.z, -b.hull.hl * 0.4, b.hull.hl * 0.4);
-    const A = b.toWorld(V3().set(sideA * (b.halfWidth(za) - 0.2), b.railY(za) + 0.05, za));
+    const za = cv ? cv.z : clamp(Lt.z, -b.hull.hl * 0.4, b.hull.hl * 0.4);
+    const A = cv ? b.toWorld(V3().set(0, cv.y, cv.z)) : b.toWorld(V3().set(sideA * (b.halfWidth(za) - 0.2), b.railY(za) + 0.05, za));
     const Lb = T.toLocal(_b.copy(A), V3()), sideB = Math.sign(Lb.x) || 1;
     const zb = clamp(Lb.z, -T.hull.hl * 0.6, T.hull.hl * 0.6);
     const Bp = T.toWorld(V3().set(sideB * (T.halfWidth(zb) - 0.15), T.railY(zb) + 0.05, zb));
     return { A, B: Bp, T, zb, sideB, za, sideA };
   }
-  _bridgesDraw() {
+  _bridgesDraw(dt) {
+    const G = this.game;
     for (const S of this.list.values()) {
-      if (!S.bridge) { if (S.bridgeMesh) { S.bridgeMesh.visible = false; } continue; }
-      const E = this.bridgeEnds(S);
-      if (!E) continue;
-      const len = E.A.distanceTo(E.B);
-      if (!S.bridgeMesh || Math.abs(S.bridgeMesh.userData.len - len) > 0.6) {
-        if (S.bridgeMesh) this.group.remove(S.bridgeMesh);
-        S.bridgeMesh = boardingBridge(Math.max(2, len)); S.bridgeMesh.userData.len = len; this.group.add(S.bridgeMesh);
+      const b = S.boat, cv = S.dress?.userData.corvus;
+      const E = S.bridge ? this.bridgeEnds(S) : null;
+      if (!cv && !E) { if (S.bridgeMesh) S.bridgeMesh.visible = false; continue; }
+      if (!S.bridgeMesh) {
+        S.bridgeMesh = boardingBridge(9); S.bridgeMesh.userData.len = 9; this.group.add(S.bridgeMesh);
+        S.rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]), new THREE.LineBasicMaterial({ color: 0xc8b48a }));
+        S.rope.frustumCulled = false; this.group.add(S.rope);
+        S.drop = 0;
       }
-      const m = S.bridgeMesh; m.visible = true;
-      m.position.copy(E.A);
-      m.lookAt(E.B);
-      m.scale.set(1, 1, len / m.userData.len);
+      // 0 stood up against the pole, 1 down on your deck: it falls (faster and faster), and is hauled back up slowly
+      const was = S.drop;
+      S.drop = E ? Math.min(1, S.drop + dt / 0.7) : Math.max(0, S.drop - dt / 2.4);
+      const A = cv ? b.toWorld(V3().set(0, cv.y, cv.z)) : E.A;
+      const stow = cv ? b.toWorld(V3().set(0, cv.y + 0.87 * 9, cv.z + 0.5 * 9)).sub(A) : E.B.clone().sub(A);
+      if (E) { S.downDir = E.B.clone().sub(A); }
+      const down = S.downDir || stow;
+      const e = E ? S.drop * S.drop : S.drop;
+      const dir = stow.clone().normalize().lerp(down.clone().normalize(), e).normalize();
+      const len = 9 + (down.length() - 9) * e;
+      const m = S.bridgeMesh; m.visible = b.group.visible !== false;
+      m.position.copy(A);
+      m.lookAt(_a.copy(A).add(dir));
+      m.scale.set(1, 1, Math.max(0.3, len / 9));
+      // the rope from the pulley to the far end
+      if (S.rope && cv) {
+        const p = S.rope.geometry.attributes.position;
+        const top = b.toWorld(V3().set(0, cv.top, cv.pz)), end = A.clone().addScaledVector(dir, len * 0.97).add(_b.set(0, 1.0, 0));
+        p.setXYZ(0, top.x, top.y, top.z); p.setXYZ(1, end.x, end.y, end.z); p.needsUpdate = true;
+        S.rope.visible = m.visible;
+      }
+      // the moment it bites: a crash, splinters, and your deck jumps
+      if (E && was < 1 && S.drop >= 1) {
+        G.fx.chips?.(E.B.x, E.B.y, E.B.z, 0x6a4a2e, 22, 0, 0);
+        G.fx.sparks?.(E.B.x, E.B.y, E.B.z, 8, 0xfff0c0);
+        G.audio.crash?.(); G.audio.thunk?.();
+        if (G.player.boat && G.player.boat.id === S.bridge.to) G.addShake?.(0.9);
+      }
     }
   }
   /** Is point p (world) on a bridge, and which ship's? (players can walk across) */
@@ -592,7 +645,8 @@ export class Ships {
     const G = this.game;
     for (const C of S.crew) {
       C.t += dt; C.cd -= dt; C.bubbleT -= dt; C.act = Math.max(0, C.act - dt);
-      if (C.st === 'down') { C.downT -= dt; if (C.downT <= 0 && !C.bound) { C.st = 'fight'; C.hp = 45; } continue; }
+      if (C.st === 'fly') { this._crewFly(C, dt); continue; }
+      if (C.st === 'down') { C.downT -= dt; if (C.downT <= 0 && !C.bound) { C.st = 'fight'; if (!C.stun) C.hp = 45; C.stun = false; C.ko = false; } continue; }
       if (C.bound) { C.st = 'bound'; continue; }
       if (C.st === 'swim') { this._crewSwim(C, dt); continue; }
       if (C.st === 'cross') { this._crewCross(C, dt); continue; }
@@ -644,7 +698,7 @@ export class Ships {
   }
   _crewFight(S, C, P, dt) {
     const G = this.game, W = C.W, here = this.crewPos(C);
-    const d = P.pos.distanceTo(here);
+    const d = Math.hypot(P.pos.x - here.x, P.pos.z - here.z) + Math.max(0, Math.abs(P.pos.y - here.y) - 0.8);
     this._face(C, P.pos);
     this._hold(C, C.weaponMesh);
     C.pose = 'fight';
@@ -659,9 +713,22 @@ export class Ships {
     // melee: go to them if they are on the same deck (or cross the bridge to get to them)
     if (C.on && P.boat === C.on) {
       const L = C.on.toLocal(P.pos, V3());
+      if (S.K.pirate && C.tieT > 0) {
+        // the rope is out: get it round them before they get away (or hit you)
+        C.tieT += dt;
+        if (d > W.reach + 1.4) C.tieT = 0;
+        else if (d > 0.9) { C.dest = L; this._crewWalk(C, dt, 2.4); C.pose = 'fight'; }
+        if (C.tieT > 1.0) { C.tieT = 0; if (d < W.reach + 1.0 && !((this.bound[P.id] || 0) > this.t) && !((this.graceT?.[P.id] || 0) > this.t)) this._bindPlayer(S, C, P); }
+        return;
+      }
       if (d > W.reach * 0.85) { C.dest = L; this._crewWalk(C, dt, 3.1); }
-      else if (S.K.pirate && P.mode === 'down' && !((this.bound[P.id] || 0) > this.t)) { this._bindPlayer(S, C, P); }
-      else if (C.cd <= 0) { C.cd = W.cd * (0.8 + Math.random() * 0.4); C.swing = 0.45; C.act = 0.45; this.after(0.26, () => this._crewMelee(C, P)); }
+      else if (C.cd <= 0) {
+        if (S.K.pirate && (P.hp < 75 || Math.random() < 0.45)) {
+          C.tieT = 0.001; C.cd = W.cd * 1.3;
+          this._say(C, pick(['Hold still!', 'Rope! Who has the rope?', 'Gotcha now, fisher...', 'Come here, you!']));
+          G._everyone({ t: 'ship', k: 'rope', c: C.id });
+        } else { C.cd = W.cd * (0.8 + Math.random() * 0.4); C.swing = 0.45; C.act = 0.45; this.after(0.26, () => this._crewMelee(C, P)); }
+      }
       return;
     }
     // they are on another boat: pirates cross over the bridge; everyone else waits at the rail
@@ -675,11 +742,18 @@ export class Ships {
   /** A pirate ties a player up. If everyone near the galley is tied up at once, that is the end of it. */
   _bindPlayer(S, C, P) {
     const G = this.game;
-    this.bound[P.id] = this.t + 9;
-    this._say(C, pick(['Got one!', 'Truss them up!', 'Stay down, fisher.']));
-    G._everyone({ t: 'bind', to: P.id, dur: 9 });
-    const near = G.allPlayers().filter(Q => Q.pos.distanceTo(S.boat.pos) < 70);
-    if (near.length && near.every(Q => (this.bound[Q.id] || 0) > this.t)) this.captureAll(S, near);
+    this.bound[P.id] = this.t + 12;
+    this._say(C, pick(['Got one!', 'Trussed up like a parcel!', 'Stay put, fisher.', 'Into the sack with this one!']));
+    G._everyone({ t: 'bind', to: P.id, dur: 12 });
+    // a moment to wriggle free; still tied when it is up, and everyone near is tied, and that is that
+    if (S.capT) return;
+    S.capT = true;
+    this.after(3.2, () => {
+      S.capT = false;
+      if (!this.list.has(S.id) || S.st === 'retreat') return;
+      const near = G.allPlayers().filter(Q => Q.pos.distanceTo(S.boat.pos) < 70);
+      if (near.length && near.every(Q => (this.bound[Q.id] || 0) > this.t)) this.captureAll(S, near);
+    });
   }
   captureAll(S, players) {
     const G = this.game;
@@ -688,7 +762,8 @@ export class Ships {
     S.st = 'retreat'; S.engaged = false; S.hostile.clear();
     this.after(4, () => { if (this.list.has(S.id)) S.gone = true; });
   }
-  onFreed(pid) { delete this.bound[pid]; }
+  /** Wriggled free: a moment's grace before anyone can get a rope round you again. */
+  onFreed(pid) { delete this.bound[pid]; (this.graceT = this.graceT || {})[pid] = this.t + 2.5; }
   _crewMelee(C, P) {
     const G = this.game;
     if (!C.c || C.st === 'down' || C.bound) return;
@@ -703,6 +778,17 @@ export class Ships {
   _crewShoot(C, P, d) {
     const G = this.game;
     const o = this.crewPos(C).add(_v.set(0, 1.35, 0));
+    if (C.ship.K.pirate) {
+      // pirates want you alive and in a cage: they shoot up your boat, not you
+      const B = P.boat;
+      if (!B || B === C.on) return;
+      const Lo = B.toLocal(o, V3()), z = clamp(Lo.z + (Math.random() - 0.5) * 3, -B.hull.hl * 0.8, B.hull.hl * 0.8), side = Math.sign(Lo.x) || 1;
+      const to = B.toWorld(V3().set(side * B.halfWidth(z) * (0.75 + Math.random() * 0.25), B.deck - 0.3 + Math.random() * 1.1, z));
+      B.damage(C.W.spread ? 5 : 3, 'shot');
+      if (Math.random() < (C.W.spread ? 0.12 : 0.05)) B.addHole(0.35);
+      G._everyone({ t: 'ship', k: 'shot', o: o.toArray().map(n => +n.toFixed(2)), to: to.toArray().map(n => +n.toFixed(2)), w: C.weapon, hit: true, chip: 1 });
+      return;
+    }
     // the further, the worse: a pistol is a pistol
     const acc = clamp(0.85 - d / 45, 0.2, 0.85) * (P.mode === 'swim' ? 0.5 : 1) * (C.W.spread ? 1.2 : 1);
     const hit = Math.random() < acc;
@@ -719,13 +805,25 @@ export class Ships {
     let nx = C.local.x + dx / d * s, nz = C.local.z + dz / d * s;
     const hw = b.halfWidth(nz) - 0.35;
     nx = clamp(nx, -hw, hw); nz = clamp(nz, -b.hull.hl + 0.6, b.hull.hl - 0.8);
-    for (const o of b.obstacles) {
+    // boxed in (a narrow bow, a cooler in the way): clamber over it
+    C.hopT = Math.max(0, (C.hopT || 0) - dt);
+    const px0 = C.local.x, pz0 = C.local.z;
+    if (!(C.hopT > 0)) for (const o of b.obstacles) {
       const ox = nx - o.x, oz = nz - o.z;
       if (Math.abs(ox) < o.hw + 0.3 && Math.abs(oz) < o.hd + 0.3) {
         const px = o.hw + 0.3 - Math.abs(ox), pz = o.hd + 0.3 - Math.abs(oz);
-        if (px < pz) nx = o.x + Math.sign(ox || 1) * (o.hw + 0.3); else nz = o.z + Math.sign(oz || 1) * (o.hd + 0.3);
+        // pushed out, and slid along the side of it so they work their way round rather than stick
+        if (px < pz) { nx = o.x + Math.sign(ox || 1) * (o.hw + 0.3); nz += Math.sign(oz || dz || 1) * s * 0.9; }
+        else { nz = o.z + Math.sign(oz || 1) * (o.hd + 0.3); nx += Math.sign(ox || dx || 1) * s * 0.9; }
       }
     }
+    { const hw2 = b.halfWidth(nz) - 0.35; nx = clamp(nx, -hw2, hw2); }
+    // no nearer to where they are going for a while (pinned, or bouncing between two things): over the top
+    const dn = Math.hypot(C.dest.x - nx, C.dest.z - nz);
+    if (!(dn < (C.bestD ?? Infinity) - 0.05)) { C.stuckT = (C.stuckT || 0) + dt; if (C.stuckT > 0.6) { C.stuckT = 0; C.hopT = 1.2; C.bestD = Infinity; } }
+    else { C.bestD = dn; C.stuckT = 0; }
+    if (C.hopT > 0 && C.hopT < 0.05) C.bestD = Infinity;
+    void px0; void pz0;
     C.local.set(nx, b.deck, nz);
     C.yaw = Math.atan2(dx, dz);
     C.speed = speed;
@@ -762,7 +860,7 @@ export class Ships {
   }
   _startCross(C, toTarget) {
     const S = C.ship, E = this.bridgeEnds(S);
-    if (!E) return;
+    if (!E || (S.bridge?.t ?? 1) < 0.9) return;
     C.st = 'cross'; C.crossT = 0; C.crossDir = toTarget;
     C.crossFrom = (toTarget ? E.A : E.B).clone(); C.crossTo = (toTarget ? E.B : E.A).clone();
     C.pos.copy(C.crossFrom);
@@ -818,27 +916,16 @@ export class Ships {
   /* ---------------- being hurt ---------------- */
   _crewHurt(C, dmg, from, knock, pid) {
     const G = this.game, S = C.ship;
-    if (C.st === 'down' && !C.bound && dmg < 30) return;
-    C.hp -= dmg;
+    // kicking a man who is already flat only moves him about
+    const floored = C.st === 'down' && !C.stun;
+    if (!floored) C.hp -= dmg;
+    C.tieT = 0;
     if (pid) { S.hostile.add(pid); S.alarm = Math.max(S.alarm, 1); this._callHelp(S); }
     const here = this.crewPos(C);
     G._everyone({ t: 'ship', k: 'hurt', c: C.id, p: here.toArray().map(n => +n.toFixed(2)) });
-    // knocked back: near the rail, over it
-    if (knock > 0 && C.on && C.st !== 'swim') {
-      const L = C.local, dir = C.on.toLocal(here.clone().add(here.clone().sub(from).setY(0).normalize()), V3()).sub(L);
-      const nx = L.x + dir.x * knock * 0.35, nz = L.z + dir.z * knock * 0.35;
-      if (Math.abs(nx) > C.on.halfWidth(nz) - 0.2 && knock > 3.2) {
-        C.pos.copy(C.on.toWorld(_v.set(Math.sign(nx) * (C.on.halfWidth(nz) + 1.2), C.on.deck, nz)));
-        C.on = null; C.st = 'swim'; C.swimT = 0;
-        if (C.carry) this._dropCarry(C);
-        G._everyone({ t: 'ship', k: 'overboard', c: C.id, p: C.pos.toArray() });
-        return;
-      }
-      const hw = C.on.halfWidth(nz) - 0.35;
-      L.x = clamp(nx, -hw, hw); L.z = clamp(nz, -C.on.hull.hl + 0.6, C.on.hull.hl - 0.8);
-    }
-    if (C.hp <= 0 && C.st !== 'down') {
-      C.st = 'down'; C.downT = 22; C.hp = 0;
+    if (C.hp <= 0 && !C.ko) {
+      C.ko = true; C.hp = 0;
+      if (C.st !== 'fly' && C.st !== 'swim') { C.st = 'down'; C.downT = 22; C.stun = false; }
       if (C.carry) this._dropCarry(C);
       this._say(C, pick(S.K.say.down || ['Ugh.']));
       // an armed man drops what he was holding
@@ -846,6 +933,59 @@ export class Ships {
         const it = G.loot.spawn({ sp: C.W.drop + 'item', kg: 1, cm: 60, pos: here.clone().add(_v.set(0, 0.6, 0)), vel: new THREE.Vector3((Math.random() - 0.5) * 2, 2, (Math.random() - 0.5) * 2), flop: 0 });
         if (it) { it.shipOf = S.id; C.weapon = 'fists'; C.W = CREW_WEAPONS.fists; C.weaponMesh = null; this._hold(C, null); }
       }
+    }
+    // and off they go
+    if (knock > 0 && C.st !== 'swim' && (C.on || C.st === 'fly')) this._fling(C, from, knock);
+  }
+  /** Send a crewman flying, away from `from`. Hit again in the air and he goes higher. */
+  _fling(C, from, knock) {
+    const G = this.game, here = this.crewPos(C);
+    const dir = here.clone().sub(from).setY(0);
+    if (dir.lengthSq() < 0.01) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+    dir.normalize();
+    const f = Math.min(knock, 18);
+    if (C.st === 'fly') {
+      C.vel.addScaledVector(dir, f * 0.75); C.vel.y = Math.max(C.vel.y + 1.5, 2.4 + f * 0.25);
+      C.spinY += (Math.random() - 0.5) * 8; C.flyT = Math.min(C.flyT, 0.2);
+      G._everyone({ t: 'ship', k: 'fling', c: C.id, f: +f.toFixed(1), air: 1 });
+      return;
+    }
+    if (C.carry) this._dropCarry(C);
+    C.vel = C.on ? new THREE.Vector3(C.on.vel.x, 0, C.on.vel.y) : V3();
+    C.vel.addScaledVector(dir, f * 1.25); C.vel.y = 2.8 + f * 0.5;
+    if (C.on) C.yaw += C.on.heading;
+    C.pos.copy(here); C.pos.y += 0.15;
+    C.on = null; C.st = 'fly'; C.flyT = 0; C.job = null; C.dest = null; C.tieT = 0;
+    if (C.untier) C.untier = null;
+    C.spinY = (Math.random() - 0.5) * 10;
+    G._everyone({ t: 'ship', k: 'fling', c: C.id, f: +f.toFixed(1) });
+  }
+  /** In the air: onto a deck (anybody's) flat on his back, or into the sea. */
+  _crewFly(C, dt) {
+    const G = this.game;
+    C.flyT += dt;
+    C.vel.y -= 15 * dt;
+    C.pos.addScaledVector(C.vel, dt);
+    C.yaw += C.spinY * dt;
+    if (C.vel.y < 0 && C.flyT > 0.08) {
+      for (const bt of G.allBoats()) {
+        if (bt.absent || bt.sinking > 2) continue;
+        const L = bt.toLocal(C.pos, _w);
+        if (L.y > bt.deck + 0.05 || L.y < bt.deck - 1.3 || !bt.over(L.x, L.z, -0.15)) continue;
+        C.on = bt;
+        const hw = bt.halfWidth(L.z) - 0.35;
+        C.local.set(clamp(L.x, -hw, hw), bt.deck, clamp(L.z, -bt.hull.hl + 0.6, bt.hull.hl - 0.8));
+        C.yaw -= bt.heading;
+        C.st = C.bound ? 'bound' : 'down'; C.stun = C.hp > 0; C.downT = C.stun ? 1.4 : 22;
+        G._everyone({ t: 'ship', k: 'land', c: C.id, p: C.pos.toArray().map(n => +n.toFixed(2)) });
+        return;
+      }
+    }
+    const sea = G.world.sea(C.pos.x, C.pos.z);
+    if (C.pos.y < sea - 0.3 || C.flyT > 6) {
+      C.st = 'swim'; C.on = null; C.swimT = 0; C.bound = false; C.stun = false; C.ko = false; C.hp = Math.max(C.hp, 30);
+      G._everyone({ t: 'ship', k: 'overboard', c: C.id, p: C.pos.toArray() });
+      C.pos.y = sea - 1.2;
     }
   }
   /** Shouting for help: the Guild escort comes if it goes on long enough, and nearby ships hear it. */
@@ -873,7 +1013,9 @@ export class Ships {
     const T = TOOL_BY_ID[c.w];
     const dmg = (T?.dmg || 10) * (c.mult || 1);
     const at = c.at ? new THREE.Vector3().fromArray(c.at) : P.pos;
-    if (c.crew) { const C = this.crewById(c.crew); if (C) this._crewHurt(C, dmg, P.pos, T?.knock ?? 3, from); }
+    // the more of the shot that lands, the further he goes
+    const knock = (T?.knock ?? 3) * (c.mult > 1 ? 1 + (c.mult - 1) * 0.3 : 1);
+    if (c.crew) { const C = this.crewById(c.crew); if (C) this._crewHurt(C, dmg, P.pos, knock, from); }
     if (c.ship) {
       const S = this.list.get(c.ship);
       if (S) { S.boat.damage(dmg * (T?.hull || 0.5), 'shot'); S.hostile.add(from); S.alarm = 1; this._callHelp(S); if (c.w === 'blunder' && Math.random() < 0.25) S.boat.addHole(0.5); if (S.dress && Math.random() < 0.3) S.sailRip = Math.min(1, (S.sailRip || 0) + 0.15); }
@@ -923,11 +1065,11 @@ export class Ships {
     if (!C) return;
     if (c.k === 'tie' && C.st === 'down') { C.bound = true; C.st = 'bound'; C.ship.hostile.add(from); this._say(C, pick(['Untie me!', 'You will hang for this!', 'Mmmf!'])); }
     else if (c.k === 'throw' && (C.bound || C.st === 'down') && C.on) {
-      const here = this.crewPos(C), b = C.on, L = C.local;
-      const side = Math.sign(L.x) || 1;
-      C.pos.copy(b.toWorld(_v.set(side * (b.halfWidth(L.z) + 1.4), b.deck, L.z)));
-      C.on = null; C.st = 'swim'; C.bound = false; C.swimT = -8; C.hp = 30;
-      this.game._everyone({ t: 'ship', k: 'overboard', c: C.id, p: C.pos.toArray() });
+      // a heave toward the nearest rail, and away he goes
+      const b = C.on, L = C.local, side = Math.sign(L.x) || 1;
+      const from = b.toWorld(_v.set(L.x - side * 2, b.deck, L.z)).clone();
+      C.stun = true;
+      this._fling(C, from, 9);
     }
   }
   /** Pirates on your deck with nobody to fight: they take what they can carry back. */
@@ -956,8 +1098,12 @@ export class Ships {
       const p = this.crewPos(C);
       c.root.position.copy(p);
       c.root.rotation.y = C.yaw + (C.on && C.st !== 'swim' && C.st !== 'cross' ? C.on.heading : 0);
+      // in the air: head over heels
+      if (C.st === 'fly') { C.tumble = (C.tumble || 0) + dt * 9; c.root.rotation.x = C.tumble; c.root.rotation.z = Math.sin(C.tumble * 0.7) * 0.6; c.root.position.y += 0.9; c.root.position.sub(_v.set(0, 0.9, 0).applyEuler(c.root.rotation)); }
+      else if (C.tumble) { C.tumble = 0; c.root.rotation.x = 0; c.root.rotation.z = 0; }
       let state = 'idle', sp = 0;
-      if (C.st === 'down' || C.bound) { c.fallT = 1.0; state = 'idle'; }
+      if (C.st === 'fly') { c.fallT = 0; state = 'swim'; }
+      else if (C.st === 'down' || C.bound) { c.fallT = 1.0; state = 'idle'; }
       else if (C.st === 'swim') state = 'swim';
       else { state = { walk: 'walk', run: 'run', talk: 'talk', fish: 'fish', drive: 'drive', reel: 'reel', fight: 'idle' }[C.pose] || 'idle'; sp = C.speed; }
       // the rod comes out to fish, the weapon to fight
@@ -965,7 +1111,9 @@ export class Ships {
       c.update(dt, state, sp);
       // fighting stances drawn over the top
       const [aL, aR] = c.arms;
-      if (C.bound) { aL.rotation.x = 0.5; aR.rotation.x = 0.5; aL.rotation.z = 0.5; aR.rotation.z = -0.5; }
+      if (C.st === 'fly') { const w = this.t * 22 + C.id.length; aL.rotation.x = -2.6 + Math.sin(w) * 0.8; aR.rotation.x = -2.6 + Math.cos(w) * 0.8; aL.rotation.z = 0.9; aR.rotation.z = -0.9; }
+      else if (C.bound) { aL.rotation.x = 0.5; aR.rotation.x = 0.5; aL.rotation.z = 0.5; aR.rotation.z = -0.5; }
+      else if (C.tieT > 0) { const w = this.t * 16; aR.rotation.x = -2.2 + Math.sin(w) * 0.3; aR.rotation.z = -0.4 + Math.cos(w) * 0.6; aL.rotation.x = -1.2; }
       else if (C.st !== 'down' && C.pose === 'fight') {
         if (C.W.ranged) { aR.rotation.x = -1.45 * Math.max(0.35, C.aim); aR.userData.elbow.rotation.x = -0.1; if (C.weapon === 'blunder') { aL.rotation.x = -1.2; aL.rotation.z = 0.4; } }
         else { const s = C.act > 0 ? Math.sin((1 - C.act / 0.45) * Math.PI) : 0; aR.rotation.x = -1.2 - s * 1.4; aR.rotation.z = 0.2 - s * 0.6; }
@@ -1004,11 +1152,15 @@ export class Ships {
         const o = P3(e.o), to = P3(e.to);
         G.fx.sparks(o.x, o.y, o.z, 6, 0xffd070); G.fx.smoke(o.x, o.y, o.z, 0xb8b0a0);
         this._tracer(o, to);
-        A.noise?.(0.12, 0.35 * this._vol(o), 'lowpass', 1400, 1, 0.3); A.tone?.(90, 0.12, 'square', 0.08 * this._vol(o), 0.002, 0.5);
-        if (!e.hit) G.fx.splash?.(to.x, G.world.sea(to.x, to.z), to.z, 0.2);
+        A.gun?.(e.w === 'blunder' ? 1.5 : 1, o);
+        if (e.chip) G.fx.chips?.(to.x, to.y, to.z, 0x6a4a2e, 6, 0, 0);
+        else if (!e.hit) G.fx.splash?.(to.x, G.world.sea(to.x, to.z), to.z, 0.2);
         break;
       }
       case 'melee': A.thunk?.(P3(e.p)); break;
+      case 'fling': { const C = this.crewById(e.c); const p = C ? this.crewPos(C) : null; A.boing?.(p); if (!e.air && Math.random() < 0.7) A.yelp?.(p); if (p) G.fx.sparks?.(p.x, p.y + 1.1, p.z, 8, 0xfff4c0); break; }
+      case 'land': { const p = P3(e.p); A.thunk?.(p); G.fx.chips?.(p.x, p.y + 0.2, p.z, 0xb8a888, 8, 0, 0); break; }
+      case 'rope': { const C = this.crewById(e.c); if (C) C.tieT = 0.001; A.swoosh?.(); break; }
       case 'hurt': { const p = P3(e.p); G.fx.sparks(p.x, p.y + 1.3, p.z, 5, 0xfff0c0); A.tone?.(260 + Math.random() * 60, 0.1, 'triangle', 0.08 * this._vol(p)); const C = this.crewById(e.c); if (C && C.c && Math.random() < 0.5) C.c.knock(); break; }
       case 'overboard': { const p = P3(e.p); G.fx.splash(p.x, G.world.sea(p.x, p.z), p.z, 1.3); A.splash(1, p); break; }
       case 'climb': { const p = P3(e.p); G.fx.splash(p.x, p.y, p.z, 0.6); break; }
@@ -1103,7 +1255,7 @@ export class Ships {
       out.push({
         id: S.id, k: S.kind, b: S.boat.snapshot(), br: S.bridge ? [S.bridge.to, Math.round(S.bridge.hp)] : 0, st: S.st, rip: +(S.sailRip || 0).toFixed(2), h: [...S.hostile],
         cg: S.cargo.map(c => c.open ? 1 : 0).join(''),
-        c: S.crew.map(C => { const p = this.crewPos(C); return [C.st, C.on ? C.on.id : 0, +C.local.x.toFixed(2), +C.local.z.toFixed(2), +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +C.yaw.toFixed(2), C.pose || '', +C.aim.toFixed(2), +C.act.toFixed(2), C.bound ? 1 : 0, C.weapon, C.carry || 0]; }),
+        c: S.crew.map(C => { const p = this.crewPos(C); return [C.st, C.on ? C.on.id : 0, +C.local.x.toFixed(2), +C.local.z.toFixed(2), +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +C.yaw.toFixed(2), C.pose || '', +C.aim.toFixed(2), +C.act.toFixed(2), C.bound ? 1 : 0, C.weapon, C.carry || 0, C.tieT > 0 ? 1 : 0]; }),
       });
     }
     return out;
@@ -1132,7 +1284,7 @@ export class Ships {
         const C = S.crew[i]; if (!C) return;
         C.st = a[0]; C.on = a[1] ? G.boatById(a[1]) : null;
         C.local.set(a[2], C.on ? C.on.deck : 0, a[3]);
-        C.pos.set(a[4], a[5], a[6]); C.yaw = a[7]; C.pose = a[8]; C.aim = a[9]; C.act = a[10]; C.bound = !!a[11];
+        C.pos.set(a[4], a[5], a[6]); C.yaw = a[7]; C.pose = a[8]; C.aim = a[9]; C.act = a[10]; C.bound = !!a[11]; C.tieT = a[14] || 0;
         if (C.weapon !== a[12]) { C.weapon = a[12]; C.W = CREW_WEAPONS[a[12]] || CREW_WEAPONS.fists; C.weaponMesh = a[12] !== 'fists' && TOOL_BY_ID[a[12]] ? toolMesh(a[12]) : null; if (C.weaponMesh) C.weaponMesh.rotation.x = Math.PI / 2; }
         C.carry = a[13] || null;
       });

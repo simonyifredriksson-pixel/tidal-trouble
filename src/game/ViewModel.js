@@ -90,6 +90,14 @@ export function toolMesh(id, iron = false) {
     b.color(0x5a3a22).box(0.06, 0.2, 0.09, 0, -0.08, -0.04); b.color(0x6a4428).push(0, -0.2, -0.1, -0.5, 0, 0); b.box(0.06, 0.18, 0.08, 0, 0, 0); b.pop();
     b.color(0xb08a3a).lathe([[0.03, 0.02], [0.03, 0.34], [0.055, 0.44], [0.075, 0.5]], 9);
     b.color(0x8a6a2a).cyl(0.035, 0.035, 0.08, 0.1, 9, false);
+  } else if (id === 'rattle') {
+    // a stock and a grip, a brass receiver, a magazine on top, a crank on the left; the barrels are their own mesh (they spin)
+    b.color(0x5a3a22).box(0.06, 0.2, 0.1, 0, -0.14, -0.05); b.color(0x6a4428).push(0, -0.05, -0.1, -0.6, 0, 0); b.box(0.05, 0.12, 0.07, 0, 0, 0); b.pop();
+    b.color(0xb08a3a).box(0.13, 0.2, 0.13, 0, 0.02, 0);
+    b.color(0x8a6a2a).cyl(0.075, 0.075, 0.1, 0.13, 10, true);
+    b.color(0xc09a48).cyl(0.042, 0.042, -0.02, 0.14, 9, true, 0, 0.11); b.color(0x6a4a1a); for (const y of [0.01, 0.07, 0.12]) b.cyl(0.045, 0.045, y, y + 0.012, 9, false, 0, 0.11);
+    b.color(0x2a2a2e).beam([-0.07, 0.0, 0], [-0.15, 0.0, 0], 0.014, 0.014); b.beam([-0.15, 0.0, 0], [-0.15, 0.0, -0.07], 0.012, 0.012);
+    b.color(0x6a4428).cyl(0.018, 0.018, -0.11, -0.05, 6, true, -0.15, 0);
   } else if (id === 'cutlass') {
     b.color(0x3a2a1c).cyl(0.02, 0.022, -0.12, 0.02, 6, true);
     b.color(0xd8b048).box(0.02, 0.03, 0.14, 0, 0.03, 0);
@@ -109,6 +117,25 @@ export function toolMesh(id, iron = false) {
   const grp = new THREE.Group();
   if (b.tris) grp.add(new THREE.Mesh(b.build(), MAT.solid));
   if (g.tris) grp.add(new THREE.Mesh(g.build(), MAT.glow));
+  if (id === 'rattle') {
+    const s = new MeshBuilder(rng(5));
+    for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; s.color(k % 2 ? 0x2a2a2e : 0x3a3a40).cyl(0.017, 0.017, 0.0, 0.46, 6, true, Math.cos(a) * 0.04, Math.sin(a) * 0.04); }
+    s.color(0xb08a3a).cyl(0.07, 0.07, 0.36, 0.39, 10, true); s.color(0x8a6a2a).cyl(0.066, 0.066, 0.05, 0.08, 10, true);
+    const sm = new THREE.Mesh(s.build(), MAT.solid); sm.name = 'spin'; sm.position.y = 0.12; grp.add(sm);
+  }
+  // guns: a flash at the muzzle, shown for a blink when it goes off
+  const tip = { pistol: 0.43, blunder: 0.55, rattle: 0.62 }[id];
+  if (tip) {
+    const f = new MeshBuilder(rng(9));
+    const fs = id === 'blunder' ? 2 : 1;
+    f.color(0xfff2b0).blob(0.05 * fs, 0.07 * fs, 0.05 * fs, 0, tip + 0.02 * fs, 0, 6, 3);
+    f.color(0xffc050);
+    for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; f.cone(0.035 * fs, tip, tip + (id === 'blunder' ? 0.4 : 0.24), 4, Math.cos(a) * 0.05 * fs, Math.sin(a) * 0.05 * fs); }
+    f.cone(0.05, tip, tip + (id === 'blunder' ? 0.42 : 0.3), 5);
+    const fm = new THREE.Mesh(f.build(), MAT.glow); fm.name = 'flash'; fm.visible = false; grp.add(fm);
+  }
+  if (id === 'rattle') grp.scale.setScalar(0.72);
+  if (id === 'pistol') grp.scale.setScalar(0.86);
   return grp;
 }
 
@@ -177,6 +204,14 @@ export class ViewModel {
   }
 
   play(action) { this.action = action; this.actT = 0; }
+  /** A gun goes off in your hands: the kick back and up, and the flash. */
+  fire(id) {
+    const k = { pistol: 1, blunder: 1.7, rattle: 0.3 }[id] || 1;
+    this.recoil = Math.min(2.2, (this.recoil || 0) * (id === 'rattle' ? 0.8 : 0) + k);
+    this.recoilSide = (Math.random() - 0.5) * 2;
+    this.flashT = id === 'rattle' ? 0.04 : 0.06;
+    this.fireT = 0; this.fireId = id;
+  }
 
   /** An iron axe or pickaxe from the workbench: build them again. */
   retool(upg = this.upg) {
@@ -267,6 +302,31 @@ export class ViewModel {
     } else if (tool === 'plans') {
       R = { x: 0.16, y: -0.3, z: -0.42, rx: 0.9, ry: -0.25, rz: 0.1 };
       Lh = { x: -0.1, y: -0.34, z: -0.44, rx: 0.7, ry: 0.3, rz: -0.2, show: true };
+    } else if (tool === 'pistol') {
+      R = { x: 0.2, y: -0.27, z: -0.44, rx: -1.5, ry: 0.05, rz: 0 };
+      // the reload: a lower, a twirl round the finger, and back up
+      const f = this.fireId === 'pistol' ? this.fireT : 9;
+      if (f > 0.25 && f < 0.95) { const u = (f - 0.25) / 0.7; R.y -= Math.sin(u * Math.PI) * 0.08; R.rx += Math.sin(u * Math.PI) * 0.35; }
+    } else if (tool === 'blunder') {
+      R = { x: 0.16, y: -0.28, z: -0.4, rx: -1.5, ry: 0.05, rz: 0 };
+      Lh = { x: 0.07, y: -0.33, z: -0.62, rx: -1.4, ry: 0, rz: 0.3, show: true };
+      // the reload: muzzle up, powder and shot down the bell, and level again
+      const f = this.fireId === 'blunder' ? this.fireT : 9;
+      if (f > 0.35 && f < 1.7) { const u = Math.sin((f - 0.35) / 1.35 * Math.PI); R.rx += u * 1.1; R.y -= u * 0.08; Lh.y += u * 0.18; Lh.z += u * 0.2; Lh.rx = -0.3; }
+    } else if (tool === 'rattle') {
+      R = { x: 0.22, y: -0.33, z: -0.48, rx: -1.52, ry: 0.06, rz: 0 };
+      const a = this.crankA || 0, sv = this.spinV || 0;
+      Lh = { x: 0.1 + Math.cos(a) * 0.025 * sv, y: -0.36 + Math.sin(a) * 0.025 * sv, z: -0.5, rx: -1.3, ry: 0.4, rz: 0.5, show: true };
+      R.x += (Math.random() - 0.5) * 0.008 * sv; R.y += (Math.random() - 0.5) * 0.008 * sv;
+    } else if (tool === 'pin' || tool === 'cutlass') {
+      // a big diagonal slash: up over your right shoulder, down across to the left
+      R = { x: 0.3, y: -0.32, z: -0.48, rx: -0.35, ry: 0.05, rz: -0.35 };
+      if (this.action === 'swing') {
+        const k = this.actT / (tool === 'pin' ? 0.4 : 0.34);
+        if (k < 0.3) { const u = k / 0.3; R.rx = -0.35 - u * 1.4; R.ry = 0.05 + u * 0.55; R.rz = -0.35 - u * 0.35; R.y += u * 0.06; }
+        else if (k < 0.62) { const v = (k - 0.3) / 0.32; R.rx = -1.75 + v * 2.3; R.ry = 0.6 - v * 1.6; R.rz = -0.7 + v * 0.9; R.x = 0.3 - v * 0.34; R.z = -0.48 - Math.sin(v * Math.PI) * 0.12; }
+        this.fast = k < 0.62;
+      }
     } else if (tool === 'trap') {
       R = { x: 0.14, y: -0.38, z: -0.5, rx: 0, ry: 0.3, rz: 0 };
       Lh = { x: -0.14, y: -0.38, z: -0.5, rx: 0, ry: -0.3, rz: 0, show: true };
@@ -346,7 +406,8 @@ export class ViewModel {
     this.walkieMesh.visible = !!s.walkie;
     if (s.walkie) Lh = { x: -0.12, y: -0.2, z: -0.34, rx: 0.1, ry: 0.35, rz: 0.1, show: true };
     const sw = this.switchT > 0 ? this.switchT / 0.35 : 0;
-    const k = 1 - Math.exp(-14 * dt);
+    const k = 1 - Math.exp(-(this.fast ? 38 : 14) * dt);
+    this.fast = false;
     const apply = (grp, T, bobK) => {
       grp.position.x += (T.x + this.sway.x + bobX * 0.012 * bobK - grp.position.x) * k;
       grp.position.y += (T.y + this.sway.y - sw * 0.3 + Math.abs(bob) * -0.015 * bobK + breathe - grp.position.y) * k;
@@ -378,7 +439,22 @@ export class ViewModel {
       this.rod.bend(this.rodBend, (F.side || 0) * 0.6);
       this.rod.crank(F.crank || 0);
     }
-    this.toolHolder.rotation.set(0, 0, 0);
+    // the kick: the arms jump back and the muzzle flips up, and settle; the flash; the pistol's twirl; the barrels
+    this.recoil = Math.max(0, (this.recoil || 0) - dt * (this.fireId === 'rattle' ? 9 : 5) * Math.max(0.4, this.recoil || 0));
+    this.fireT = (this.fireT ?? 9) + dt;
+    if (this.freeze) { this.recoil = this.freeze.recoil; this.flashT = 1; this.fireT = this.freeze.fireT ?? 0.03; this.fireId = tool; }
+    const rk = this.recoil;
+    this.root.position.set((this.recoilSide || 0) * rk * 0.01, rk * 0.02, rk * 0.085);
+    this.root.rotation.set(rk * 0.16, 0, (this.recoilSide || 0) * rk * 0.05);
+    let twirl = 0;
+    if (tool === 'pistol' && this.fireId === 'pistol' && this.fireT > 0.3 && this.fireT < 0.85) twirl = -((this.fireT - 0.3) / 0.55) * TAU;
+    this.toolHolder.rotation.set(rk * 0.45 + twirl, 0, 0);
+    this.flashT = Math.max(0, (this.flashT || 0) - dt);
+    const T = this.tools[tool];
+    if (T) {
+      const fl = T.getObjectByName('flash'); if (fl) { fl.visible = this.flashT > 0; fl.rotation.y = Math.random() * 6; fl.scale.setScalar(0.8 + Math.random() * 0.5); }
+      const sp = T.getObjectByName('spin'); if (sp) { this.crankA = (this.crankA || 0) + dt * (this.spinV || 0) * 28; sp.rotation.y = this.crankA; }
+    }
     // match the world camera
     this.cam.fov = worldCam.fov; this.cam.aspect = worldCam.aspect; this.cam.updateProjectionMatrix();
   }

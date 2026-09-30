@@ -99,6 +99,11 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .cross i { position: absolute; background: #fbf4e2; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
 .cross i:nth-child(1) { left: 10px; top: 2px; width: 2px; height: 6px; } .cross i:nth-child(2) { left: 10px; bottom: 2px; width: 2px; height: 6px; }
 .cross i:nth-child(3) { top: 10px; left: 2px; height: 2px; width: 6px; } .cross i:nth-child(4) { top: 10px; right: 2px; height: 2px; width: 6px; }
+.hitmark { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
+.hitmark.on { animation: hitm 0.3s ease-out; }
+.hitmark i { position: absolute; left: 16px; top: 0; width: 2.5px; height: 9px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.5); transform-origin: 1.25px 17px; }
+.hitmark i:nth-child(1) { transform: rotate(45deg); } .hitmark i:nth-child(2) { transform: rotate(135deg); } .hitmark i:nth-child(3) { transform: rotate(225deg); } .hitmark i:nth-child(4) { transform: rotate(315deg); }
+@keyframes hitm { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1.45); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
 .cross.dot i { display: none; } .cross.dot::after { content: ''; position: absolute; left: 9px; top: 9px; width: 4px; height: 4px; background: #fbf4e2; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); }
 
 .prompt { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); font-weight: 800; font-size: 16px; white-space: nowrap; }
@@ -232,7 +237,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .underwater.on { opacity: 1; }
 .hurtflash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(200,40,20,0.55)); opacity: 0; transition: opacity 0.4s; }
 .flash { position: absolute; inset: 0; background: #fff; opacity: 0; transition: opacity 0.35s; }
-.fade { position: absolute; inset: 0; background: #07121a; opacity: 0; transition: opacity 0.8s; display: grid; place-items: center; font: 400 34px var(--display); color: var(--paper1); }
+.fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.3s; display: grid; place-items: center; font: 400 34px var(--display); color: var(--paper1); }
 .fade.on { opacity: 1; }
 #ui.fighting .sub { opacity: 0; }
 .sub { transition: opacity 0.3s; }

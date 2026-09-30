@@ -139,6 +139,8 @@ const I = {
     P('M18 26 L24 24 L26 30 L22 32Z', K2), P('M8 38 L14 34 L15 39 L10 42Z', G2), P('M20 18 L24 16 L26 21 L22 22Z', K2)],
   blunder: [P('M4 36 L16 26 L22 30 L10 40Z', W2), P('M4 36 L16 26 L17 29 L6 38Z', W1), P('M16 26 L36 14 L38 18 L18 30Z', G2), P('M16 26 L36 14 L36 16 L17 28Z', G1),
     P('M34 10 L44 6 L46 18 L38 20Z', G2), P('M34 10 L44 6 L44 9 L36 12Z', G1), P('M38 20 L46 18 L44 21Z', G3)],
+  rattle: [P('M4 36 L14 28 L20 32 L10 42Z', W2), P('M4 36 L14 28 L15 31 L6 38Z', W1), P('M14 24 L40 12 L43 20 L17 32Z', K1), P('M16 25 L41 14 L41 15.5 L16 26.5Z', M2), P('M16 28 L42 17 L42 18.5 L16 29.5Z', M2),
+    P('M40 10 L45 9 L47 20 L42 22Z', G2), P('M22 26 A6 6 0 1 0 22.01 26Z', G2), P('M22 26 A3 3 0 1 0 22.01 26Z', G1), P('M28 32 L31 40 L34 39 L31 31Z', W3), P('M30 40 L38 40 L38 42.5 L30 42.5Z', G1)],
   cutlass: [P('M10 38 L36 8 L40 6 L38 11 L13 41Z', M1), P('M13 41 L38 11 L40 12 L15 43Z', M2), P('M6 34 L16 40 L14 44 L4 38Z', G2), P('M6 44 L12 38 L14 40 L8 46Z', W3),
     P('M16 34 Q8 42 12 46', 'none'), P('M4 38 L6 34 L8 36Z', G1)],
   pin: [P('M8 42 L30 20 L34 24 L12 46Z', W2), P('M8 42 L30 20 L31 22 L10 44Z', W1), P('M28 16 L36 8 L44 16 L36 24Z', W2), P('M28 16 L36 8 L38 10 L30 18Z', W1), P('M36 24 L44 16 L43 20 L38 25Z', W3)],
@@ -154,7 +156,7 @@ export function ic(name, cls = '') {
 export const ICON_NAMES = Object.keys(I);
 
 /* Which icon stands for what. */
-export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe', pick: 'pick', plans: 'plans', pistol: 'pistol', blunder: 'blunder', cutlass: 'cutlass', pin: 'pin' };
+export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe', pick: 'pick', plans: 'plans', pistol: 'pistol', blunder: 'blunder', cutlass: 'cutlass', pin: 'pin', rattle: 'rattle' };
 export const EVENT_ICON = { storm: 'storm', migration: 'school', giant: 'fin', thief: 'mask', whirlpool: 'whirl', meteor: 'meteor' };
 export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light',
   whisper: 'pine', sunscar: 'volcano', skywatch: 'cliff', crystal: 'crystal', frostfall: 'mountain', dread: 'swamp', ironwreck: 'wreck', lost: 'ghost',

@@ -182,21 +182,23 @@ export const TOOLS = [
    dmg per hit (per pellet for the blunderbuss), knock = how hard it shoves, rate = seconds between,
    hull = how much of a hit a ship's hull takes. Fishing is still the point. */
 TOOLS.push(
-  { id: 'pin', name: 'Belaying Pin', kind: 'weapon', price: 250, shop: 'home', melee: true, dmg: 20, knock: 5.4, reach: 2.2, rate: 0.6, hull: 0.1,
+  { id: 'pin', name: 'Belaying Pin', kind: 'weapon', price: 250, shop: 'home', melee: true, dmg: 20, knock: 7.5, reach: 2.3, rate: 0.55, hull: 0.1,
     blurb: 'A hardwood pin off a ship\'s rail. Clubs a sailor off his feet - and, if he is near the rail, over the side.' },
-  { id: 'cutlass', name: 'Rusty Cutlass', kind: 'weapon', price: 1800, shop: 'ironwreck', melee: true, dmg: 34, knock: 3.4, reach: 2.4, rate: 0.5, hull: 0.25,
+  { id: 'cutlass', name: 'Rusty Cutlass', kind: 'weapon', price: 1800, shop: 'ironwreck', melee: true, dmg: 34, knock: 5.5, reach: 2.5, rate: 0.45, hull: 0.25,
     blurb: 'Notched and rusty and fished out of a wreck. Quick in the hand. Vex swears it was a captain\'s.' },
-  { id: 'pistol', name: 'Barnacle Flintlock', kind: 'weapon', price: 3200, shop: 'sunscar', dmg: 42, knock: 1.8, range: 48, rate: 1.5, hull: 0.5,
+  { id: 'pistol', name: 'Barnacle Flintlock', kind: 'weapon', price: 3200, shop: 'sunscar', dmg: 42, knock: 7, range: 48, rate: 1.1, hull: 0.5, kick: 0.06,
     blurb: 'One shot, a cloud of smoke and a reload. Dunn forges them in Emberhaven for people who fish the pirate water.' },
-  { id: 'blunder', name: 'Brine Blunderbuss', kind: 'weapon', price: 6500, shop: 'thunder', dmg: 13, pellets: 7, knock: 6.5, range: 17, rate: 2.4, hull: 0.9,
+  { id: 'blunder', name: 'Brine Blunderbuss', kind: 'weapon', price: 6500, shop: 'thunder', dmg: 13, pellets: 7, knock: 6.5, range: 17, rate: 1.9, hull: 0.9, kick: 0.13,
     blurb: 'A brass bell of a gun that throws a fistful of shot. Clears a deck. Knocks boarders into the sea. Punches holes in hulls.' },
+  { id: 'rattle', name: 'Rattletrap Gun', kind: 'weapon', price: 14000, shop: 'blackflag', auto: true, dmg: 7, knock: 2.4, range: 42, rate: 0.085, spread: 0.035, hull: 0.22, kick: 0.012,
+    blurb: 'Six barrels in a brass nest, turned by a crank. Hold the trigger: it spins up and does not stop. Keeps a boarder in the air for as long as you like.' },
 );
 export const TOOL_BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
 export const WEAPONS = TOOLS.filter(t => t.kind === 'weapon');
 
 /* Passive gear. */
 export const GEAR = [
-  { id: 'diving', name: 'Diving Gear', price: 1500, blurb: 'Mask and air tank: 90 seconds underwater instead of 20, and you swim faster.' },
+  { id: 'diving', name: 'Diving Gear', price: 1500, blurb: 'Mask and air tank: 90 seconds underwater instead of 10, and you swim faster.' },
   { id: 'sonar', name: 'Handheld Sonar', price: 900, blurb: 'Pings the water around you. Shows fish schools, giants and anything very large and very quiet.' },
   { id: 'lucky', name: 'Lucky Hat', price: 2400, blurb: 'Bigger fish. Rarer fish. Nobody knows why. Do not wash it.' },
   { id: 'gloves', name: 'Rubber Gloves', price: 350, blurb: 'Grab an Electric Eel without being electrocuted. Mostly.' },

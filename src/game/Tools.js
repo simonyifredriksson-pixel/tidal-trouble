@@ -95,8 +95,13 @@ export class Tools {
     else if (tool === 'bucket' && click && this.cool <= 0) this._bucket();
     else if (tool === 'hammer' && hold) this._hammer(dt);
     else if (tool === 'auger' && hold) this._auger(dt);
-    else if (TOOL_BY_ID[tool]?.kind === 'weapon' && click && this.cool <= 0) this._weapon(TOOL_BY_ID[tool]);
+    else if (TOOL_BY_ID[tool]?.kind === 'weapon' && (TOOL_BY_ID[tool].auto ? hold && this.spin > 0.55 : click) && this.cool <= 0) this._weapon(TOOL_BY_ID[tool]);
     else this.augerT = 0;
+    // the rattle gun spins up while you hold the trigger, and winds down after
+    const auto = TOOL_BY_ID[tool]?.auto && !P.held && P.mode !== 'mount';
+    this.spin = auto && hold ? Math.min(1, (this.spin || 0) + dt * 3.2) : Math.max(0, (this.spin || 0) - dt * 1.6);
+    G.vm.spinV = this.spin;
+    if (auto && hold && this.spin < 0.55 && Math.random() < dt * 20) G.audio.tone?.(120 + this.spin * 300, 0.05, 'square', 0.03);
 
     this._spears(dt);
     this._grappleStep(dt);
@@ -116,30 +121,37 @@ export class Tools {
     const SH = G.ships;
     if (T.melee) {
       G.vm.play('swing'); G.audio.swoosh?.();
+      P.nudge?.(P.flatForward(new THREE.Vector3()), 1.6);        // you lunge into it
       setTimeout(() => {
         const front = P.pos.clone().add(new THREE.Vector3(0, 1.1, 0)).addScaledVector(d, T.reach * 0.55);
         const hits = SH ? SH.crewNear(front, T.reach * 0.7) : [];
-        if (hits.length) { const h = hits[0]; G.act({ t: 'strike', w: T.id, crew: h.C.id, at: h.q.toArray() }); G.audio.thunk?.(); G.fx.sparks(h.q.x, h.q.y + 1.2, h.q.z, 6, 0xfff0c0); G.addShake(0.12); return; }
+        if (hits.length) { const h = hits[0]; G.act({ t: 'strike', w: T.id, crew: h.C.id, at: h.q.toArray() }); G.audio.thunk?.(); G.audio.bonk?.(); G.ui.hitmark?.(); G.fx.sparks(h.q.x, h.q.y + 1.2, h.q.z, 12, 0xfff0c0); G.addShake(0.22); return; }
         const br = SH?.bridgeAt(front, 1.2);
         if (br) { G.act({ t: 'strike', w: T.id, bridge: br.S.id }); G.audio.thunk?.(); G.fx.chips?.(front.x, front.y, front.z, 0x6a4a2e, 8, 0, 0); return; }
         const sh = SH?.rayShip(o, d, T.reach + 0.6);
         if (sh && P.boat !== sh.S.boat) { G.act({ t: 'strike', w: T.id, ship: sh.S.id, at: sh.p.toArray() }); G.audio.thunk?.(); G.fx.chips?.(sh.p.x, sh.p.y, sh.p.z, 0x6a4a2e, 6, 0, 0); }
-      }, 170);
+      }, 130);
       return;
     }
-    // a gun: flash, smoke, and a line of shot
-    G.vm.play('hit');
+    // a gun: the kick, the flash, the smoke, and a line of shot
+    G.vm.fire(T.id);
     const muzzle = G.vm.handWorld(cam, new THREE.Vector3()).addScaledVector(d, 0.5);
-    G.fx.sparks(muzzle.x, muzzle.y, muzzle.z, 10, 0xffd070); G.fx.smoke(muzzle.x, muzzle.y, muzzle.z, 0xc8c0b0);
-    G.audio.noise?.(T.pellets ? 0.3 : 0.16, T.pellets ? 0.6 : 0.4, 'lowpass', T.pellets ? 900 : 1600, 1, 0.3);
-    G.audio.tone?.(T.pellets ? 60 : 95, 0.16, 'square', 0.12, 0.002, 0.4);
-    G.addShake(T.pellets ? 0.35 : 0.18);
+    const big = T.pellets ? 1.6 : T.auto ? 0.4 : 1;
+    G.fx.sparks(muzzle.x, muzzle.y, muzzle.z, Math.round(6 + big * 8), 0xffd070);
+    if (!T.auto || Math.random() < 0.35) { const sm = muzzle.clone().addScaledVector(d, 1.4 + Math.random() * 0.6); G.fx.smoke(sm.x, sm.y, sm.z, 0xd8d0c0); }
+    G.audio.gun?.(T.pellets ? 1.6 : T.auto ? 0.45 : 1);
+    G.addShake(T.pellets ? 0.5 : T.auto ? 0.07 : 0.24);
+    // the muzzle climbs; a blunderbuss shoves you back a step
+    P.pitch = Math.min(1.4, P.pitch + (T.kick || 0.04) * (0.8 + Math.random() * 0.4));
+    if (T.auto) P.yaw += (Math.random() - 0.5) * 0.012;
+    if (T.pellets) P.nudge?.(P.flatForward(new THREE.Vector3()).multiplyScalar(-1), 3.2);
     const n = T.pellets || 1;
     const struck = new Map();
     let shipHit = null, far = T.range;
     for (let k = 0; k < n; k++) {
       const dd = d.clone();
       if (n > 1) { dd.x += (Math.random() - 0.5) * 0.14; dd.y += (Math.random() - 0.5) * 0.1; dd.z += (Math.random() - 0.5) * 0.14; dd.normalize(); }
+      else if (T.spread) { dd.x += (Math.random() - 0.5) * T.spread; dd.y += (Math.random() - 0.5) * T.spread; dd.z += (Math.random() - 0.5) * T.spread; dd.normalize(); }
       const ch = SH?.rayCrew(o, dd, T.range);
       const sh = SH?.rayShip(o, dd, ch ? ch.t : T.range);
       // your own boat does not count
@@ -151,9 +163,11 @@ export class Tools {
         const sea = G.world.sea(end.x, end.z);
         if (end.y < sea + 1) G.fx.splash(end.x, sea, end.z, 0.25);
       }
-      if (k === 0) this._tracer(muzzle, o.clone().addScaledVector(dd, ch ? ch.t : ship ? ship.t : T.range * 0.6));
+      if (k < (n > 1 ? 3 : 1)) this._tracer(muzzle, o.clone().addScaledVector(dd, ch ? ch.t : ship ? ship.t : T.range * 0.6));
+      if (ch) { const q = o.clone().addScaledVector(dd, ch.t); G.fx.sparks(q.x, q.y, q.z, 5, 0xfff4c0); }
     }
     for (const [cid, k] of struck) G.act({ t: 'strike', w: T.id, crew: cid, mult: k });
+    if (struck.size) { G.ui.hitmark?.(); G.audio.bonk?.(); }
     if (shipHit) { G.act({ t: 'strike', w: T.id, ship: shipHit.S.id, at: shipHit.p.toArray(), mult: n }); G.fx.chips?.(shipHit.p.x, shipHit.p.y, shipHit.p.z, 0x6a4a2e, 10, 0, 0); }
     const br = SH?.bridgeAt(o.clone().addScaledVector(d, Math.min(far, 12)), 1.4);
     if (br && !struck.size) G.act({ t: 'strike', w: T.id, bridge: br.S.id, mult: n });
@@ -164,7 +178,7 @@ export class Tools {
     const g = new THREE.BufferGeometry().setFromPoints([a, b]);
     const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xfff0b0, transparent: true, opacity: 0.85 }));
     G.scene.add(l);
-    let t = 0; const f = () => { t += 1 / 60; l.material.opacity = 0.85 * (1 - t / 0.16); if (t < 0.16) requestAnimationFrame(f); else { G.scene.remove(l); g.dispose(); } };
+    let t = 0; const f = () => { t += 1 / 60; l.material.opacity = 0.85 * (1 - t / 0.12); if (t < 0.12) requestAnimationFrame(f); else { G.scene.remove(l); g.dispose(); } };
     requestAnimationFrame(f);
   }
 

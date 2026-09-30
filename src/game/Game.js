@@ -1021,7 +1021,7 @@ export class Game {
     this.passing = true;
     this.fishing.cancel(true);
     this.dropHeld(P, true);
-    this.ui.fade(true, why === 'drown' ? 'You blacked out under the water...' : why === 'exhausted' ? 'Too tired to swim... someone fishes you out.' : 'Everything goes dark...');
+    this.ui.fade(true);
     setTimeout(() => {
       const A = this.world.settlement.anchors;
       // your own shelter, if you have built one; home otherwise
@@ -1033,9 +1033,8 @@ export class Game {
       const fee = this.isHost && !sh ? Math.min(300, Math.round(this.state.s.money * 0.1)) : 0;
       if (fee > 0) this.state.spend(fee);
       this.ui.fade(false);
-      this.ui.toast(sh ? 'You come round in your shelter, soaked through.' : fee > 0 ? `You wake up at home. The doctor charged ${fee} coins.` : 'You wake up at home, soaked.', 'warn');
       this.passing = false;
-    }, 2600);
+    }, 2000);
   }
 
   /* ================= clues and leviathans ================= */
@@ -2036,9 +2035,8 @@ export class Game {
     this.dropHeld(P, true);
     this.ui.closeTalk?.(); if (this.ui.isOpen) this.ui.close();
     P.boundT = 0;
-    this.ui.fade(true, why === 'guards' ? 'A club, the sand coming up to meet you, and a door slamming.' : 'Rough hands. A sack over your head. Laughing, all round you.');
+    this.ui.fade(true);
     this.audio.thunk?.();
-    setTimeout(() => this.ui.fade(true, 'The creak of a hull. Somebody singing, badly. Hours of it. Then sand under your knees.'), why === 'guards' ? 1600 : 3000);
     setTimeout(() => {
       // your gear goes into their stash: nothing on the hotbar, nothing in your hands
       this.state.confiscate();
@@ -2048,10 +2046,8 @@ export class Game {
       this.act({ t: 'captive', on: true });
       this.world.prebuild(P.pos.x, P.pos.z);
       this.ui.fade(false);
-      this.ui.banner('CAPTURED', 'A wooden cage on an island no chart shows. Your gear is gone. Force the bars when the guard is not looking (hold E), get your things back out of their stash up in the camp, and get to your boat at their dock.', 'cage', 7);
-      this.audio.eventSting?.();
       this.passing = false;
-    }, why === 'guards' ? 3200 : 6400);
+    }, 2000);
   }
   /** Host: a player has been brought in (or has got away). Their boat goes with them to the pirates' dock. */
   _hostCaptive(from, on) {
@@ -2391,7 +2387,7 @@ export class Game {
     this._waking = true;
     this.fishing.cancel(true);
     this.dropHeld(P, true);
-    this.ui.fade(true, 'The sea closes over you.');
+    this.ui.fade(true);
     setTimeout(() => {
       const spot = this.intro.wakeSpot();
       P.place(spot.pos.clone().add(new THREE.Vector3(0, 0.1, 0)), spot.yaw);
@@ -2399,11 +2395,10 @@ export class Game {
       if (this.isHost) { this.state.s.day++; this.tod = 0.28; }
       this.world.prebuild(spot.pos.x, spot.pos.z);
       this.ui.fade(false);
-      this.ui.banner('DRIFTWOOD BAY', 'You wake up on the same beach as the first time. You do not remember the swim.', 'wave', 5);
       const gus = this.npcs.byId('gus');
       if (gus) { this.npcs.visit(gus, spot.gus, Math.atan2(spot.pos.x - spot.gus.x, spot.pos.z - spot.gus.z)); this._gusWarden = true; setTimeout(() => this._gusTalkWarden(gus), 2200); }
       this._waking = false;
-    }, 3600);
+    }, 2000);
   }
 
   /** Handle a network event from `from`, or a local _everyone call. */
@@ -2418,8 +2413,8 @@ export class Game {
       case 'ship': this.ships.onEvent(e); break;
       case 'gunfx': { const o = new THREE.Vector3(...e.o); this.fx.sparks(o.x, o.y, o.z, 8, 0xffd070); this.fx.smoke(o.x, o.y, o.z, 0xc8c0b0); this.audio.noise?.(e.p ? 0.3 : 0.16, 0.4 * Math.max(0, 1 - o.distanceTo(this.player.pos) / 150), 'lowpass', 1200, 1, 0.3); break; }
       case 'captured': this._captured(e.why); break;
-      case 'bind': this.player.boundT = e.dur; this.ui.banner('TIED UP', 'A pirate has tied your hands. Struggle free - hammer E - or wait for a crewmate to cut you loose.', 'rope', 3); break;
-      case 'unbind': this.player.boundT = 0; this.ui.toast('Free!', 'good'); break;
+      case 'bind': this.player.boundT = e.dur; this.fishing.cancel(true); this.dropHeld(this.player, true); this.audio.thunk?.(); this.addShake(0.3); break;
+      case 'unbind': this.player.boundT = 0; break;
       case 'banner': this.ui.banner(e.title, e.sub, e.icon); break;
       case 'secret': { const D = SECRET_BY_ID[e.id]; if (D) { this.ui.banner(D.name.toUpperCase(), D.found, D.icon, 6); this.audio.eventSting('zone'); this.audio.fanfare(2); } break; }
       case 'card': this._showCard(e.card); break;
