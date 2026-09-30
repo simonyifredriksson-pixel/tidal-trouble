@@ -31,7 +31,7 @@ import { ROD_BY_ID, TOOL_BY_ID } from '../data/GearData.js';
 import { SHIP_KINDS, CREW_LOOKS, CREW_WEAPONS } from '../data/ShipData.js';
 import { HULL_BY_ID } from '../data/BoatData.js';
 import { FISH, FISH_BY_ID } from '../data/FishData.js';
-import { galleyDress, waveFlag, cargoMesh, boardingBridge, cannonballMesh } from '../art/ShipArt.js';
+import { galleyDress, waveFlag, cargoMesh, boardingBridge, cannonballMesh, harpoonMesh } from '../art/ShipArt.js';
 import { toolMesh } from './ViewModel.js';
 import { heightAt } from '../world/Terrain.js';
 import { zoneAt, HOME_CENTRE, WORLD, fogAt } from '../world/MapData.js';
@@ -71,6 +71,7 @@ export class Ships {
     this.list = new Map();          // id -> ship
     this.boatList = [];             // their Boats (for Game.allBoats)
     this.balls = [];                // cannonballs in the air (everyone simulates; the host decides hits)
+    this.darts = [];                // harpoons in the air (just to look at: the host decides when one bites)
     this.bridges = [];              // boarding-bridge meshes
     this.spawnT = 25;
     this.t = 0;
@@ -113,7 +114,7 @@ export class Ships {
     boat.npc = true; boat.docked = false; boat.mooring = null;
     boat.pos.set(x, 0, z); boat.heading = heading; boat._updateMatrix();
     const S = { id, kind, K, boat, crew: [], cargo: [], hostile: new Set(), alarm: 0, st: K.derelict ? 'drift' : 'roam', wp: null, t: 0, fishT: 20 + Math.random() * 40,
-      gunT: 3, bridge: null, calledHelp: false, taunt: 4, fled: 0, sayT: 0, age: 0, far: 0 };
+      gunT: 3, bridge: null, calledHelp: false, taunt: 4, fled: 0, sayT: 0, age: 0, far: 0, lines: [], harpT: 1.5 };
     if (K.derelict) { boat.hp = boat.stats.hp * 0.35; boat.addHole(0.5); boat.water = 0.25; boat.breakSomething('rail'); boat.breakSomething('engine'); }
     if (kind === 'pirate') this._dressGalley(S);
     this.list.set(id, S);
@@ -228,7 +229,7 @@ export class Ships {
           if (E) { E.T.damage(6, 'corvus'); for (const P of G.allPlayers()) { const d = P.pos.distanceTo(E.B); if (d < 2.2) G.knockPlayer(P, P.pos.clone().sub(E.B).setY(0).normalize(), 4, 'cannon'); } }
         }
       }
-      if (host) { this._shipAI(S, dt); b.simulate(dt, G.world); this._crewHost(S, dt); }
+      if (host) { this._shipAI(S, dt); if (S.lines.length) this._lines(S, dt); b.simulate(dt, G.world); this._crewHost(S, dt); }
       b.visuals(dt, G.fx, G.world, G._night?.() || 0);
       if (S.dress) waveFlag(S.dress.userData.flag, this.t + S.id.length, 1 + G.world.storm);
       this._crewPose(S, dt);
@@ -236,6 +237,7 @@ export class Ships {
     }
     this._balls(dt, host);
     this._bridgesDraw(dt);
+    this._linesDraw(dt);
     if (host) this._collideBoats(dt);
   }
   _hostSpawn(dt) {
@@ -271,6 +273,8 @@ export class Ships {
     G.scene.remove(S.boat.group);
     if (S.bridgeMesh) { this.group.remove(S.bridgeMesh); S.bridgeMesh = null; }
     if (S.rope) { this.group.remove(S.rope); S.rope.geometry.dispose(); S.rope = null; }
+    for (const m of S.lineMeshes || []) { this.group.remove(m.rope, m.h); m.rope.geometry.dispose(); }
+    S.lineMeshes = [];
     // what was lying on its deck goes into the sea with it
     for (const it of [...G.loot.items.values()]) if (it.boat === S.boat) G.loot._detach(it);
     this.list.delete(S.id);
@@ -366,7 +370,7 @@ export class Ships {
     const G = this.game, b = S.boat, K = S.K;
     const hurt = b.hp < b.stats.hp * 0.3 || b.water > 0.55;
     if ((beaten || hurt) && S.st !== 'retreat') {
-      S.st = 'retreat'; S.engaged = false;
+      S.st = 'retreat'; S.engaged = false; S.lines = [];
       if (S.bridge) this.dropBridge(S, 'retreat');
       const cap = S.crew.find(C => C.on === b && C.st !== 'down' && !C.bound) || S.crew[0];
       this._say(cap, pick(K.say.flee));
@@ -404,14 +408,18 @@ export class Ships {
     }
     if (tb) {
       const d = threat.d;
-      // the guns: when they are abeam and in range
+      // the guns: when they are abeam and in range - until they have a harpoon in you, and then they want the boat whole
       S.gunT -= dt;
       const bearing = wrapAngle(Math.atan2(tp.x - b.pos.x, tp.z - b.pos.z) - b.heading);
       const abeam = Math.abs(Math.abs(bearing) - Math.PI / 2) < 0.55;
-      if (d < 130 && d > 14 && abeam && S.gunT <= 0) { S.gunT = 6 + Math.random() * 3; this._broadside(S, tb, bearing > 0 ? 1 : -1); }
+      const hooked = S.lines.filter(L => L.to === tb.id).length;
+      if (d < 130 && d > 14 && abeam && S.gunT <= 0 && !hooked) { S.gunT = 6 + Math.random() * 3; this._broadside(S, tb, bearing > 0 ? 1 : -1); }
+      // the harpoons: close enough, and they pin you where you are
+      S.harpT -= dt;
+      if (d < 75 && d > 9 && hooked < 2 && S.harpT <= 0) { S.harpT = hooked ? 2.4 : 1.4; this._harpoon(S, tb); }
       // close in on the side; when alongside and slow enough, the bridge comes down
-      if (d < 40) {
-        this._alongside(S, tb, dt, false);
+      if (d < 40 || hooked) {
+        this._alongside(S, tb, dt, false, hooked > 0);
         const rel = Math.hypot(tb.vel.x - b.vel.x, tb.vel.y - b.vel.y);
         const gap = d - tb.hull.hw - b.hull.hw;
         if (gap < 5.5 && rel < 4.5 && S.t > 3) this.lowerBridge(S, tb);
@@ -430,7 +438,7 @@ export class Ships {
     }
   }
   /** Hold station beside boat T (matching its heading and speed); `lock` keeps them tight together. */
-  _alongside(S, T, dt, lock) {
+  _alongside(S, T, dt, lock, slow = false) {
     const b = S.boat;
     const f = T.forward(), side = Math.sign((b.pos.x - T.pos.x) * f.z - (b.pos.z - T.pos.z) * f.x) || 1;
     const gap = T.hull.hw + b.hull.hw + (lock ? 3.4 : 3.0);
@@ -444,6 +452,8 @@ export class Ships {
       this._stop(S);
       return;
     }
+    // on a line they have you: ease in beside you, no racing ahead (they would only drag you along)
+    if (slow) { this._steerTo(S, tx, tz, clamp(Math.hypot(dx, dz) * 0.04, 0.12, 0.45), 0.35); return; }
     const ahead = Math.hypot(T.vel.x, T.vel.y);
     this._steerTo(S, tx + f.x * (4 + ahead * 1.5), tz + f.z * (4 + ahead * 1.5), clamp(0.4 + Math.hypot(dx, dz) * 0.05 + ahead / Math.max(4, b.stats.speed), 0.3, 1), 1.02);
   }
@@ -540,6 +550,94 @@ export class Ships {
     G._everyone({ t: 'ship', k: 'hit', p: B.p.toArray(), b: bt.id });
   }
 
+  /* ================= harpoons on ropes ================= */
+  /** Fire a harpoon from the galley's rail into boat T. It does no damage: it just holds on. */
+  _harpoon(S, T) {
+    const G = this.game, b = S.boat, guns = S.dress?.userData.harpoons || [];
+    const Lt = b.toLocal(_a.copy(T.pos), V3()), side = Math.sign(Lt.x) || 1;
+    const mine = guns.filter(g => g.side === side), gn = mine[S.lines.length % Math.max(1, mine.length)];
+    const aL = gn ? V3().set(gn.x, gn.y, gn.z) : V3().set(side * (b.hw || b.hull.hw), b.deck + 1.1, 0);
+    const Lb = T.toLocal(_b.copy(b.pos), V3()), side2 = Math.sign(Lb.x) || 1;
+    const zt = clamp(Lb.z + (Math.random() - 0.5) * T.hull.hl * 0.9, -T.hull.hl * 0.65, T.hull.hl * 0.65);
+    const bL = V3().set(side2 * (T.halfWidth(zt) - 0.05), T.railY(zt) - 0.15, zt);
+    const o = b.toWorld(aL.clone()), to = T.toWorld(bL.clone());
+    const tf = 0.25 + o.distanceTo(to) / 48;
+    G._everyone({ t: 'ship', k: 'harpoon', s: S.id, o: o.toArray().map(n => +n.toFixed(2)), at: to.toArray().map(n => +n.toFixed(2)), tf: +tf.toFixed(2) });
+    this.after(tf, () => {
+      if (!this.list.has(S.id) || S.st === 'retreat' || T.sinking || T.absent) return;
+      S.lines.push({ to: T.id, a: aL.toArray(), b: bL.toArray(), rest: o.distanceTo(to) });
+      G._everyone({ t: 'ship', k: 'hook', s: S.id, tb: T.id, p: T.toWorld(bL.clone()).toArray().map(n => +n.toFixed(2)) });
+    });
+  }
+  /** Where a line runs from and to, in the world. */
+  lineEnds(S, L) {
+    const T = this.game.boatById(L.to);
+    if (!T) return null;
+    return { A: S.boat.toWorld(V3().fromArray(L.a)), B: T.toWorld(V3().fromArray(L.b)), T };
+  }
+  /** Host: every line holds its boat back and the pirates haul it in, down to a boat's width apart. */
+  _lines(S, dt) {
+    for (let i = S.lines.length - 1; i >= 0; i--) {
+      const L = S.lines[i], E = this.lineEnds(S, L);
+      if (!E || E.T.sinking > 2 || E.T.absent) { S.lines.splice(i, 1); continue; }
+      const T = E.T, b = S.boat;
+      const gap = b.hull.hw + T.hull.hw + 3.2;
+      L.rest = Math.max(gap, L.rest - dt * 3.2);
+      const dx = E.A.x - E.B.x, dz = E.A.z - E.B.z, d = Math.hypot(dx, dz) || 1;
+      // held: whatever the engine does, the boat hardly moves on its own
+      const k = Math.exp(-dt * 2.2);
+      T.vel.x *= k; T.vel.y *= k;
+      if (d > L.rest) { const f = Math.min(12, (d - L.rest) * 2.2); T.tow.x += dx / d * f; T.tow.y += dz / d * f; b.tow.x -= dx / d * f * 0.15; b.tow.y -= dz / d * f * 0.15; }
+      T.yawRate *= Math.exp(-dt * 1.5);
+    }
+  }
+  /** A player cuts a line (E at the harpoon). */
+  cutLine(sid, i) {
+    const S = this.list.get(sid);
+    if (!S || !S.lines[i]) return;
+    S.lines.splice(i, 1);
+    S.harpT = Math.max(S.harpT, 3);
+    this.game._everyone({ t: 'ship', k: 'cut', s: S.id });
+  }
+  /** The line whose harpoon is near p (for the E prompt). */
+  lineNear(p, r = 1.8) {
+    for (const S of this.list.values()) for (let i = 0; i < S.lines.length; i++) { const E = this.lineEnds(S, S.lines[i]); if (E && E.B.distanceTo(p) < r) return { S, i, E }; }
+    return null;
+  }
+  /** Everyone: the ropes, the harpoons stuck in the hull, and any still in the air. */
+  _linesDraw(dt) {
+    for (const S of this.list.values()) {
+      S.lineMeshes = S.lineMeshes || [];
+      while (S.lineMeshes.length < S.lines.length) {
+        const rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3(), V3(), V3(), V3(), V3()]), new THREE.LineBasicMaterial({ color: 0xc8b48a }));
+        rope.frustumCulled = false;
+        const h = harpoonMesh();
+        this.group.add(rope, h); S.lineMeshes.push({ rope, h });
+      }
+      while (S.lineMeshes.length > S.lines.length) { const m = S.lineMeshes.pop(); this.group.remove(m.rope, m.h); m.rope.geometry.dispose(); }
+      S.lines.forEach((L, i) => {
+        const E = this.lineEnds(S, L), M = S.lineMeshes[i];
+        if (!E) { M.rope.visible = M.h.visible = false; return; }
+        M.rope.visible = M.h.visible = true;
+        // the rope sags a little in the middle unless it is hauled taut
+        const p = M.rope.geometry.attributes.position, d = E.A.distanceTo(E.B), sag = Math.max(0, (L.rest || d) - d) * 0.4 + 0.25;
+        for (let k = 0; k < 6; k++) { const t = k / 5; p.setXYZ(k, E.A.x + (E.B.x - E.A.x) * t, E.A.y + (E.B.y - E.A.y) * t - Math.sin(t * Math.PI) * sag, E.A.z + (E.B.z - E.A.z) * t); }
+        p.needsUpdate = true;
+        M.h.position.copy(E.B); M.h.lookAt(_a.copy(E.B).sub(E.A).normalize().add(E.B));
+      });
+    }
+    // in the air
+    for (let i = this.darts.length - 1; i >= 0; i--) {
+      const D = this.darts[i];
+      D.t += dt;
+      const t = Math.min(1, D.t / D.tf);
+      const at = V3().lerpVectors(D.o, D.to, t); at.y += Math.sin(t * Math.PI) * D.o.distanceTo(D.to) * 0.06;
+      D.m.position.copy(at); D.m.lookAt(_a.copy(D.to).sub(D.o).normalize().add(at));
+      const p = D.rope.geometry.attributes.position; p.setXYZ(0, D.o.x, D.o.y, D.o.z); p.setXYZ(1, at.x, at.y, at.z); p.needsUpdate = true;
+      if (D.t > D.tf + 0.1) { this.group.remove(D.m, D.rope); D.rope.geometry.dispose(); this.darts.splice(i, 1); }
+    }
+  }
+
   /* ================= the boarding bridge ================= */
   lowerBridge(S, T) {
     if (S.bridge) return;
@@ -547,7 +645,7 @@ export class Ships {
     S.st = 'board';
     const cap = S.crew.find(C => C.on === S.boat && C.st !== 'down' && !C.bound);
     if (cap) this._say(cap, pick(S.K.say.angry));
-    this.game._everyone({ t: 'ship', k: 'bridge', id: S.id, to: T.id });
+    this.game._everyone({ t: 'ship', k: 'bridge', id: S.id, tb: T.id });
   }
   dropBridge(S, why = '') {
     if (!S.bridge) return;
@@ -557,7 +655,7 @@ export class Ships {
     S.bridge = null;
     if (S.st === 'board') S.st = 'chase';
     S.t = -4;          // a few seconds before it can try again
-    G._everyone({ t: 'ship', k: 'unbridge', id: S.id, why, to: T?.id });
+    G._everyone({ t: 'ship', k: 'unbridge', id: S.id, why, tb: T?.id });
   }
   /** The two ends of a ship's bridge in world space (on its rail, and on the other boat's rail). */
   bridgeEnds(S) {
@@ -759,7 +857,7 @@ export class Ships {
     const G = this.game;
     for (const Q of players) { G._everyone({ t: 'captured', to: Q.id, why: 'bound' }); delete this.bound[Q.id]; }
     if (S.bridge) this.dropBridge(S, 'done');
-    S.st = 'retreat'; S.engaged = false; S.hostile.clear();
+    S.st = 'retreat'; S.engaged = false; S.hostile.clear(); S.lines = [];
     this.after(4, () => { if (this.list.has(S.id)) S.gone = true; });
   }
   /** Wriggled free: a moment's grace before anyone can get a rope round you again. */
@@ -782,11 +880,13 @@ export class Ships {
       // pirates want you alive and in a cage: they shoot up your boat, not you
       const B = P.boat;
       if (!B || B === C.on) return;
+      // once your boat is on their line they want it in one piece
+      if (C.ship.lines.some(L => L.to === B.id) || (C.ship.bridge && C.ship.bridge.to === B.id)) return;
       const Lo = B.toLocal(o, V3()), z = clamp(Lo.z + (Math.random() - 0.5) * 3, -B.hull.hl * 0.8, B.hull.hl * 0.8), side = Math.sign(Lo.x) || 1;
       const to = B.toWorld(V3().set(side * B.halfWidth(z) * (0.75 + Math.random() * 0.25), B.deck - 0.3 + Math.random() * 1.1, z));
       B.damage(C.W.spread ? 5 : 3, 'shot');
       if (Math.random() < (C.W.spread ? 0.12 : 0.05)) B.addHole(0.35);
-      G._everyone({ t: 'ship', k: 'shot', o: o.toArray().map(n => +n.toFixed(2)), to: to.toArray().map(n => +n.toFixed(2)), w: C.weapon, hit: true, chip: 1 });
+      G._everyone({ t: 'ship', k: 'shot', o: o.toArray().map(n => +n.toFixed(2)), at: to.toArray().map(n => +n.toFixed(2)), w: C.weapon, hit: true, chip: 1 });
       return;
     }
     // the further, the worse: a pistol is a pistol
@@ -794,7 +894,7 @@ export class Ships {
     const hit = Math.random() < acc;
     const to = P.pos.clone().add(_w.set((Math.random() - 0.5) * (hit ? 0.2 : 2.5), 1.1 + (Math.random() - 0.5) * (hit ? 0.2 : 1.4), (Math.random() - 0.5) * (hit ? 0.2 : 2.5)));
     if (hit) { G.hurtPlayer(P, C.W.dmg * (C.W.spread ? clamp(1.4 - d / 10, 0.4, 1.2) : 1), 'shot'); if (C.W.spread && d < 6) G.knockPlayer(P, to.clone().sub(o).setY(0).normalize(), C.W.knock, 'shot'); }
-    G._everyone({ t: 'ship', k: 'shot', o: o.toArray().map(n => +n.toFixed(2)), to: to.toArray().map(n => +n.toFixed(2)), w: C.weapon, hit });
+    G._everyone({ t: 'ship', k: 'shot', o: o.toArray().map(n => +n.toFixed(2)), at: to.toArray().map(n => +n.toFixed(2)), w: C.weapon, hit });
   }
   _crewWalk(C, dt, speed) {
     const b = C.on;
@@ -1149,7 +1249,7 @@ export class Ships {
     switch (e.k) {
       case 'say': { const C = this.crewById(e.c); if (C) this._showSay(C, e.text); break; }
       case 'shot': {
-        const o = P3(e.o), to = P3(e.to);
+        const o = P3(e.o), to = P3(e.at);
         G.fx.sparks(o.x, o.y, o.z, 6, 0xffd070); G.fx.smoke(o.x, o.y, o.z, 0xb8b0a0);
         this._tracer(o, to);
         A.gun?.(e.w === 'blunder' ? 1.5 : 1, o);
@@ -1165,15 +1265,30 @@ export class Ships {
       case 'overboard': { const p = P3(e.p); G.fx.splash(p.x, G.world.sea(p.x, p.z), p.z, 1.3); A.splash(1, p); break; }
       case 'climb': { const p = P3(e.p); G.fx.splash(p.x, p.y, p.z, 0.6); break; }
       case 'cannon': this.onCannon(e); break;
+      case 'harpoon': {
+        const o = P3(e.o), to = P3(e.at), m = harpoonMesh();
+        const rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([o.clone(), o.clone()]), new THREE.LineBasicMaterial({ color: 0xc8b48a }));
+        rope.frustumCulled = false; m.position.copy(o);
+        this.group.add(m, rope); this.darts.push({ m, rope, o, to, t: 0, tf: e.tf });
+        A.tone?.(90, 0.25, 'square', 0.18 * this._vol(o), 0.002, 0.4); A.swoosh?.(); G.fx.smoke(o.x, o.y, o.z, 0xb8b0a0);
+        break;
+      }
+      case 'hook': {
+        const p = P3(e.p);
+        A.thunk?.(p); A.crack?.(); G.fx.chips?.(p.x, p.y, p.z, 0x6a4a2e, 10, 0, 0);
+        if (G.player.boat && G.player.boat.id === e.tb) { G.addShake?.(0.5); if (!this._hookTold || this.t - this._hookTold > 30) { this._hookTold = this.t; G.ui.toast('Harpooned! They have you on a line - cut it at the rail (hold E), or get ready for boarders.', 'warn'); } }
+        break;
+      }
+      case 'cut': A.crack?.(); A.swoosh?.(); break;
       case 'splash': { const p = P3(e.p); G.fx.splash(p.x, G.world.sea(p.x, p.z), p.z, 2.4); A.splash(1.6, p); break; }
       case 'hit': { const p = P3(e.p); G.fx.explosion?.(p.x, p.y, p.z, 0.8); G.fx.chips?.(p.x, p.y, p.z, 0x8a6a4a, 18, 0, 0); A.crash?.(); if (G.player.boat && G.player.boat.id === e.b) G.addShake?.(0.6); break; }
       case 'thud': { A.crash?.(); break; }
       case 'bridge': {
         A.crash?.(); A.chain?.();
-        if (G.player.boat && G.player.boat.id === e.to) G.ui.banner('BOARDERS!', 'A spiked bridge just bit into your rail. Knock them into the sea - or kick the bridge off (E at the bridge).', 'skull', 3.5);
+        if (G.player.boat && G.player.boat.id === e.tb) G.ui.banner('BOARDERS!', 'A spiked bridge just bit into your rail. Knock them into the sea - or kick the bridge off (E at the bridge).', 'skull', 3.5);
         break;
       }
-      case 'unbridge': { A.splash?.(1.4); if (G.player.boat && G.player.boat.id === e.to) G.ui.toast(e.why === 'kicked' ? 'The bridge splinters and drops into the sea!' : 'They cut the bridge loose!', 'good'); break; }
+      case 'unbridge': { A.splash?.(1.4); if (G.player.boat && G.player.boat.id === e.tb) G.ui.toast(e.why === 'kicked' ? 'The bridge splinters and drops into the sea!' : 'They cut the bridge loose!', 'good'); break; }
       case 'bridgeHit': A.thunk?.(); break;
       case 'open': { A.crack?.(); break; }
       case 'pirates': {
@@ -1253,7 +1368,7 @@ export class Ships {
     const out = [];
     for (const S of this.list.values()) {
       out.push({
-        id: S.id, k: S.kind, b: S.boat.snapshot(), br: S.bridge ? [S.bridge.to, Math.round(S.bridge.hp)] : 0, st: S.st, rip: +(S.sailRip || 0).toFixed(2), h: [...S.hostile],
+        id: S.id, k: S.kind, b: S.boat.snapshot(), br: S.bridge ? [S.bridge.to, Math.round(S.bridge.hp)] : 0, ln: S.lines.map(L => [L.to, ...L.a.map(n => +n.toFixed(2)), ...L.b.map(n => +n.toFixed(2)), +L.rest.toFixed(1)]), st: S.st, rip: +(S.sailRip || 0).toFixed(2), h: [...S.hostile],
         cg: S.cargo.map(c => c.open ? 1 : 0).join(''),
         c: S.crew.map(C => { const p = this.crewPos(C); return [C.st, C.on ? C.on.id : 0, +C.local.x.toFixed(2), +C.local.z.toFixed(2), +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +C.yaw.toFixed(2), C.pose || '', +C.aim.toFixed(2), +C.act.toFixed(2), C.bound ? 1 : 0, C.weapon, C.carry || 0, C.tieT > 0 ? 1 : 0]; }),
       });
@@ -1280,6 +1395,7 @@ export class Ships {
       S.boat.applySnapshot(o.b, dt);
       S.st = o.st; S.sailRip = o.rip; S.hostile = new Set(o.h || []);
       S.bridge = o.br ? { to: o.br[0], hp: o.br[1] } : null;
+      S.lines = (o.ln || []).map(a => ({ to: a[0], a: a.slice(1, 4), b: a.slice(4, 7), rest: a[7] }));
       o.c.forEach((a, i) => {
         const C = S.crew[i]; if (!C) return;
         C.st = a[0]; C.on = a[1] ? G.boatById(a[1]) : null;

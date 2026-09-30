@@ -489,7 +489,7 @@ export async function runScripts(names, game) {
         ok(b.water > w2, 'thrown on your own deck, it runs back into the bilge');
         // scoop again, walk to the rail, throw it over
         P.pitch = -0.6; I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
-        P.local.set(b.halfWidth(0) - 0.4, b.deck, 0); P.yaw = b.heading - Math.PI / 2 + Math.PI; P.pitch = 0;
+        P.local.set(b.halfWidth(0) - 0.4, b.deck, 0); { const out = b.toWorld(V(1, 0, 0)).sub(b.toWorld(V(0, 0, 0))); P.yaw = Math.atan2(-out.x, -out.z); } P.pitch = 0;
         const w3 = b.water; I.fakeBtn(0, true); step(0.05); I.fakeBtn(0, false); step(0.6);
         ok(b.water <= w3 + 0.001 && !G.tools.bucketFull, 'thrown over the rail, it is gone (' + w3.toFixed(3) + ' -> ' + b.water.toFixed(3) + ')');
         b.water = 0;
@@ -1466,6 +1466,40 @@ export async function runScripts(names, game) {
         ok(!fd.classList.contains('on') && !G.passing, 'for two seconds, and you are home');
         b.leaks = []; b.breaks = []; b.fires = []; b.water = 0; b.hp = b.stats.hp;
       }
+      if (name === 'harpoon') {
+        // pirates: harpoons first (no damage), they reel you in, then the corvus
+        const SH = G.ships;
+        SH.clear(); G.teleport('offshore'); step(0.5);
+        if (P.boat !== b) P.attach(b, V(0, b.deck, 0));
+        b.leaks = []; b.breaks = []; b.water = 0; b.hp = b.stats.hp; P.hp = 1e4;
+        ok(b.hull.hl * 2 >= 11.9, 'your boat is a real boat now: ' + (b.hull.hl * 2).toFixed(1) + ' m (' + b.hull.name + ')');
+        const f = b.forward();
+        const PS = SH.spawn('pirate', b.pos.x + f.z * 45, b.pos.z - f.x * 45, b.heading);
+        // everything that hurts the boat, and why (the offshore swell is hard on a small boat: that is not them)
+        const whys = []; const dm0 = b.damage.bind(b); b.damage = (n, why) => { if (why !== 'waves') whys.push(why + ' ' + Math.round(n)); return dm0(n, why); };
+        let flew = 0;
+        for (let i = 0; i < 20 * 30 && !PS.lines.length; i++) { PS.gunT = 99; step(1 / 30); flew = Math.max(flew, SH.darts.length); }
+        ok(flew > 0 && PS.lines.length > 0, 'they fire harpoons and one bites into your boat (' + PS.lines.length + ' in)');
+        ok(!whys.length, 'a harpoon does not hurt the boat (' + (whys.join(', ') || 'no damage') + ')');
+        // full throttle away from them
+        const d0 = b.pos.distanceTo(PS.boat.pos);
+        b.heading = Math.atan2(b.pos.x - PS.boat.pos.x, b.pos.z - PS.boat.pos.z); b._updateMatrix();
+        let vmax = 0;
+        for (let i = 0; i < 6 * 30; i++) { PS.gunT = 99; b.autopilot = { x: b.pos.x, z: b.pos.z }; b.throttle = 1; b.steer = 0; step(1 / 30); if (i > 30) { const ax = b.pos.x - PS.boat.pos.x, az = b.pos.z - PS.boat.pos.z, al = Math.hypot(ax, az) || 1; vmax = Math.max(vmax, ((b.vel.x - PS.boat.vel.x) * ax + (b.vel.y - PS.boat.vel.y) * az) / al); } }
+        b.autopilot = null; b.throttle = 0;
+        const d1 = b.pos.distanceTo(PS.boat.pos);
+        ok(d1 < d0 && vmax < 1.5, 'full throttle and you cannot get away: they reel you in (' + d0.toFixed(0) + ' m -> ' + d1.toFixed(0) + ' m, never more than ' + vmax.toFixed(1) + ' m/s away from them)');
+        ok(!whys.length, 'and still not a scratch on the boat from it (' + (whys.join(', ') || 'no damage') + ')');
+        b.damage = dm0;
+        // cut the lines
+        const n = PS.lines.length;
+        for (let k = n - 1; k >= 0; k--) G.act({ t: 'cutLine', ship: PS.id, i: k }); step(0.1);
+        ok(n > 0 && PS.lines.length === 0, 'cut the lines (' + n + ') and you are loose');
+        // and then: back on, alongside, the corvus
+        for (let i = 0; i < 40 * 30 && !PS.bridge; i++) { PS.gunT = 99; step(1 / 30); }
+        ok(!!PS.bridge && PS.lines.length > 0, 'they hook you again, haul you alongside and drop the corvus');
+        SH.clear(); P.hp = 100;
+      }
       if (name === 'shipspeed') {
         // every ship out there is slower than you: you can always catch them (and outrun a pirate)
         const SH = G.ships;
@@ -1556,11 +1590,11 @@ export async function runScripts(names, game) {
         const fades = [], f0 = G.ui.fade.bind(G.ui); G.ui.fade = (on, text = '') => { fades.push([on, text]); f0(on, text); };
         const PS = SH.spawn('pirate', b.pos.x + f.z * 70, b.pos.z - f.x * 70, b.heading);
         ok(PS && PS.crew.length === 6 && PS.dress && PS.dress.userData.flag, 'a pirate galley: six crew, six guns, and a skull flag');
-        let cannon = 0, balls = 0; const on = SH.onEvent.bind(SH); SH.onEvent = e => { if (e.k === 'cannon') cannon++; on(e); };
+        let cannon = 0, balls = 0, hooks = 0; const on = SH.onEvent.bind(SH); SH.onEvent = e => { if (e.k === 'cannon') cannon++; if (e.k === 'hook') hooks++; on(e); };
         const hp1 = b.hp;
         for (let i = 0; i < 40 * 30 && !PS.bridge; i++) { G.update(1 / 30); balls = Math.max(balls, SH.balls.length); }
         ok(PS.engaged, 'it has seen you and comes for you');
-        ok(cannon > 0, 'it fires its guns: ' + cannon + ' shots' + (b.hp < hp1 ? ', your hull ' + Math.round(hp1 - b.hp) + ' down' : ''));
+        ok(cannon + hooks > 0, 'it opens up on you: ' + cannon + ' cannon shots, ' + hooks + ' harpoons in your boat' + (b.hp < hp1 ? ', your hull ' + Math.round(hp1 - b.hp) + ' down' : ''));
         if (!PS.bridge) { PS.boat.pos.set(b.pos.x + f.z * (b.hull.hw + PS.boat.hull.hw + 3), 0, b.pos.z - f.x * (b.hull.hw + PS.boat.hull.hw + 3)); PS.boat.heading = b.heading; PS.boat.vel.set(0, 0); b.vel.set(0, 0); step(0.2); SH.lowerBridge(PS, b); }
         ok(!!PS.bridge, 'the corvus is let go');
         P.hp = 1e4; if (P.boat !== b) { P.detach?.(); P.attach(b, V(0, b.deck, 0)); } P.mode = 'walk';

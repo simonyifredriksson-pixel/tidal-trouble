@@ -111,16 +111,33 @@ export const HULLS = [
 const ANCHOR_AT = { dinghy: [0, 1.72], motor: [0.5, 2.2], trawler: [0.95, 4.0], expedition: [1.25, 6.0], wayfarer: [1.4, 6.6] };
 /* The Leviathan Hunter was laid out at 2.9 x 8.2; it is built bigger than
    any ship in the sea, so everything on it is stretched to the new hull. */
-function stretch(H, W, L) {
+function stretch(H, W, L, cabinMax = 1.15) {
   const sx = W / H.hw, sz = L / H.hl;
   const p = a => a && (a.length === 3 ? [a[0] * sx, a[1], a[2] * sz] : [a[0] * sx, a[1] * sz]);
   H.hw = W; H.hl = L;
-  for (const k of ['helm', 'cooler', 'fuel', 'mount', 'crane']) if (H[k]) H[k] = p(H[k]);
-  for (const k of ['seats', 'rodHolders', 'lights']) if (H[k]) H[k] = H[k].map(p);
-  if (H.cabin) H.cabin = { ...H.cabin, z: H.cabin.z * sz, hl: H.cabin.hl * Math.min(sz, 1.15), hw: H.cabin.hw * sx };
+  for (const k of ['helm', 'cooler', 'fuel', 'mount', 'crane', 'anchor']) if (H[k]) H[k] = p(H[k]);
+  for (const k of ['seats', 'rodHolders', 'lights', 'masts']) if (H[k]) H[k] = H[k].map(p);
+  if (H.cabin) H.cabin = { ...H.cabin, z: H.cabin.z * sz, hl: H.cabin.hl * Math.min(sz, cabinMax), hw: H.cabin.hw * Math.min(sx, cabinMax) };
+  if (H.hold) H.hold = { ...H.hold, z0: H.hold.z0 * sz, z1: H.hold.z1 * sz, hw: H.hold.hw * sx, hatch: p(H.hold.hatch) };
   if (ANCHOR_AT[H.id]) ANCHOR_AT[H.id] = p(ANCHOR_AT[H.id]);
 }
 stretch(HULLS.find(h => h.id === 'expedition'), 3.4, 9.8);
+/* Every hull grows to the length of its tier: the small boats are real boats now, and the best of
+   them are as big as a pirate galley (19 m) - the Leviathan Hunter a little bigger than that.
+   The deck rises a little with the size; the fittings (the cooler, the helm, the seats) stay the size
+   they are and just spread out. `baseHl` keeps the old length for what counts pieces (the plans). */
+const TIER_LEN = { 1: 12, 2: 14, 3: 16, 4: 18, 5: 19.6 }, OWN_LEN = { expedition: 20.8 };
+for (const H of HULLS) {
+  const L = OWN_LEN[H.id] || TIER_LEN[H.tier] || 14, f = L / (H.hl * 2);
+  H.baseHl = H.hl; H.baseHw = H.hw;
+  if (f <= 1.01) continue;
+  stretch(H, H.hw * f, H.hl * f, 1.6);
+  const up = 1 + (f - 1) * 0.35;
+  H.deck = +(H.deck * up).toFixed(2); H.draft = +(H.draft * (1 + (f - 1) * 0.5)).toFixed(2);
+  if (H.cabin) H.cabin.h = +(H.cabin.h * Math.min(1.3, up)).toFixed(2);
+  // (the mass stays: the drift, the anchor and the handling were all tuned to it)
+  for (const k of ['seats', 'rodHolders', 'lights']) if (H[k]) H[k] = H[k].map(a => a.length === 3 ? [a[0], a[1] * (k === 'lights' ? up : 1), a[2]] : a);
+}
 for (const H of HULLS) { H.anchor = H.anchor || ANCHOR_AT[H.id] || [0, H.hl * 0.7]; H.windage = H.windage ?? (H.engine === 'sail' ? 1.6 : 1); }
 export const HULL_BY_ID = Object.fromEntries(HULLS.map(h => [h.id, h]));
 /* The pirates' own ship: the Wanderer's frame, faster, meaner, a raised stern and gun ports.

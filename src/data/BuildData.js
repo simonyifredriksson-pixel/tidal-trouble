@@ -291,7 +291,8 @@ export const AQUARIUMS = [
    The better the boat, the more it takes - and the rarer the stuff. */
 export function boatParts(H) {
   const hl = H.hl, hw = H.hw, tier = H.tier || 1, P = [];
-  const ribs = Math.max(3, Math.round(hl * 1.1)), rows = tier >= 3 ? 3 : 2;
+  const hl0 = H.baseHl || hl;
+  const ribs = Math.max(3, Math.round(hl0 * 1.1)), rows = tier >= 3 ? 3 : 2;
   const hwAt = z => hw * Math.sqrt(Math.max(0.05, 1 - Math.pow(Math.max(0, z / hl), 2.4) * 0.9)) * (z < -hl * 0.8 ? 0.85 : 1);
   // cradle stones and the keel
   for (const z of [-hl * 0.6, 0, hl * 0.6]) P.push({ m: 'stone', k: 'stone', t: 0, x: 0, y: -0.15, z, w: 0.28 });
@@ -302,13 +303,13 @@ export function boatParts(H) {
     for (const s of [-1, 1]) P.push({ m: 'wood', k: 'post', t: 2, x: s * w * 0.92, y: 0.05, z, w: 0.05, h: H.deck * 0.9 + 0.25 });
   }
   // hull planks, both sides, in strakes
-  const segs = Math.max(2, Math.round(hl / 1.3));
+  const segs = Math.max(2, Math.round(hl0 / 1.3));
   for (let r = 0; r < rows; r++) for (let i = 0; i < segs; i++) {
     const z0 = -hl * 0.9 + (hl * 1.8) * i / segs, z1 = -hl * 0.9 + (hl * 1.8) * (i + 1) / segs, zc = (z0 + z1) / 2, w = hwAt(zc);
     for (const s of [-1, 1]) P.push({ m: tier >= 5 && r === 0 ? 'iron' : 'wood', k: 'plank', t: 3, x: s * w * (0.85 + r * 0.05), y: 0.2 + r * (H.deck / rows), z: zc, w: 0.05, h: H.deck / rows * 0.95, d: (z1 - z0) * 1.02, r: s * (w - hwAt(z1)) / (z1 - z0) * -0.9 });
   }
   // the deck
-  const dk = Math.max(2, Math.round(hl * 0.9));
+  const dk = Math.max(2, Math.round(hl0 * 0.9));
   for (let i = 0; i < dk; i++) { const z = -hl * 0.8 + hl * 1.6 * (i + 0.5) / dk; P.push({ m: 'wood', k: 'plank', t: 4, x: 0, y: H.deck, z, w: hwAt(z) * 1.7, h: 0.05, d: hl * 1.6 / dk * 0.96 }); }
   // the rail
   for (const s of [-1, 1]) P.push({ m: 'wood', k: 'log', t: 5, x: s * hw * 0.9, y: H.deck + 0.45, z: -hl * 0.1, w: hl * 1.5, h: 0.04, r: Math.PI / 2 });

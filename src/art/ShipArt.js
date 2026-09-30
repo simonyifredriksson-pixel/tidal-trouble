@@ -150,6 +150,18 @@ export function galleyDress(H, D) {
   pb.color(0x7a5a3a).push(0, D + 0.5, zp - 0.9, 0, 0, Math.PI / 2); pb.cyl(0.14, 0.14, -0.3, 0.3, 8, true); pb.pop();
   G.add(mesh(pb));
   G.userData.corvus = { z: zp + 0.55, y: D + 1.1, top: D + 7.5, pz: zp + 0.3 };
+  // swivel harpoon guns on the rail, two a side: they pin a boat before the corvus comes down
+  const hb = new MeshBuilder(rng(14));
+  G.userData.harpoons = [];
+  for (const side of [-1, 1]) for (const z of [hl * 0.35, -hl * 0.15]) {
+    const x = side * (hw * 0.93);
+    hb.color(0x3a2a1c).cyl(0.09, 0.12, D, D + 1.0, 6, true, x, z);
+    hb.color(0x2a2a2e).push(x, D + 1.12, z, 0, 0, side * Math.PI / 2); hb.cyl(0.1, 0.08, -0.3, 0.55, 7, true); hb.pop();
+    hb.color(0x6a6a70).push(x + side * 0.62, D + 1.12, z, 0, 0, side * Math.PI / 2); hb.cone(0.07, 0, 0.22, 4); hb.pop();
+    hb.color(0xc8b48a).cyl(0.13, 0.13, D + 0.35, D + 0.6, 8, true, x - side * 0.35, z);
+    G.userData.harpoons.push({ side, x: x + side * 0.7, y: D + 1.12, z });
+  }
+  G.add(mesh(hb));
   return G;
 }
 
@@ -199,6 +211,17 @@ export function boardingBridge(len = 9) {
   b.push(0, -0.1, len - 0.2, Math.PI + 0.25, 0, 0); b.cone(0.13, 0, 1.0, 6); b.pop();
   for (const x of [-0.45, -0.22, 0.22, 0.45]) { b.push(x, -0.08, len - 0.22, Math.PI + 0.15, 0, 0); b.cone(0.05, 0, 0.42, 4); b.pop(); }
   b.color(0x8a8a90); b.blob(0.09, 0.09, 0.09, 0, 1.0, len - 0.25, 5, 3);
+  const m = mesh(b); m.castShadow = true; return m;
+}
+
+/** A pirate harpoon: an iron shaft with a barbed head and a ring for the rope, pointing along +Z. */
+export function harpoonMesh() {
+  const b = new MeshBuilder(rng(3));
+  b.color(0x3a3a40).push(0, 0, 0, Math.PI / 2, 0, 0); b.cyl(0.035, 0.035, -1.3, 0.2, 6, true); b.pop();
+  b.color(0x8a8a90).push(0, 0, 0.2, Math.PI / 2, 0, 0); b.cone(0.09, 0, 0.42, 5); b.pop();
+  for (const s of [-1, 1]) b.color(0x8a8a90).beam([0, 0, 0.3], [s * 0.16, 0, 0.06], 0.03, 0.03);
+  for (const s of [-1, 1]) b.color(0x7a7a80).beam([0, 0, 0.3], [0, s * 0.16, 0.06], 0.03, 0.03);
+  b.color(0xc8b48a).push(0, 0, -1.3, 0, 0, 0); b.blob(0.07, 0.07, 0.07, 0, 0, 0, 5, 3); b.pop();
   const m = mesh(b); m.castShadow = true; return m;
 }
 

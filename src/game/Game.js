@@ -455,6 +455,7 @@ export class Game {
       case 'strike': this.ships.hostStrike(c, from); break;
       case 'crate': { const S = this.ships.list.get(c.ship); const cg = S?.cargo[c.i]; if (cg) this.ships.openCargo(S, cg, from); break; }
       case 'crewTie': this.ships.hostTie(c, from); break;
+      case 'cutLine': this.ships.cutLine(c.ship, c.i); break;
       case 'kickBridge': { const S = this.ships.list.get(c.id); if (S) this.ships.hitBridge(S, c.n || 25, from); break; }
       case 'freed': this.ships.onFreed(from); break;
       case 'captive': this._hostCaptive(from, !!c.on); break;
@@ -1621,6 +1622,8 @@ export class Game {
         const me = this.myId();
         const br = SH.bridgeAt(P.pos, 1.6) || SH.bridgeAt(look, 1.2);
         if (br) opt.push({ label: 'Kick the boarding bridge free (hold E)', icon: 'skull', run: () => { this._kickT = 0; }, hold: dt => { this._kickT = (this._kickT || 0) + dt; this.addShake(0.05); if (this._kickT > 1.1) { this._kickT = 0; this.act({ t: 'kickBridge', id: br.S.id, n: 999 }); this.audio.crack?.(); } } });
+        const ln = SH.lineNear(P.pos, 1.9) || SH.lineNear(look, 1.2);
+        if (ln) opt.push({ label: 'Cut the harpoon line (hold E)', icon: 'hook', run: () => { this._cutT = 0; }, hold: dt => { this._cutT = (this._cutT || 0) + dt; this.addShake(0.03); if (Math.random() < dt * 8) this.audio.thunk?.(); if (this._cutT > 0.7) { this._cutT = 0; this.act({ t: 'cutLine', ship: ln.S.id, i: ln.i }); } } });
         const down = SH.crewNear(P.pos, 1.9).find(h => (h.C.st === 'down' || h.C.bound) && h.C.on);
         if (down) opt.push(down.C.bound ? { label: 'Throw them over the side', icon: 'wave', run: () => { this.vm.play('throw'); this.act({ t: 'crewTie', id: down.C.id, k: 'throw' }); } }
           : { label: 'Tie them up', icon: 'hands', run: () => { this.vm.play('hit'); this.act({ t: 'crewTie', id: down.C.id, k: 'tie' }); } });
