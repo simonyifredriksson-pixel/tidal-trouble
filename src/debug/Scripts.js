@@ -955,6 +955,21 @@ export async function runScripts(names, game) {
         G.ui._adm.area = 'black'; ok(click('areaFish') && G.loot.items.size === n0 + 5, 'five random fish from the Blackwater (' + (G.loot.items.size - n0) + ')');
         ok(click('dexFill:all') && (await import('../data/JournalData.js')).progress(G.state.s).per.kraken.got === 44 - 1, 'fill the whole journal: every fish entry discovered');
         ok(click('dexClear') && !Object.keys(G.state.s.dex).length, 'clear the journal');
+        // Blackflag Isle and the ships
+        const PI = G.world.settlement.isle.pirate;
+        for (const [id, to] of [['pirateCamp', PI.camp], ['pirateFence', PI.fence.pos], ['pirateLake', PI.lakePier], ['pirateVault', PI.hoard]]) {
+          click('tp:' + id); step(0.5);
+          const d = Math.hypot(P.pos.x - to.x, P.pos.z - to.z);
+          ok(d < 30 && Math.abs(P.pos.y - to.y) < 4 && P.mode !== 'swim', 'teleport ' + id + ': standing there (' + d.toFixed(0) + ' m off, y ' + P.pos.y.toFixed(1) + ' vs ' + to.y.toFixed(1) + ', ' + P.mode + ')');
+        }
+        click('tp:pirateSea'); step(0.5);
+        ok(P.boat === G.boats[0] && Math.hypot(P.pos.x - PI.cx, P.pos.z - PI.cz) < 500, 'teleport to Blackflag Isle by boat');
+        click('tp:offshore'); step(0.5); G.ships.clear();
+        ok(click('spawnShip:pirate') && [...G.ships.list.values()].some(S => S.kind === 'pirate'), 'spawn a pirate galley (' + [...G.ships.list.values()].map(S => S.kind + ' ' + Math.round(S.boat.pos.distanceTo(P.pos)) + ' m').join(', ') + ')');
+        ok(click('spawnShip:fisher') && click('spawnShip:cargo') && G.ships.list.size === 3, 'and NPC boats: ' + G.ships.list.size + ' ships out');
+        step(3); ok([...G.ships.list.values()].every(S => S.crew.length || S.K.derelict), 'with their crews aboard');
+        ok(click('clearShips') && G.ships.list.size === 0, 'remove every ship');
+        G.teleport('home'); step(0.3);
         for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, true);
         ok(G.ui.screen !== 'admin', 'the same combination closes it');
         for (const k of ['KeyL', 'KeyJ', 'KeyM', 'Digit3']) key(k, false);

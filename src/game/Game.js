@@ -2140,9 +2140,22 @@ export class Game {
       { id: 'promise', name: 'Bright Promise wreck - above it (boat)', water: () => this._inst.world.settlement.anchors.promiseWater },
       { id: 'promiseDive', name: 'Bright Promise wreck - the sea chest (dive)', dive: () => this._inst.world.settlement.anchors.promiseFloor },
       { id: 'castaway', name: 'Castaway Key', at: () => this._inst.world.settlement.anchors.castaway },
+      { id: 'pirateSea', name: 'Blackflag Isle - the approach (boat)', water: () => { const I = this._inst.world.settlement.isle.pirate; return { x: I.cx + 60, z: I.cz + 330 }; }, heading: Math.PI },
+      { id: 'pirateCamp', name: 'Blackflag Isle - the pirate camp', at: () => this._inst._isleSpot(I => I.camp.clone().add(new THREE.Vector3(8, 0, 22))) },
+      { id: 'pirateFence', name: 'Blackflag Isle - Rattigan the fence', at: () => this._inst._isleSpot(I => I.fence.pos.clone().add(new THREE.Vector3(-4, 0, 3))) },
+      { id: 'pirateLake', name: 'Blackflag Isle - the Drowned Bell lake', at: () => this._inst._isleSpot(I => I.lakePier.clone()) },
+      { id: 'pirateVault', name: 'Blackflag Isle - the hoard vault', at: () => this._inst._isleSpot(I => I.hoard.clone().add(new THREE.Vector3(0, 0, 7))) },
     ];
   }
   /** Put yourself somewhere; water spots bring your boat along. */
+  /** A standing spot on Blackflag Isle, on whatever floor is there. */
+  _isleSpot(f) {
+    const W = this.world, p = f(W.settlement.isle.pirate);
+    // a floor near that height wins; the ground only counts if it is not far overhead (the vault is under the hill)
+    const fl = W.colliders.floorAt(p.x, p.z, p.y + 1, 2), g = W.ground(p.x, p.z), cave = g > p.y + 2;
+    p.y = Math.max(fl, cave ? -Infinity : g, cave ? p.y : -Infinity);
+    return p;
+  }
   teleport(id) {
     const T = Game.TELEPORTS.find(t => t.id === id);
     if (!T) return;
@@ -2174,6 +2187,16 @@ export class Game {
         this.great.krakenCool = 0; this.great.startKraken(b);
         break;
       }
+      case 'spawnShip': {
+        // an NPC ship of that kind, out in open water, heading your way
+        const at = (P.boat || this.boats[0])?.pos || P.pos, pirate = c.id === 'pirate';
+        const spot = this.ships._openWater(at.x, at.z, pirate ? 220 : 70, pirate ? 340 : 140) || this.ships._openWater(at.x, at.z, 40, 500);
+        if (!spot) { this.tell(P.id, 'No open water deep enough near you - head out to sea first.', 'warn'); break; }
+        const S = this.ships.spawn(c.id, spot.x, spot.z, Math.atan2(at.x - spot.x, at.z - spot.z));
+        if (S) this.tell(P.id, S.K.name + ' spawned ' + Math.round(Math.hypot(spot.x - at.x, spot.z - at.z)) + ' m away.', 'info');
+        break;
+      }
+      case 'clearShips': this.ships.clear(); break;
       case 'giveRod': if (ROD_BY_ID[c.id] && !s.rods.includes(c.id)) s.rods.push(c.id); s.rod = c.id; this._rodChanged(); break;
       case 'allRods': for (const R of RODS) if (!s.rods.includes(R.id)) s.rods.push(R.id); this._rodChanged(); break;
       case 'giveFish': {

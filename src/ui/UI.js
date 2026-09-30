@@ -32,6 +32,7 @@ import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
 import { worldMapCanvas, mapView, fogCanvas } from './MapArt.js';
 import { invHTML } from './InvScreen.js';
+import { SHIP_KINDS } from '../data/ShipData.js';
 import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -985,6 +986,9 @@ export class UI {
           <p class="note">${G.great.lev ? 'Up right now: ' + esc(G.great.lev.def.name) + ' (' + G.great.lev.phase + ')' : 'None up.'}  Hook chance near one: 15%.</p></section>
         <section><h3>${ic('tentacle')}The Kraken</h3><div class="row">${btn('Start the kraken attack on my boat', 'spawnKraken', 'red')}</div>
           <p class="note">${G.great.kraken ? 'Encounter: ' + G.great.kraken.phase : 'No encounter.'}  Normally only in the Offshore zone. Hook chance after it dives: 10%.</p></section>
+        <section><h3>${ic('boat')}Ships and pirates</h3><div class="row">${btn('Pirate Galley - they come for you', 'spawnShip:pirate', 'red')}${Object.entries(SHIP_KINDS).filter(([id]) => id !== 'pirate').map(([id, K]) => btn(K.name, 'spawnShip:' + id)).join('')}${btn('Remove every ship', 'clearShips', 'dark')}</div>
+          <div class="row">${[['pirateSea', 'Blackflag Isle (boat)'], ['pirateCamp', 'Pirate camp'], ['pirateFence', 'Rattigan the fence'], ['pirateLake', 'Drowned Bell lake'], ['pirateVault', 'Hoard vault']].map(([id, n]) => btn('Teleport: ' + n, 'tp:' + id, 'gold')).join('')}</div>
+          <p class="note">${G.ships.list.size ? 'Out now: ' + [...G.ships.list.values()].map(S => esc(S.K.name) + ' (' + S.st + ', ' + Math.round(S.boat.pos.distanceTo(G.player.pos)) + ' m)').join(', ') : 'No ships out.'}  Ships spawn in open water near your boat; pirates start a few hundred metres off.</p></section>
         <section><h3>${ic('leviathan')}Ocean beasts</h3><div class="row">${BEASTS.map(D => btn(D.name, 'spawnBeast:' + D.id)).join('')}${btn('Send it away', 'clearBeast', 'dark')}</div>
           <p class="note">${G.beasts.b ? 'Out now: ' + esc(G.beasts.b.def.name) + ' (' + G.beasts.b.phase + ') - to hook: ' + esc(G.beasts.b.def.tell) : 'None out. Spawns next to your boat, whatever the conditions.'}</p>
           <div class="row">${btn('Chart with an X', 'mystery')}${btn('Hotspots around me', 'hotspots')}</div></section>
