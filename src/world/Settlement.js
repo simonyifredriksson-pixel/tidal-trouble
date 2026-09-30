@@ -21,6 +21,7 @@ import { heightAt, groundAt, ICE_Y } from './Terrain.js';
 import { LEVIATHANS } from '../data/LeviathanData.js';
 import { ZONES, HOME_CENTRE, VIGIL } from './MapData.js';
 import { buildIslands } from './Islands.js';
+import { buildPirateIsland } from './PirateIsland.js';
 import { rng, TAU } from '../core/Util.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -122,6 +123,7 @@ export class Settlement {
     this._black();
     this._vigil();
     buildIslands(this);
+    buildPirateIsland(this);
     this._clues();
     this._zoneBuoys();
   }
@@ -175,7 +177,9 @@ export class Settlement {
 
     // --- Melvin's Bait & Tackle (the reference cabin) with Gus on the porch ---
     const tx = 0, tz = 172;
-    const tack = this._house({ w: 5.6, d: 4.6, h: 2.9, rise: 1.8, seed: 3, wall: 0x7a5236, roof: 0x6a3a2e, doorX: 0.7, doorOpen: false, windows: [{ side: 'front', x: -1.3 }, { side: 'left', x: 0 }], porch: true, floorH: 0.4 }, tx, tz, 0, 'tackle');
+    const tack = this._house({ w: 5.6, d: 4.6, h: 2.9, rise: 1.8, seed: 3, wall: 0x7a5236, roof: 0x6a3a2e, doorX: 0.7, doorOpen: true, windows: [{ side: 'front', x: -1.3 }, { side: 'left', x: 0 }], porch: true, floorH: 0.4, interior: true }, tx, tz, 0, 'tackle');
+    // the shop floor inside, where the rods and bait are put out (see Showroom)
+    this.anchors.tackleShop = { x: tx, z: tz, y: tack.y + 0.4, rot: 0 };
     this._npcAnchor('tackleDoor', V(tx + 2.2, tack.y + 0.4, tz + 3.6), 0);
     this.anchors.gusChair = { pos: V(tx - 1.3, tack.y + 0.4 + 0.02, tz + 3.4), face: 0.25 };
     this._props(b => BA.buildRockingChair(b, 0, 0, 0, 0), tx - 1.3, tz + 3.4, 0.25, tack.y + 0.4);
@@ -192,6 +196,7 @@ export class Settlement {
     const yd = this.place(yard, bx, bz, 0, heightAt(bx, bz) - 0.1);
     this.blockers.push({ x: bx, z: bz, r: 7 });
     this._npcAnchor('yardDoor', V(bx - 2.2, yd.y + 0.2, bz + 3.8), 0);
+    this.anchors.yardShop = { x: bx, z: bz, y: yd.y + 0.15, rot: 0 };
     const ys = BA.signBoard('BOATYARD', 2.4, 0.55);
     ys.position.set(bx, yd.y + 3.9, bz + 3.05); this.group.add(ys);
     this._props(b => {

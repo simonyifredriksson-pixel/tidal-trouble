@@ -750,6 +750,45 @@ export function buildJunk(kind) {
     b.color(0x6a8a5a); for (let k = 0; k < 6; k++) b.lump(0.06, (Math.cos(k) * 0.4), -0.2 + k * 0.08, Math.sin(k) * 0.4, 0.4);
     g.color(0xf0c848); for (let k = 0; k < 6; k++) g.cyl(0.07, 0.07, 0.5 + k * 0.02, 0.51 + k * 0.02, 7, true, (k % 3 - 1) * 0.06, (k % 2) * 0.05);
     rotateBuilderZ(b, -Math.PI / 2); rotateBuilderZ(g, -Math.PI / 2);
+  } else if (kind === 'sack') {
+    // a burlap sack of bait tied at the neck
+    b.color(0xb89a68).blob(0.46, 0.34, 0.36, -0.05, -0.1, 0, 8, 4, 0.12); b.color(0x9a7e50).cyl(0.12, 0.2, 0.2, 0.38, 6, true, 0.25, 0);
+    b.color(0x5a3a24).cyl(0.13, 0.13, 0.26, 0.3, 6, false, 0.25, 0); b.color(0xc87a6a); for (let k = 0; k < 3; k++) b.tube([0.3 + k * 0.03, 0.38, 0.02], [0.34 + k * 0.03, 0.45, 0.06], 0.02, 0.015, 4);
+  } else if (kind === 'bundle') {
+    for (let k = 0; k < 5; k++) b.color(k % 2 ? 0x8a6444 : 0x7a5638).box(1, 0.1, 0.12, 0, -0.15 + (k % 2) * 0.1, (k - 2) * 0.12);
+    b.color(0x6a6a70).box(0.7, 0.08, 0.1, 0, 0.12, 0); b.color(0x9ac4d6).box(0.5, 0.03, 0.4, 0.1, 0.18, 0);
+    b.color(0xc8a870); for (const x of [-0.3, 0.3]) b.cyl(0.3, 0.3, -0.02, 0.02, 8, false, x, 0);
+  } else if (kind === 'jar') {
+    b.color(0xa8603a).lathe([[0.25, -0.45], [0.36, -0.2], [0.34, 0.25], [0.2, 0.38], [0.2, 0.46]], 9);
+    b.color(0xd8b048).cyl(0.22, 0.22, 0.44, 0.5, 9, true); b.color(0xe8d8b0).cyl(0.36, 0.36, -0.1, 0.1, 9, false);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'bolt') {
+    b.color(0x2a8a9a).cyl(0.28, 0.28, -0.5, 0.5, 10, true); b.color(0x48b0c0).cyl(0.29, 0.29, -0.1, 0.1, 10, false);
+    b.color(0xf0e8d0).cyl(0.07, 0.07, -0.56, 0.56, 6, true);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'cask') {
+    b.color(0x7a5232).lathe([[0.34, -0.5], [0.44, -0.2], [0.44, 0.2], [0.34, 0.5]], 10); b.color(0x3a3a3a); for (const y of [-0.38, 0, 0.38]) b.cyl(0.45, 0.45, y - 0.03, y + 0.03, 10, false);
+    b.color(0x5a3a24).cyl(0.06, 0.06, 0, 0.1, 6, true, 0.44, 0);
+    rotateBuilderZ(b, -Math.PI / 2);
+  } else if (kind === 'teachest') {
+    b.color(0xc8a070).box(1, 0.7, 0.7, 0, 0, 0); b.color(0x8a6a44); for (const x of [-0.49, 0.49]) b.box(0.03, 0.72, 0.72, x, 0, 0);
+    b.color(0xa8302a).box(0.36, 0.3, 0.02, 0, 0.05, 0.36); b.color(0xd8b048).cyl(0.08, 0.08, 0.35, 0.37, 8, true, 0, 0);
+  } else if (kind === 'w_pistol') {
+    // a flintlock: walnut stock, brass cap, long barrel
+    b.color(0x5a3a22).box(0.34, 0.1, 0.09, -0.3, -0.12, 0); b.box(0.2, 0.26, 0.09, -0.4, -0.25, 0);
+    b.color(0x3a3a40).cyl(0.045, 0.05, -0.1, 0.55, 7, true); b.color(0xd8b048).blob(0.06, 0.06, 0.06, -0.48, -0.36, 0, 5, 3);
+    b.color(0x2a2a2e).box(0.06, 0.08, 0.02, -0.12, -0.02, 0.05);
+    rotateBuilderZ(b, 0);
+  } else if (kind === 'w_blunder') {
+    b.color(0x5a3a22).box(0.4, 0.14, 0.1, -0.35, -0.12, 0); b.color(0x6a4a2a).box(0.3, 0.3, 0.1, -0.56, -0.22, 0);
+    b.color(0x8a6a3a).lathe([[0.05, -0.2], [0.05, 0.3], [0.1, 0.45], [0.14, 0.52]], 8); rotateBuilderZ(b, 0);
+  } else if (kind === 'w_cutlass') {
+    b.color(0xc8ccd0).box(0.95, 0.07, 0.015, 0.1, 0, 0); b.color(0xe8ecf0).box(0.9, 0.02, 0.017, 0.12, 0.035, 0);
+    b.color(0xd8b048).box(0.05, 0.22, 0.06, -0.38, 0, 0); b.color(0x3a2a1c).box(0.2, 0.06, 0.05, -0.5, 0, 0);
+    for (let k = 0; k < 5; k++) { const a = k / 4 * Math.PI; b.color(0xd8b048).beam([-0.38, 0.1, 0], [-0.38 - Math.sin(a) * 0.14, 0.1 - (1 - Math.cos(a)) * 0.1, 0], 0.02, 0.02); }
+  } else if (kind === 'w_pin') {
+    b.color(0x8a5a32).lathe([[0.04, -0.5], [0.05, -0.2], [0.09, -0.1], [0.09, 0.1], [0.12, 0.35], [0.1, 0.48]], 8);
+    rotateBuilderZ(b, -Math.PI / 2);
   }
   return { solid: b.build(), glow: g.tris ? g.build() : null };
 }
@@ -784,6 +823,39 @@ function variantMat(v) {
   return (VMAT[v] = new THREE.MeshLambertMaterial(o));
 }
 
+/* The Drowned Captain: over a ghost-glass body, a tricorn grown into its head,
+   hollow black eyes, a lantern hanging in its jaw, a ship's ribs showing
+   through its sides, and a string of gold coins trailing from its fins.
+   Fish frame: length 1 along X, head at +X. */
+let _ghostParts = null;
+function ghostCaptainParts() {
+  if (_ghostParts) return _ghostParts;
+  const b = new MeshBuilder(rng(77)), g = new MeshBuilder(rng(78));
+  // the hat
+  b.color(0x121214).cyl(0.07, 0.085, 0.12, 0.2, 7, true, 0.3, 0);
+  for (let k = 0; k < 3; k++) { const a = k / 3 * TAU + Math.PI / 2, c = a + TAU / 3; b.color(0x1a1a1e).card([0.3 + Math.cos(a) * 0.13, 0.13, Math.sin(a) * 0.13], [0.3 + Math.cos(c) * 0.13, 0.13, Math.sin(c) * 0.13], [0.3 + Math.cos((a + c) / 2) * 0.07, 0.19, Math.sin((a + c) / 2) * 0.07]); }
+  b.color(0xd8b048).box(0.02, 0.025, 0.012, 0.37, 0.16, 0);
+  // hollow eyes and a grin
+  b.color(0x0a0a0c); for (const s of [-1, 1]) b.blob(0.028, 0.03, 0.012, 0.38, 0.04, s * 0.065, 5, 3);
+  for (let k = 0; k < 5; k++) b.box(0.008, 0.02, 0.004, 0.42 - k * 0.012, -0.03, 0.062); for (let k = 0; k < 5; k++) b.box(0.008, 0.02, 0.004, 0.42 - k * 0.012, -0.03, -0.062);
+  // the lantern in its jaw, on a length of chain
+  b.color(0x3a3a40).beam([0.46, -0.04, 0], [0.54, -0.13, 0], 0.006, 0.006);
+  b.color(0x2a2a2e).box(0.035, 0.05, 0.035, 0.55, -0.16, 0);
+  g.color(0xffd070).blob(0.018, 0.024, 0.018, 0.55, -0.16, 0, 5, 3);
+  // ribs: a ship's frames glowing through the glass
+  g.color(0xe8fff8);
+  for (let k = 0; k < 6; k++) {
+    const x = 0.22 - k * 0.075, h = 0.12 * (1 - Math.abs(k - 2) * 0.12);
+    for (const s of [-1, 1]) g.beam([x, h, 0], [x - 0.02, 0, s * 0.055], 0.006, 0.006), g.beam([x - 0.02, 0, s * 0.055], [x, -h * 0.8, 0], 0.006, 0.006);
+  }
+  g.beam([0.28, 0, 0], [-0.24, 0, 0], 0.008, 0.008);
+  // coins trailing off the tail
+  g.color(0xf8d048);
+  for (let k = 0; k < 7; k++) { const x = -0.45 - k * 0.07, y = Math.sin(k * 1.3) * 0.05 - k * 0.012; g.push(x, y, 0, Math.PI / 2, 0, k * 0.5); g.cyl(0.02, 0.02, -0.003, 0.003, 7, true); g.pop(); }
+  _ghostParts = { solid: b.build(), glow: g.build() };
+  return _ghostParts;
+}
+
 export function fishMesh(species, lengthM, opts = {}) {
   const geos = fishGeos(species);
   const grp = new THREE.Group();
@@ -793,7 +865,9 @@ export function fishMesh(species, lengthM, opts = {}) {
   m.castShadow = !ghost; m.receiveShadow = true;
   grp.add(m);
   if (geos.glow) { const gm = new THREE.Mesh(geos.glow, MAT.glow); grp.add(gm); }
-  const junkScale = species.junk ? ({ chest: 0.75, strongbox: 0.7, duck: 0.12, planks: 1.2, page: 0.35, key: 0.22, idol: 0.35, bell: 0.45, wheel: 0.9, porthole: 0.45, compass: 0.25, crown: 0.3, sceptre: 0.7, chalice: 0.25, seal: 0.15, mask: 0.3, coinjar: 0.35 }[species.junk] ?? 0.3) : 1;
+  if (species.art?.custom === 'ghostcaptain') { const x = ghostCaptainParts(); const a = new THREE.Mesh(x.solid, MAT.solid); a.castShadow = true; grp.add(a); grp.add(new THREE.Mesh(x.glow, MAT.glow)); }
+  const junkScale = species.junk ? ({ chest: 0.75, strongbox: 0.7, duck: 0.12, planks: 1.2, page: 0.35, key: 0.22, idol: 0.35, bell: 0.45, wheel: 0.9, porthole: 0.45, compass: 0.25, crown: 0.3, sceptre: 0.7, chalice: 0.25, seal: 0.15, mask: 0.3, coinjar: 0.35,
+    sack: 0.45, bundle: 0.9, jar: 0.28, bolt: 0.6, cask: 0.65, teachest: 0.55, w_pistol: 0.48, w_blunder: 0.8, w_cutlass: 0.85, w_pin: 0.45 }[species.junk] ?? 0.3) : 1;
   const s = species.junk ? junkScale / 1 : lengthM;
   grp.scale.setScalar(opts.forceScale || s);
   grp.userData.species = species.id;

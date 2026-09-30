@@ -22,7 +22,7 @@ import { WORLD, HOME_CENTRE } from '../world/MapData.js';
 import { carryStyle, carryPose, CARRY_SPEED } from './Loot.js';
 
 const EYE = 1.62, RADIUS = 0.3, HEIGHT = 1.75;
-const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _w2 = new THREE.Vector3();
 
 export class Player {
   constructor(game, id = 'local') {
@@ -137,9 +137,15 @@ export class Player {
       this.pitch = clamp(this.pitch - look.y, -1.45, 1.45);
     }
     this.stunT = Math.max(0, this.stunT - dt);
+    // tied up by a pirate: you can look about, not walk; hammer E to work the knots loose
+    if (this.boundT > 0) {
+      this.boundT -= dt;
+      if (!blocked && input.pressed('KeyE')) { this.boundT -= 0.55; G.audio?.tone?.(180 + Math.random() * 60, 0.05, 'square', 0.03); }
+      if (this.boundT <= 0) { this.boundT = 0; G.ui?.toast('You wriggle free!', 'good'); G.act?.({ t: 'freed' }); }
+    }
 
     let mx = 0, mz = 0, jump = false, sprint = false, dive = false;
-    if (!blocked && this.mode !== 'down' && this.stunT <= 0 && this.mode !== 'drive' && this.mode !== 'mount') {
+    if (!blocked && this.mode !== 'down' && this.stunT <= 0 && !(this.boundT > 0) && this.mode !== 'drive' && this.mode !== 'mount') {
       mx = input.axis('KeyA', 'KeyD');
       mz = input.axis('KeyS', 'KeyW');
       jump = input.pressed('Space');
@@ -314,6 +320,10 @@ export class Player {
       let g = G.ground(w.x, w.z);
       const fl = G.colliders.floorAt(w.x, w.z, w.y, 0.9);
       if (fl > g) g = fl;
+      // a boarding bridge off the rail, or another boat right alongside
+      const br = this.game.ships?.bridgeAt(w, 0.75);
+      if (br && br.y > g) g = br.y;
+      for (const o of this.game.allBoats()) { if (o === b || o.absent || o.sinking) continue; const L2 = o.toLocal(w, _w2); if (o.over(L2.x, L2.z, 0) && Math.abs(L2.y - o.deck) < 1.4) g = Math.max(g, w.y); }
       if (g > w.y - 0.9 || overRail || gap || !b.over(ox, oz, -1.2)) {
         L.set(ox, ny, oz);
         this.detach();
@@ -344,6 +354,8 @@ export class Player {
     let g = G.ground(P.x, P.z);
     const fl = G.colliders.floorAt(P.x, P.z, P.y, 0.6);
     if (fl > g) g = fl;
+    const br = this.game.ships?.bridgeAt(P, 0.72);
+    if (br && br.y > g - 0.1 && br.y < P.y + 0.8) g = br.y;
     if (P.y <= g + 0.001) {
       // steep ground slows you
       if (this.onGround === false && V.y < -12 && !this.game.state.has('harness')) this.hurt((-V.y - 12) * 4, 'fall');
@@ -355,7 +367,7 @@ export class Player {
     }
     this.speed = Math.hypot(V.x, V.z);
     // boarding: walk onto a deck
-    for (const b of this.game.boats) {
+    for (const b of this.game.allBoats()) {
       if (b.sinking || b.absent) continue;
       const L = b.toLocal(P, _w);
       if (b.over(L.x, L.z, 0.2) && L.y > b.deck - 0.9 && L.y < b.deck + 1.2) {
@@ -410,7 +422,7 @@ export class Player {
   tryClimb() {
     if (this.mode !== 'swim') return false;
     const G = this.game;
-    for (const b of G.boats) {
+    for (const b of G.allBoats()) {
       if (b.sinking || b.absent) continue;
       const L = b.toLocal(this.pos, _w);
       const hw = b.halfWidth(clamp(L.z, -b.hull.hl, b.hull.hl));

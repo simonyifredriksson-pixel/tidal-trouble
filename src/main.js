@@ -608,7 +608,78 @@ function stage(name) {
     P.attach(b, new THREE.Vector3(0, b.deck, -1));
     setTimeout(() => { const items = [...G.loot.items.values()]; items[1].fav = true; items[3].fav = true; G.ui.open('catch'); }, 600);
   }
+  // the shops: ?stage=shop:melvin | shop:marge | shop:<stall index>[:look item index]
+  if (name.startsWith('shop:')) {
+    const [, which, li] = name.split(':');
+    G.tod = 0.45;
+    const SR = G.showroom, S = world.settlement;
+    let eye, at;
+    if (which === 'melvin') { const H = S.anchors.tackleShop; eye = new THREE.Vector3(H.x + 1.0, H.y, H.z + 1.4); at = new THREE.Vector3(H.x - 1.2, H.y + 1.1, H.z - 1.2); }
+    else if (which === 'marge') { const H = S.anchors.yardShop; eye = new THREE.Vector3(H.x - 0.6, H.y, H.z + 1.0); at = new THREE.Vector3(H.x - 3.2, H.y + 0.8, H.z - 0.2); }
+    else {
+      // the n-th stall or pavilion: stand in front of it
+      const frames = SR.group.children.filter(o => o.isGroup);
+      const F = frames[+which % frames.length];
+      const f = new THREE.Vector3(Math.sin(F.rotation.y), 0, Math.cos(F.rotation.y));
+      eye = F.position.clone().addScaledVector(f, 3.6); at = F.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+    }
+    if (li != null) { const it = SR.items[+li]; if (it) { at = it.center.clone(); const d = eye.clone().sub(at).setY(0).normalize(); eye = at.clone().addScaledVector(d, 1.6); eye.y = Math.max(G.world.ground(eye.x, eye.z), G.world.colliders.floorAt(eye.x, eye.z, at.y, 2.5)); } }
+    world.prebuild(eye.x, eye.z);
+    P.place(eye, 0);
+    advance(0.3);
+    look(P.pos.clone(), at, Math.atan2(at.y - (P.pos.y + 1.62), Math.hypot(at.x - P.pos.x, at.z - P.pos.z)));
+    if (Q.has('hold')) { G.input.keys.add('KeyE'); setTimeout(() => G.input.keys.delete('KeyE'), +Q.get('hold') * 1000); }
+    if (window.__log) setTimeout(() => window.__log('showroom items ' + SR.items.length + ' target ' + (SR.target ? SR.target.kind + ':' + SR.target.ref : 'none') + ' frames ' + SR.group.children.filter(o => o.isGroup).length), 900);
+  }
+  // another boat alongside yours: ?stage=ship:<kind>[:dist][:bridge]
+  if (name.startsWith('ship:')) {
+    const [, kind, dist = '14', br] = name.split(':');
+    G.tod = +(Q.get('tod') || 0.42);
+    G.teleport('offshore'); advance(0.3);
+    const f = b.forward();
+    const S = G.ships.spawn(kind, b.pos.x + f.z * +dist, b.pos.z - f.x * +dist, b.heading);
+    G.ships._stop(S); S.fishT = 99; S.st = kind === 'pirate' ? 'chase' : 'fish';
+    if (br) { S.boat.pos.set(b.pos.x + f.z * (b.hull.hw + S.boat.hull.hw + 3.2), 0, b.pos.z - f.x * (b.hull.hw + S.boat.hull.hw + 3.2)); S.boat._updateMatrix(); G.ships.lowerBridge(S, b); }
+    P.attach(b, new THREE.Vector3(-0.3, b.deck, -0.5));
+    advance(+(Q.get('adv') || 1.5));
+    const at = S.boat.pos.clone().add(new THREE.Vector3(0, 3.2, 0));
+    P.yaw = Math.atan2(-(at.x - P.pos.x), -(at.z - P.pos.z)); P.pitch = +(Q.get('pitch') || 0.05);
+  }
+  // Blackflag Isle: ?stage=isle:harbour | isle:camp | isle:cage | isle:lake | isle:vault
+  if (name.startsWith('isle:')) {
+    const w = name.split(':')[1], I = world.settlement.isle.pirate;
+    G.tod = +(Q.get('tod') || 0.4);
+    const views = {
+      harbour: [new THREE.Vector3(I.cx + 60, 3, I.cz + 330), new THREE.Vector3(I.cx + 100, 14, I.cz + 220)],
+      camp: [I.camp.clone().add(new THREE.Vector3(8, 0, 22)), I.camp.clone().add(new THREE.Vector3(0, 2, 0))],
+      cage: [I.cages[1].inside.clone(), I.camp.clone().add(new THREE.Vector3(0, 3, 0))],
+      lake: [I.lakePier.clone(), I.bell.clone()],
+      vault: [I.hoard.clone().add(new THREE.Vector3(0, 0, 7)), I.hoard.clone()],
+      fence: [I.fence.pos.clone().add(new THREE.Vector3(-4, 0, 3)), I.fence.pos.clone().add(new THREE.Vector3(0, 1.2, 0))],
+    };
+    const [eye, at] = views[w] || views.harbour;
+    if (w === 'harbour') { b.pos.set(eye.x, 0, eye.z); b.heading = Math.PI; b.docked = false; b._updateMatrix(); P.attach(b, new THREE.Vector3(0, b.deck, 0)); }
+    else { eye.y = Math.max(world.ground(eye.x, eye.z), world.colliders.floorAt(eye.x, eye.z, eye.y + 1, 2)); P.place(eye, 0); }
+    world.prebuild(eye.x, eye.z);
+    advance(0.5);
+    P.yaw = Math.atan2(-(at.x - P.pos.x), -(at.z - P.pos.z)); P.pitch = Math.atan2(at.y - (P.pos.y + 1.6), Math.hypot(at.x - P.pos.x, at.z - P.pos.z));
+  }
+  // the inventory, with a few fish in the bag: ?stage=inv[:cat]
+  if (name.startsWith('inv')) {
+    const cat = name.split(':')[1] || 'all';
+    b.respawn(false);
+    P.attach(b, new THREE.Vector3(0, b.deck, -1));
+    G.state.s.tools.harpoon = true; G.state.s.rods.push('reef', 'deepwater'); G.state.s.mats = { wood: 14, stone: 6, fibre: 3 }; G.state.s.baits.glow = 8;
+    ['bass', 'marlin', 'goldtrout', 'mahi', 'fogfin', 'perch', 'pike'].forEach((sp, i) => { const it = G.loot.spawn({ sp, kg: [2, 38, 3, 12, 5, 0.6, 9][i], cm: 40 + i * 12, pos: new THREE.Vector3(0, -500, 0), v: i === 2 ? 'golden' : null, zone: i % 3 }); if (it) { it.state = 'bag'; it.bagOf = P.id; it.mesh.visible = false; if (i === 1) it.fav = true; } });
+    setTimeout(() => { G.state.fixHotbar(); G.ui.open('inv', { cat, sel: cat === 'fish' ? 'fish:' + [...G.loot.items.values()][1].id : 'rod:reef' }); }, 600);
+  }
   if (name === 'admin') setTimeout(() => G.ui.open('admin'), 400);
+  // any screen: ?stage=screen:boatyard:parts[:yard]  or  screen:tackle:gear:ironwreck
+  if (name.startsWith('screen:')) {
+    const [, sc, tab, where] = name.split(':');
+    G.state.s.money = 20000; G.state.s.hulls = ['dinghy', 'motor']; G.state.s.gear.gloves = true;
+    setTimeout(() => { if (tab) G.ui.tab[sc] = tab; G.ui.open(sc, { shop: where || 'home', yard: where || 'home' }); }, 400);
+  }
   if (name === 'zoo') {
     // a row of catches laid out on your dock, for looking at the models in the world
     const ids = (Q.get('ids') || 'browncrab,arcticskate,bayoctopus,tidestar,nautilus,lionfish,hammerhead,boxfish,snowjelly,crayfish').split(',');

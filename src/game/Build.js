@@ -219,7 +219,7 @@ export class Build {
     for (const c of G.world.colliders.near(x, z, bp.foot + 1)) {
       if (c.tag === 'build') continue;
       const d = c.t === 'c' ? Math.hypot(c.x - x, c.z - z) - c.r : Math.hypot(c.x - x, c.z - z) - Math.min(c.hw, c.hd);
-      if (d < bp.foot * 0.85) return c.tag === 'tree' ? 'A tree is in the way. Chop it down first (0).' : c.tag === 'rock' ? 'A rock is in the way. Break it up first (-).' : 'Something is in the way.';
+      if (d < bp.foot * 0.85) return c.tag === 'tree' ? 'A tree is in the way. Chop it down first' + this.game.kh('axe') + '.' : c.tag === 'rock' ? 'A rock is in the way. Break it up first' + this.game.kh('pick') + '.' : 'Something is in the way.';
     }
     for (const S of s.builds || []) { const o = BP_BY_ID[S.bp]; if (o && Math.hypot(x - S.x, z - S.z) < bp.foot + o.foot + 0.3) return 'Too close to another blueprint.'; }
     return null;
@@ -252,7 +252,7 @@ export class Build {
     const G = this.game, m = G.state.s.mats || {};
     const have = MATS.filter(M => (m[M.id] || 0) > 0).map(M => M.id);
     if (prefer && have.includes(prefer)) this.held = prefer;
-    else if (!have.length) { this.held = null; G.ui.toast('Your pack is empty. Chop trees (0) and break rocks (-).', 'info'); }
+    else if (!have.length) { this.held = null; G.ui.toast('Your pack is empty. Chop trees' + G.kh('axe') + ' and break rocks' + G.kh('pick') + '.', 'info'); }
     else { const i = have.indexOf(this.held); this.held = i < 0 ? have[0] : have[i + 1] || null; }
     G.vm.heldMat = this.held;
     G.audio.click();

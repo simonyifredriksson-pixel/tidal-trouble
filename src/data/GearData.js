@@ -121,6 +121,7 @@ export const SHOPS = {
   tide:      { id: 'tide',      npc: 'marin',  place: 'Tidebreaker', seller: 'Marin at the Current Masters\' dock on Tidebreaker', outfit: 'The Current Masters' },
   crown:     { id: 'crown',     npc: 'amara',  place: 'the Sunken Crown', seller: 'Regent Amara at the Crown Dock', outfit: "Goldtooth's Treasure Supplies" },
   abyssal:   { id: 'abyssal',   npc: 'ysolde', place: 'the Abyssal Reach', seller: 'Keeper Ysolde at the Deep Light', outfit: "Doctor Fathom's Deep Kit" },
+  blackflag: { id: 'blackflag', npc: 'rattigan', place: 'Blackflag Isle', seller: 'Rattigan the Fence on Blackflag Isle', outfit: "Rattigan's Black Market", hidden: true },
 };
 
 export const BAITS = [
@@ -177,7 +178,21 @@ export const TOOLS = [
   { id: 'pick', name: 'Pickaxe', slot: '-', key: 'Minus', price: 0, owned: true, blurb: 'Breaks rock for stone (left mouse). Black rock gives iron ore, reef crystal gives crystal.' },
   { id: 'plans', name: 'Blueprint Book', slot: '=', key: 'Equal', price: 0, owned: true, blurb: 'Every plan the islanders know. Left mouse to open it and lay a blueprint out on the ground; then carry the materials to it (G) and build it piece by piece (E).' },
 ];
+/* Weapons: for trouble at sea - boarders, a crew that did not like you taking their catch.
+   dmg per hit (per pellet for the blunderbuss), knock = how hard it shoves, rate = seconds between,
+   hull = how much of a hit a ship's hull takes. Fishing is still the point. */
+TOOLS.push(
+  { id: 'pin', name: 'Belaying Pin', kind: 'weapon', price: 250, shop: 'home', melee: true, dmg: 20, knock: 5.4, reach: 2.2, rate: 0.6, hull: 0.1,
+    blurb: 'A hardwood pin off a ship\'s rail. Clubs a sailor off his feet - and, if he is near the rail, over the side.' },
+  { id: 'cutlass', name: 'Rusty Cutlass', kind: 'weapon', price: 1800, shop: 'ironwreck', melee: true, dmg: 34, knock: 3.4, reach: 2.4, rate: 0.5, hull: 0.25,
+    blurb: 'Notched and rusty and fished out of a wreck. Quick in the hand. Vex swears it was a captain\'s.' },
+  { id: 'pistol', name: 'Barnacle Flintlock', kind: 'weapon', price: 3200, shop: 'sunscar', dmg: 42, knock: 1.8, range: 48, rate: 1.5, hull: 0.5,
+    blurb: 'One shot, a cloud of smoke and a reload. Dunn forges them in Emberhaven for people who fish the pirate water.' },
+  { id: 'blunder', name: 'Brine Blunderbuss', kind: 'weapon', price: 6500, shop: 'thunder', dmg: 13, pellets: 7, knock: 6.5, range: 17, rate: 2.4, hull: 0.9,
+    blurb: 'A brass bell of a gun that throws a fistful of shot. Clears a deck. Knocks boarders into the sea. Punches holes in hulls.' },
+);
 export const TOOL_BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
+export const WEAPONS = TOOLS.filter(t => t.kind === 'weapon');
 
 /* Passive gear. */
 export const GEAR = [

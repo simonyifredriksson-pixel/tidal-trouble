@@ -11,6 +11,7 @@ import { LEVIATHANS } from '../data/LeviathanData.js';
 import { Bus } from '../core/Bus.js';
 import { BP_BY_ID, bpCost } from '../data/BuildData.js';
 import { HULLS } from '../data/BoatData.js';
+import { ROD_BY_ID, BAIT_BY_ID } from '../data/GearData.js';
 let landedN = 0; Bus.on('catch', () => landedN++);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -345,7 +346,7 @@ export async function runScripts(names, game) {
           G.act({ t: 'buy', k: kk, id });
         }
         ok(G.state.s.boatPlans.includes('motor') && G.state.s.boat.hull !== 'motor', 'buying the motorboat gets you its blueprint - you build it yourself');
-        ok(G.state.has('harpoon') && G.state.s.rod === 'reinforced', 'bought gear');
+        ok(G.state.has('harpoon') && G.state.s.rods.includes('reinforced') && G.state.has('sonar'), 'bought gear (a bought rod goes into the inventory, not straight into your hands)');
         step(2);
       }
       if (name === 'tools') {
@@ -666,7 +667,7 @@ export async function runScripts(names, game) {
           step(0.5);
           const F = G.fishing; F.cancel(true); P.tool = 'rod'; G.vm.setTool('rod');
           F.bpos.copy(P.pos).add(V(0, 0, 12)); F.bpos.y = 0; F.water = 'sea';
-          F.pending = { sp: 'cod', kg: 3, cm: 50, size: 0.5 }; F._hook();
+          F.pending = { sp: 'cod', kg: 55, cm: 150, size: 0.5 }; F._hook();   // (too big for the bag: it has to land on the beach)
           const n0 = G.loot.items.size;
           F.bar.catch = 1; step(0.1);
           const it = [...G.loot.items.values()].pop();
@@ -777,7 +778,7 @@ export async function runScripts(names, game) {
         ok(fav.fav, 'a fish can be made a favourite');
         G._talk(pim);
         const labels = () => [...(G.ui.talkEl?.querySelectorAll('.dopt span') || [])].map(s => s.textContent);
-        ok(labels().join('|').includes('Sell all fish') && labels().join('|').includes('Sell the fish I\'m holding') && labels().join('|').includes('View fishing rods') && labels().join('|').includes('Never mind'), 'talking to Pim offers: ' + labels().join(', '));
+        ok(labels().join('|').includes('Sell all fish') && labels().join('|').includes('Sell the fish I\'m holding') && labels().join('|').includes('Do you sell rods?') && labels().join('|').includes('Never mind'), 'talking to Pim offers: ' + labels().join(', '));
         ok(!document.querySelector('#screens.on'), 'and no shop window opened');
         const m0 = G.state.s.money;
         document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit1', bubbles: true }));
@@ -791,12 +792,11 @@ export async function runScripts(names, game) {
         ok(G.loot.items.has(fav.id), 'not even by a direct sell order');
         G.uiAct('favToggle', fav.id); G._dSellHeld(pim); step(0.1);
         ok(!G.loot.items.has(fav.id), 'unfavourited, it sells');
-        G._dRods(pim);
-        ok(labels().some(l => l.startsWith('Reinforced Rod')) && !labels().some(l => l.startsWith('Coral Whip')), 'Pim only stocks the home rods: ' + labels().join(', '));
-        const coco = G.npcs.byId('coco'); G._dRods(coco);
-        ok(labels().some(l => l.startsWith('Coral Whip')) && labels().some(l => l.startsWith('Deepwater')), 'Coco on the Sunken Coast sells the Coral Whip and the Deepwater Rod');
-        const maud = G.npcs.byId('maud'); G._dRods(maud);
-        ok(labels().some(l => l.startsWith("Vigil's Oath")), "Maud at Vigil's End sells Vigil's Oath");
+        // the rods are on the racks now: each shop shows only its own
+        const rodsAt = id => G.showroom.at(id).filter(it => it.kind === 'rod').map(it => it.ref);
+        ok(rodsAt('home').includes('reinforced') && !rodsAt('home').includes('reef'), 'Melvin\'s rack has the home rods only: ' + rodsAt('home').join(', '));
+        ok(rodsAt('tropic').includes('reef') && rodsAt('tropic').includes('deepwater'), 'on the Sunken Coast: ' + rodsAt('tropic').join(', '));
+        ok(rodsAt('reach').includes('oath'), "Vigil's End: " + rodsAt('reach').join(', '));
         G.ui.closeTalk();
       }
       if (name === 'trophy') {
@@ -1231,7 +1231,7 @@ export async function runScripts(names, game) {
       if (name === 'aquarium') {
         const s = G.state.s, B = G.build, L = G.loot, bb = G.boats[0];
         const Lm = await import('../game/Loot.js');
-        const land = (sp, cm = 40, kg = 2, alive = true) => G.landCatch({ sp, kg, cm, pos: P.pos.clone().add(V(0, 1, 1)), vel: V(0, 0, 0), by: P.id, size: 0.5, quiet: true, alive });
+        const land = (sp, cm = 40, kg = 2, alive = true) => G.landCatch({ sp, kg, cm, pos: P.pos.clone().add(V(0, 1, 1)), vel: V(0, 0, 0), by: P.id, size: 0.5, quiet: true, alive, noBag: true });
         // 1. alive, and the clock runs
         const a = land('bass');
         ok(a.alive && Math.abs(a.air - 300) < 1, 'a hooked fish comes up alive, with five minutes out of the water');
@@ -1315,7 +1315,7 @@ export async function runScripts(names, game) {
         // the boatyard sells plans, not boats
         s.money = 5000; G.act({ t: 'buy', k: 'hull', id: 'motor', yard: 'home' }); step(0.1);
         ok(s.boatPlans.includes('motor') && !s.hulls.includes('motor') && s.money === 5000 - 900, 'buying at the boatyard gets you the Motorboat plans (' + (5000 - s.money) + ' coins), not a boat');
-        G.ui.open('boatyard', { yard: 'home' }); ok(!!document.querySelector('.ydetail .ypic img') && document.querySelectorAll('.yitem').length >= 2, 'the boatyard is a showcase: a big preview and the plans for sale'); G.ui.close();
+        { const plans = G.showroom.at('yard:home').filter(it => it.kind === 'plan').map(it => it.ref); ok(plans.includes('motor') && plans.includes('seafarer') && plans.length === 3, 'the plans are laid out on Marge\'s drafting tables, each with a model of the boat: ' + plans.join(', ')); }
         // find water just off the beach and lay the rowboat out
         let spot = null;
         for (let r = 20; r < 400 && !spot; r += 3) for (let a = 0; a < 6.28 && !spot; a += 0.15) { const x = 20 + Math.cos(a) * r, z = 160 + Math.sin(a) * r; if (!B._why(BP_BY_ID['boat:dinghy'], x, z, 0, a)) spot = { x, z, r: a }; }
@@ -1396,6 +1396,229 @@ export async function runScripts(names, game) {
         G.ui.open('admin', {}); const btn = document.querySelector('[data-arg="edgeTest"]'); ok(!!btn, 'the admin panel has the edge-of-the-world button');
         btn && btn.click(); G.ui.close(); step(2);
         ok(P.boat && P.mode === 'drive' && G.edge.E, 'you are at the helm past the edge, and it has noticed you: ' + (G.edge.E ? G.edge.E.ph : 'nothing'));
+      }
+      if (name === 'ships') {
+        // other people's boats: out on open water, a fishing boat comes by, then a trader, then pirates
+        const SH = G.ships, s = G.state.s;
+        SH.clear();
+        G.teleport('offshore'); step(0.5);
+        if (P.boat !== b) P.attach(b, V(0, b.deck, 0));
+        b.hp = b.stats.hp; b.leaks = []; b.water = 0;
+        const beside = (k, gap = 9) => { const f = b.forward(); return SH.spawn(k, b.pos.x + f.z * gap, b.pos.z - f.x * gap, b.heading); };
+        const F = beside('fisher');
+        ok(F && F.crew.length === 2 && F.boat.npc && G.allBoats().includes(F.boat), 'a fishing boat alongside, with its crew of ' + F.crew.length);
+        // (a friendly boat stops for you when you pull alongside: back off and let it go)
+        const bp0 = b.pos.clone(); b.pos.x -= 160; b._updateMatrix(); step(0.2);
+        const p0 = F.boat.pos.clone();
+        F.st = 'roam'; F.fishT = 99; F.wp = { x: F.boat.pos.x + 300, z: F.boat.pos.z }; step(6);
+        log('INFO fisher: th ' + F.boat.throttle.toFixed(2) + ' ap ' + !!F.boat.autopilot + ' v ' + Math.hypot(F.boat.vel.x, F.boat.vel.y).toFixed(2) + ' st ' + F.st + ' helm ' + F.crew.map(C => C.helm + ':' + C.st + ':' + (C.on === F.boat)).join(',') + ' dr ' + F.boat.driver);
+        const sailed = F.boat.pos.distanceTo(p0);
+        b.pos.copy(bp0); b._updateMatrix(); F.boat.pos.set(b.pos.x + b.forward().z * 9, 0, b.pos.z - b.forward().x * 9); F.boat._updateMatrix();
+        ok(sailed > 8, 'it sails on about its business (' + sailed.toFixed(0) + ' m in 6 s)');
+        // jump across: stand on their deck
+        F.st = 'fish'; F.fishT = 99; SH._stop(F); F.boat.vel.set(0, 0); step(1);
+        P.detach(); P.attach(F.boat, V(0, F.boat.deck, 0)); P.mode = 'walk'; step(0.5);
+        ok(P.boat === F.boat, 'you are standing on their deck');
+        // their catch: take a fish while they watch and they come for you
+        const theirs = [...G.loot.items.values()].filter(it => it.shipOf === F.id);
+        ok(theirs.length >= 3, 'their catch is lying on the deck: ' + theirs.length + ' fish');
+        P.hp = 1e4;      // (the test player can take a beating: the point is that they hit back)
+        const hp0 = P.hp;
+        G._do({ t: 'pickup', id: theirs[0].id }, P.id); step(0.2);
+        ok(F.hostile.has(P.id), 'you pick one up in front of them: "' + (F.crew.find(C => C.sayText)?.sayText || '?') + '"');
+        for (let i = 0; i < 12 * 30 && P.hp >= hp0 && P.mode !== 'down'; i++) step(1 / 30);
+        ok(P.hp < hp0 || P.mode === 'down' || P.mode === 'swim', 'and they fight back (hp ' + Math.round(P.hp) + ', ' + P.mode + ')');
+        // knock them down, tie one up, throw one over the side
+        G.dropHeld(P, true); P.hp = 1e4; P.mode = 'walk'; if (P.boat !== F.boat) P.attach(F.boat, V(0, F.boat.deck, 0));
+        s.tools.pin = true; s.tools.pistol = true;
+        for (const C of F.crew) for (let k = 0; k < 4 && C.st !== 'down'; k++) { G.act({ t: 'strike', w: 'pistol', crew: C.id }); step(0.1); }
+        ok(F.crew.every(C => C.st === 'down' || C.st === 'swim'), 'four flintlock shots and they are all down: ' + F.crew.map(C => C.st).join(', '));
+        const C0 = F.crew.find(C => C.st === 'down');
+        if (C0) { G.act({ t: 'crewTie', id: C0.id, k: 'tie' }); step(0.1); ok(C0.bound, 'tied up'); G.act({ t: 'crewTie', id: C0.id, k: 'throw' }); step(0.1); ok(C0.st === 'swim' && !C0.on, 'and thrown over the side'); }
+        // crates
+        const cg = F.cargo.find(c => !c.open);
+        const n0 = G.loot.items.size;
+        if (cg) { G.act({ t: 'crate', ship: F.id, i: cg.i }); step(0.8); }
+        ok(cg && cg.open && G.loot.items.size > n0, 'a crate broken open: ' + (G.loot.items.size - n0) + ' things spill onto the deck');
+        // they get up again, untie each other, repair
+        F.boat.addHole(0.6); step(28);
+        ok(F.crew.some(C => C.st !== 'down' && C.st !== 'bound'), 'after a while they are back on their feet: ' + F.crew.map(C => C.st).join(', '));
+        // weapons they drop can be taken
+        const dropped = [...G.loot.items.values()].find(it => FISH_BY_ID[it.sp]?.beh === 'weapon');
+        if (dropped) { delete s.tools[FISH_BY_ID[dropped.sp].weapon]; G._do({ t: 'pickup', id: dropped.id }, P.id); step(0.1); ok(s.tools[FISH_BY_ID[dropped.sp].weapon], 'picked a dropped ' + FISH_BY_ID[dropped.sp].name + ' off their deck: it is yours'); }
+        SH.clear(); step(0.2); P.hp = 100;
+        // back on our own boat: the pirates
+        P.detach(); P.attach(b, V(0, b.deck, 0)); P.mode = 'walk'; P.hp = 100; b.hp = b.stats.hp; b.leaks = [];
+        const f = b.forward();
+        const PS = SH.spawn('pirate', b.pos.x + f.z * 70, b.pos.z - f.x * 70, b.heading);
+        ok(PS && PS.crew.length === 6 && PS.dress && PS.dress.userData.flag, 'a pirate galley: six crew, six guns, and a skull flag');
+        let cannon = 0, balls = 0; const on = SH.onEvent.bind(SH); SH.onEvent = e => { if (e.k === 'cannon') cannon++; on(e); };
+        const hp1 = b.hp;
+        for (let i = 0; i < 40 * 30 && !PS.bridge; i++) { G.update(1 / 30); balls = Math.max(balls, SH.balls.length); }
+        ok(PS.engaged, 'it has seen you and comes for you');
+        ok(cannon > 0, 'it fires its guns: ' + cannon + ' shots' + (b.hp < hp1 ? ', your hull ' + Math.round(hp1 - b.hp) + ' down' : ''));
+        if (!PS.bridge) { PS.boat.pos.set(b.pos.x + f.z * (b.hull.hw + PS.boat.hull.hw + 3), 0, b.pos.z - f.x * (b.hull.hw + PS.boat.hull.hw + 3)); PS.boat.heading = b.heading; PS.boat.vel.set(0, 0); b.vel.set(0, 0); step(0.2); SH.lowerBridge(PS, b); }
+        ok(!!PS.bridge, 'the spiked boarding bridge comes down on your rail');
+        P.hp = 1e4; if (P.boat !== b) { P.detach?.(); P.attach(b, V(0, b.deck, 0)); } P.mode = 'walk'; step(6);
+        { const C = PS.crew[1], q = SH.crewPos(C); log('INFO foe ' + (SH._foe(PS, C)?.id || 'none') + ' d ' + q.distanceTo(P.pos).toFixed(1) + ' pb ' + (P.boat?.id) + ' to ' + PS.bridge?.to + ' bound ' + SH.bound[P.id] + ' t ' + SH.t.toFixed(1) + ' players ' + G.allPlayers().map(Q => Q.id).join(',')); }
+        log('INFO pirates: ' + PS.crew.map(C => C.weapon + ':' + C.st + (C.on === b ? '@you' : C.on === PS.boat ? '@galley' : '@-')).join(' ') + ' hostile ' + [...PS.hostile].join(','));
+        const across = PS.crew.filter(C => C.on === b).length;
+        ok(across > 0, across + ' pirates across the bridge onto your deck');
+        // kick it off
+        G.act({ t: 'kickBridge', id: PS.id, n: 999 }); step(0.3);
+        ok(!PS.bridge, 'you kick the bridge off: it drops into the sea');
+        SH.onEvent = on;
+        // captured: everyone near is tied up
+        P.hp = 100; G.passing = false;
+        SH.captureAll(PS, [P]);
+        await new Promise(r => setTimeout(r, 7500)); step(0.5);
+        const PI = G.pirateIsle;
+        ok(PI.cell >= 0 && PI.cageAt(P.pos) >= 0, 'CAPTURED: you wake up in a cage on Blackflag Isle (' + P.pos.x.toFixed(0) + ', ' + P.pos.z.toFixed(0) + ')');
+        ok(G.state.hot.slots.every(k => !k) && P.tool === 'none', 'your hotbar is empty - they took everything');
+        ok(G.boats[0].pos.distanceTo(PI.P.berth.pos) < 12, 'and your boat is tied up at their dock');
+        // force the bars when the guard is looking away
+        for (const g of PI.guards) g.pos.set(PI.P.camp.x + 200, 0, PI.P.camp.z);
+        const cc = PI.cell;
+        for (let i = 0; i < 4 * 30; i++) { I.keys.add('KeyE'); step(1 / 30); }
+        I.keys.clear(); step(0.1);
+        ok(PI.doorOpen[cc], 'hold E at the bars and they give');
+        // the stash
+        P.place(PI.P.stash.clone().add(V(0.4, 0, 0)), 0); step(0.2);
+        G._stash(); step(0.2);
+        ok(!G.state.captive && G.state.hot.slots.some(Boolean), 'the stash chest: everything back on the hotbar (' + G.state.hot.slots.filter(Boolean).length + ')');
+        ok(G.state.s.trophies.got.escaped, 'trophy: Out of the Cage');
+        // the lake
+        const L = PI.P.lakePier;
+        const ctx = { region: G.world.region(L.x, L.z - 20), water: 'lake', zone: 6, bait: 'worm', night: false };
+        const W = (await import('../game/Fishing.js')).speciesWeights(ctx);
+        const tot = W.reduce((a, e) => a + e.w, 0), myth = W.find(e => e.f.rarity === 'mythical');
+        const own = W.filter(e => e.f.where !== 'all' && e.f.where.includes('pirate')).length, all12 = FISH.filter(f => Array.isArray(f.where) && f.where.includes('pirate')).length;
+        ok(ctx.region === 'pirate' && all12 === 12 && own >= 9, 'the Drowned Bell: ' + all12 + ' fish found nowhere else, ' + own + ' of them biting in daylight');
+        ok(myth && Math.abs(myth.w / tot - 0.0025) < 0.0001, 'the Drowned Captain: ' + (myth.w / tot * 100).toFixed(3) + '% of bites');
+        SH.clear();
+      }
+      if (name === 'shop') {
+        // walk up, look at it, it outlines, see its price, hold E, it is yours
+        const SR = G.showroom, s = G.state.s, S = G.world.settlement;
+        const aim = (it, room) => {
+          const at = it.center.clone(), d = V(room.x - at.x, 0, room.z - at.z).normalize();
+          const eye = at.clone().addScaledVector(d, 1.5);
+          P.detach?.(); P.mode = 'walk';
+          P.place(V(eye.x, room.y, eye.z), Math.atan2(-(at.x - eye.x), -(at.z - eye.z)));
+          P.pitch = Math.atan2(at.y - (room.y + 1.62), Math.hypot(at.x - eye.x, at.z - eye.z));
+          step(0.15);
+        };
+        const hold = sec => { I.keys.add('KeyE'); step(sec); I.keys.delete('KeyE'); step(0.05); };
+        const home = S.anchors.tackleShop, yard = S.anchors.yardShop;
+        const rod = SR.at('home').find(it => it.kind === 'rod' && it.ref === 'reinforced');
+        ok(!!rod, 'Melvin has the Reinforced Rod on his rack');
+        s.rods = s.rods.filter(r => r !== 'reinforced'); s.money = 0;
+        aim(rod, home);
+        const bp = document.querySelector('.buyprompt');
+        ok(SR.target === rod && rod.op > 0.5 && !bp.classList.contains('hide'), 'looking at it: it is outlined (' + rod.op.toFixed(2) + ') and the card is up');
+        ok(/REINFORCED ROD/.test(bp.textContent) && /450/.test(bp.textContent) && /HOLD E TO PURCHASE/.test(bp.textContent), 'the card: ' + bp.querySelector('.bpn').textContent + ' / ' + bp.querySelector('.bpp').textContent + ' / ' + bp.querySelector('.bpt').textContent);
+        const others = SR.at('home').filter(it => it !== rod);
+        ok(others.every(it => it.op < 0.05), 'and nothing else on the walls is');
+        hold(0.9);
+        ok(!s.rods.includes('reinforced') && /NOT ENOUGH MONEY/.test(bp.textContent), 'with no money: ' + bp.querySelector('.bpt').textContent);
+        s.money = 1000; step(1.8);
+        hold(0.3); step(0.1);
+        ok(!s.rods.includes('reinforced') && SR.hold < 0.2, 'let go half way: nothing bought, the ring empties');
+        hold(0.8);
+        ok(s.rods.includes('reinforced') && s.money === 550, 'held all the way: bought (' + s.money + ' left)');
+        step(0.4);
+        ok(G.state.hot.slots.includes('rod:reinforced') && s.rod !== 'reinforced', 'it went into the inventory and onto the hotbar - not into your hands');
+        step(1.8);
+        ok(/OWNED/.test(bp.textContent), 'looking at it again: ' + bp.querySelector('.bpp').textContent);
+        // looking away
+        P.yaw += Math.PI; step(0.4);
+        ok(!SR.target && bp.classList.contains('hide') && rod.op < 0.1, 'look away: the outline fades and the card goes');
+        // bait
+        const glow = SR.at('home').find(it => it.kind === 'bait' && it.ref === 'glow');
+        const g0 = s.baits.glow || 0;
+        aim(glow, home); hold(0.8);
+        ok((s.baits.glow || 0) === g0 + 8, 'Glow Bait off the shelf: +8 in the tin (' + s.baits.glow + ')');
+        // too far away
+        aim(glow, home); P.pos.addScaledVector(V(Math.sin(P.yaw), 0, Math.cos(P.yaw)), 4); step(0.2);
+        ok(SR.target !== glow, 'step back across the room and it is not yours to buy any more');
+        // plans at Marge's
+        const plan = SR.at('yard:home').find(it => it.ref === 'motor');
+        s.boatPlans = s.boatPlans.filter(x => x !== 'motor'); s.money = 5000;
+        aim(plan, yard); hold(0.8);
+        ok(s.boatPlans.includes('motor') && s.money === 5000 - 900, 'the Motorboat plans off Marge\'s table: in the blueprint book (' + (5000 - s.money) + ' coins)');
+        // nothing is ever on display where it is not sold
+        let wrong = 0;
+        for (const it of SR.items) {
+          if (it.kind === 'rod' && ROD_BY_ID[it.ref].shop !== it.shop) wrong++;
+          if (it.kind === 'bait' && BAIT_BY_ID[it.ref].shop && BAIT_BY_ID[it.ref].shop !== it.shop) wrong++;
+          if (it.kind === 'plan' && 'yard:' + HULLS.find(H => H.id === it.ref).yard !== it.shop) wrong++;
+        }
+        ok(wrong === 0 && SR.items.length > 60, SR.items.length + ' things on display across the sea, every one in the shop that sells it (' + wrong + ' wrong)');
+        ok(SR.at('lost').some(it => it.ref === 'ghost'), 'and the Ghost Bait can finally be bought: the Lost Shores stall');
+      }
+      if (name === 'inv') {
+        // the bag, the hotbar and TAB
+        const s = G.state.s, H = G.state.hot, ui = G.ui;
+        // a castaway starts with nothing: the hotbar is empty until Old Gus hands over his things
+        const keep = { tools: { ...s.tools }, rods: [...s.rods], hot: JSON.parse(JSON.stringify(s.hotbar)), kit: s.flags.kit };
+        s.tools = {}; s.rods = []; s.flags.kit = false; s.hotbar = { slots: new Array(10).fill(null), seen: [] };
+        P.tool = 'none'; step(0.4);
+        ok(G.state.hot.slots.every(k => !k) && document.querySelectorAll('.hotbar .slot.empty').length === 10 && !document.querySelector('.hotbar .slot .gi, .hotbar .slot img'), 'a castaway\'s hotbar: ten empty slots, not a picture in any of them');
+        G.act({ t: 'kit' }); step(0.4);
+        ok(G.state.hot.slots[0] === 'rod:basic' && G.state.hot.slots.filter(Boolean).length === 6, 'Old Gus hands over his things and they go straight onto the hotbar: ' + G.state.hot.slots.filter(Boolean).join(', '));
+        ok(document.querySelectorAll('.hotbar .slot.full').length === 6 && document.querySelectorAll('.hotbar .slot.empty').length === 4, 'six full slots, four empty ones');
+        // the number keys follow the slots; the same key again puts it away
+        I.down.add('Digit1'); step(1 / 30); I.down.clear(); step(0.05);
+        ok(P.tool === 'rod', 'key 1: the rod is in your hands');
+        I.down.add('Digit1'); step(1 / 30); I.down.clear(); step(0.05);
+        ok(P.tool === 'none', 'key 1 again: it is put away - empty hands');
+        I.down.add('Digit2'); step(1 / 30); I.down.clear(); step(0.05);
+        ok(P.tool === G.state.hot.slots[1], 'key 2: ' + P.tool);
+        // buying something new: it appears in the first empty slot by itself
+        s.money += 5000; G.act({ t: 'buy', k: 'tool', id: 'harpoon' }); step(0.4);
+        ok(G.state.hot.slots.includes('harpoon'), 'a harpoon bought: it is on the hotbar at key ' + G.hotKeyFor('harpoon'));
+        // take it off and it stays off (it is still yours, in the inventory)
+        G.uiAct('hotOff', 'harpoon'); step(0.4);
+        ok(!G.state.hot.slots.includes('harpoon') && s.tools.harpoon, 'taken off the hotbar, it stays off - and it is still yours');
+        G.uiAct('hotOn', 'harpoon'); step(0.1);
+        ok(G.state.hot.slots.includes('harpoon'), 'and back on again');
+        // catching: the fish goes straight into your bag
+        const b0 = G.loot.bagOf(P.id).length;
+        G.landCatch({ sp: 'bass', kg: 2, cm: 40, pos: P.pos.clone().add(V(0, 0.5, 4)), vel: V(0, 3, 0), by: P.id, v: null, zone: 0 });
+        step(0.2); const flying = [...G.loot.items.values()].some(it => it.fly);
+        step(1);
+        ok(flying && G.loot.bagOf(P.id).length === b0 + 1, 'a bass: it arcs up out of the water to you and into your bag (bag ' + G.loot.bagOf(P.id).length + ')');
+        ok(/INTO YOUR BAG/.test(document.querySelector('.catchcard').textContent), 'the catch card says where it went');
+        const big = G.landCatch({ sp: 'tuna', kg: 120, cm: 190, pos: P.pos.clone().add(V(0, 0.5, 3)), vel: V(0, 2, 0), by: P.id, v: null, zone: 0 });
+        step(1.2);
+        ok(big && big.state === 'free' && !big.fly, 'a 120 kg tuna is too big for the bag: it stays where it landed');
+        // TAB: the inventory; the fish is there; take it in your hands and put it back
+        I.down.add('Tab'); step(1 / 30); I.down.clear(); step(0.1);
+        ok(ui.screen === 'inv' && document.querySelectorAll('.inv .itile').length > 6, 'TAB opens the inventory (' + document.querySelectorAll('.inv .itile').length + ' things)');
+        ok(document.querySelector('.inv .ihot') && document.querySelectorAll('.inv .ihot .slot').length === 10, 'with the hotbar right under it');
+        ui.data.cat = 'fish'; ui.render();
+        const ft = document.querySelector('.inv .itile[data-arg^="fish:"]');
+        ok(!!ft, 'the bass is in the Fish tab');
+        ft && ft.click(); step(0.05);
+        const take = document.querySelector('.inv [data-act="bagTake"]');
+        ok(!!take, 'picked, it shows what it is and "Take it in your hands"');
+        const id = take && take.dataset.arg; take && take.click(); step(0.2);
+        ok(P.held === id && ui.screen !== 'inv', 'taken out: the bass is in your hands');
+        G.act({ t: 'bagPut', id }); step(0.1);
+        ok(!P.held && G.loot.get(id)?.state === 'bag', 'and back into the bag');
+        I.down.add('Tab'); step(1 / 30); I.down.clear(); step(0.05);
+        I.down.add('Tab'); step(1 / 30); I.down.clear(); step(0.05);
+        ok(!ui.screen, 'TAB again closes it');
+        // selling from the bag at the fish stall
+        const m0 = s.money, nb = G.loot.bagOf(P.id).length;
+        G._sell(G.sellable(G.world.settlement.anchors.market.pos, false, P.id).filter(it => it.state === 'bag'), P.id, null);
+        ok(s.money > m0 && G.loot.bagOf(P.id).length < nb, 'the fish stall buys straight out of the bag (+' + (s.money - m0) + ')');
+        // the bag survives a save
+        G.landCatch({ sp: 'perch', kg: 0.6, cm: 20, pos: P.pos.clone().add(V(0, 0.5, 3)), vel: V(0, 2, 0), by: P.id, v: null, zone: 0 }); step(1.2);
+        const saved = G.loot.saveBag(P.id);
+        ok(saved.length >= 1 && saved.some(o => o.sp === 'perch'), 'the bag is written into the save (' + saved.length + ')');
+        if (big) G.loot.remove(big);
+        s.tools = keep.tools; s.rods = keep.rods; s.hotbar = keep.hot; s.flags.kit = keep.kit; step(0.3);
       }
       if (name === 'jetty') {
         // a jetty from the beach out over the sea: walk to the end and fish from it; a watchtower: climb it and look out

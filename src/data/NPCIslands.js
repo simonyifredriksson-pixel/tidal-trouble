@@ -24,6 +24,17 @@ const say = o => ({
 const L = (skin, shirt, pants, hat, hatCol, hair, hairCol, x = {}) => ({ skin, shirt, pants, boots: x.boots || 0x2e2620, hat, hatCol, hair, hairCol, nose: x.nose || 1.1, ...x });
 
 export const ISLAND_NPCS = [
+  /* ======================= BLACKFLAG ISLE (on no chart) ======================= */
+  { id: 'rattigan', name: 'rattigan', full: 'Rattigan the Fence', pr: 'he', role: 'seller', shop: 'blackflag', at: 'pirateFence', pose: 'stand',
+    look: L(0xd8a880, 0x5a2a2a, 0x2a2a2a, 'tricorn', 0x1a1a1a, 'long', 0x2a1a10, { beard: 'moustache', beardCol: 0x2a1a10, patch: true, vest: 0x2a2a2a, nose: 1.5 }),
+    lines: ['I sell to anybody. I buy from anybody. The captain lets me, because the captain buys from me.'],
+    say: say({
+      hello: ['Well now. A face I have not robbed yet. Selling?', 'Fish from the Bell? Careful how you hold those. What have you got?', 'Nobody finds this island by accident, friend. Nobody leaves it by accident either. Buying or selling?'],
+      rods: ['Rods? This is a pirate island. I sell things for hurting people. Look at the rack.'],
+      nothing: ['Nothing? Then you are wasting a fence\'s time.', 'Come back with something worth the walk.'],
+      sold: ['{n} fish, {total} coins, no questions. That is the Blackflag way.', '{total} coins. Do not tell the captain what I paid you.'],
+      bye: ['Watch the guards.', 'You never saw me.', 'Fair winds - and foul ones for everyone else.'],
+    }) },
   /* ======================= WHISPERING WOODS ======================= */
   { id: 'hazel', name: 'hazel', full: 'Hazel Thornwood', pr: 'she', role: 'seller', shop: 'whisper', at: 'whisperSeller', pose: 'stand',
     look: L(0xe0b48c, 0x3a5a2e, 0x4a3a2a, 'hood', 0x2e4a2a, 'long', 0x6a3a1e, { vest: 0x5a3e28 }),

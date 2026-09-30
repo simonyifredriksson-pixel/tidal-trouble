@@ -10,7 +10,11 @@
 import * as THREE from '../../lib/three.module.js';
 import { Player } from './Player.js';
 import { Boat } from './Boat.js';
-import { Loot } from './Loot.js';
+import { Loot, livesSp, bagRefuses } from './Loot.js';
+import { Showroom } from './Showroom.js';
+import { Ships } from './Ships.js';
+import { PirateIsle } from './PirateIsle.js';
+import '../data/ShipLoot.js';
 import { Fishing, pickSpecies, rollCatch } from './Fishing.js';
 import { Tools } from './Tools.js';
 import { ViewModel } from './ViewModel.js';
@@ -24,7 +28,7 @@ import { State } from './State.js';
 import { PLAYER_LOOKS } from '../art/Character.js';
 import { fishMesh } from '../art/FishArt.js';
 import { FISH, FISH_BY_ID, RARITY, fishValue, GIANTS, valueBreakdown, catchName, VARIANT_BY_ID } from '../data/FishData.js';
-import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR_BY_ID } from '../data/GearData.js';
+import { RODS, ROD_BY_ID, BAITS, BAIT_BY_ID, TOOLS, TOOL_BY_ID, GEAR, GEAR_BY_ID } from '../data/GearData.js';
 import { HULL_BY_ID, PART_BY_ID, PAINT_BY_ID, DECOR_BY_ID, boatStats, partCap } from '../data/BoatData.js';
 import { LEVIATHANS, LEV_BY_ID, STORY } from '../data/LeviathanData.js';
 import { LAKES, REGIONS, waveAmp, zoneAt, ZONES } from '../world/MapData.js';
@@ -118,6 +122,9 @@ export class Game {
     this.deep = new Deep(this);
     this.gather = new Gather(this);
     this.build = new Build(this);
+    this.showroom = this.showroom || new Showroom(this);   // the shops' shelves are part of the world: built once
+    this.ships = this.ships || new Ships(this);             // other people's boats (and pirates)
+    this.pirateIsle = this.pirateIsle || new PirateIsle(this);   // Blackflag Isle's guards, cages and stash
     this.admin = this.admin || { autoCatch: false, autoCast: false };
     // every lightning bolt, storm or beast, is followed by its thunder
     this.world.sky.onThunder = d => setTimeout(() => this.audio.thunder(d), Math.min(2500, d / 340 * 1000));
@@ -151,7 +158,12 @@ export class Game {
     // a new world (or a crew you have just joined) begins at sea, in the storm, on the first night
     if ((mode === 'new' || mode === 'join') && !this.skipIntro) {
       // your boat went down in the storm: you will have to build the next one
-      if (mode === 'new' && !this.state.remote) { s.boat.built = false; s.hulls = []; }
+      if (mode === 'new' && !this.state.remote) {
+        s.boat.built = false; s.hulls = [];
+        // and everything you had went down with it: empty hands, an empty hotbar, until Old Gus finds you
+        s.tools = {}; s.rods = []; s.flags.kit = false; s.hotbar = { slots: new Array(10).fill(null), seen: [] };
+        this.player.tool = 'none'; this.vm.setTool('none');
+      }
       this.intro.start();
     }
     else if (mode !== 'continue' && !this.state.remote) {
@@ -173,13 +185,18 @@ export class Game {
       b._updateMatrix();
     } else b.respawn(false);
     this.boats.push(b);
-    if (!this.state.remote) this.loot.loadOnBoat(b, s.boatCargo);
+    if (!this.state.remote) {
+      this.loot.loadOnBoat(b, s.boatCargo);
+      if (!this._bagLoaded) { this._bagLoaded = true; this.loot.loadBag(this.player.id, s.bag); }
+    }
   }
 
   homeMooring() { return this.world.settlement.moorings[0]; }
-  boatById(id) { return this.boats.find(b => b.id === id) || null; }
+  boatById(id) { return this.boats.find(b => b.id === id) || this.ships?.list.get(id)?.boat || null; }
+  /** Every boat on the sea: yours and everybody else's. */
+  allBoats() { return this.ships && this.ships.boatList.length ? this.boats.concat(this.ships.boatList) : this.boats; }
   boatAt(pos, margin = 0) {
-    for (const b of this.boats) {
+    for (const b of this.allBoats()) {
       if (b.sinking || b.absent) continue;
       const L = b.toLocal(pos, _w);
       if (b.over(L.x, L.z, -margin) && L.y > b.deck - 0.8 && L.y < b.deck + 3) return b;
@@ -407,7 +424,42 @@ export class Game {
         break;
       }
       case 'buy': this._buy(c, from); break;
+      case 'kit': {
+        // Old Gus's things: his old rod, a hand axe, a pick, a hammer, a bucket and the rowboat plans
+        if (s.flags.kit !== false) break;
+        s.flags.kit = true;
+        if (!s.rods.includes('basic')) s.rods.push('basic');
+        s.rod = 'basic';
+        for (const id of ['rod', 'axe', 'pick', 'hammer', 'bucket', 'plans']) s.tools[id] = true;
+        this._rodChanged();
+        this._everyone({ t: 'toast', text: 'Old Gus gives you his old rod, a hand axe, a pick, a hammer, a bucket and his rowboat plans. They are on your hotbar.', kind: 'good' });
+        this._saveDirty = true;
+        break;
+      }
+      case 'bagTake': {
+        if (P.held) { this.tell(from, 'Your hands are full.', 'warn'); break; }
+        const x = this.loot.get(c.id);
+        if (x && this.loot.fromBag(x, from)) { if (!me) P.held = x.id; this._onPickup?.(x, P); }
+        break;
+      }
+      case 'bagPut': {
+        const x = this.loot.get(c.id || P.held);
+        if (!x || x.held !== from) break;
+        const why = this.loot.toBag(x, from);
+        if (!why) { P.held = null; this.tell(from, 'In your bag.', 'good'); }
+        else this.tell(from, why === 'full' ? 'Your bag is full - thirty fish. Sell some, or put them in a cooler.' : why === 'big' ? 'Too big for your bag. It goes on the deck, in a cooler or in a tank.' : 'That does not go in a bag.', 'warn');
+        break;
+      }
       case 'heldGiant': break;
+      // other people's boats
+      case 'strike': this.ships.hostStrike(c, from); break;
+      case 'crate': { const S = this.ships.list.get(c.ship); const cg = S?.cargo[c.i]; if (cg) this.ships.openCargo(S, cg, from); break; }
+      case 'crewTie': this.ships.hostTie(c, from); break;
+      case 'kickBridge': { const S = this.ships.list.get(c.id); if (S) this.ships.hitBridge(S, c.n || 25, from); break; }
+      case 'freed': this.ships.onFreed(from); break;
+      case 'captive': this._hostCaptive(from, !!c.on); break;
+      case 'hoard': this._hoard(from); break;
+      case 'crewTalk': { const C = this.ships.crewById(c.id); if (C) this.ships._say(C, c.line); break; }
       case 'spearKill': if (it) this.loot.kill(it, 'harpoon'); break;
       case 'tankPut': this.build.hostTankPut(c, from); break;
       case 'tankTake': this.build.hostTankTake(c, from); break;
@@ -652,6 +704,8 @@ export class Game {
     const it = this.loot.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: o.pos, vel: o.vel, by: o.by, v: o.v || null, zone: o.zone || 0, mult: o.mult || 1, alive: o.alive !== false });
     if (it && o.ashore) { it.ashore = new THREE.Vector3(...o.ashore); it.ashoreT = 12; }
     if (!it) return;
+    // straight into your bag: it arcs up out of the water to you and is gone into it
+    const bag = o.slap || o.noBag ? 'odd' : this.loot.toBag(it, o.by || this.player.id, true);
     // record first, announce second
     const junk = sp.rarity === 'junk' || sp.beh === 'mimic';
     const lake = this.isLake(o.pos.x, o.pos.z) ? LAKES.find(L => Math.hypot(o.pos.x - L.x, o.pos.z - L.z) < L.r * 1.3) : null;
@@ -659,7 +713,8 @@ export class Game {
     const rec = junk && sp.beh !== 'chest' ? { isNew: false, record: false } : this.state.record(sp.id, o.kg, o.cm, o.v, where);
     if (sp.beh === 'bottle') { /* read on pickup */ }
     const value = fishValue(sp, o.kg, o.mult || 1);
-    const card = { sp: sp.beh === 'mimic' ? 'chest' : sp.id, kg: o.kg, cm: o.cm, value: sp.beh === 'mimic' ? 0 : value, isNew: rec.isNew, record: rec.record, v: sp.beh === 'mimic' ? null : o.v || null, zone: o.zone || 0 };
+    const card = { sp: sp.beh === 'mimic' ? 'chest' : sp.id, kg: o.kg, cm: o.cm, value: sp.beh === 'mimic' ? 0 : value, isNew: rec.isNew, record: rec.record, v: sp.beh === 'mimic' ? null : o.v || null, zone: o.zone || 0,
+      bag: bag || 'in', alive: livesSp(sp) ? it.alive : undefined };
     if (!o.quiet) this._cardTo(o.by, card);
     if (o.slap) this.slaps.push({ id: it.id, pid: o.by, t: 0 });
     // tutorial and clues
@@ -671,7 +726,7 @@ export class Game {
       if (cl.water === 'lake' && !this.isLake(o.pos.x, o.pos.z)) continue;
       this.foundClue(cl.id, o.by);
     }
-    const tier = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 3, giant: 3, junk: 0 }[sp.rarity];
+    const tier = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 3, giant: 3, mythical: 3, junk: 0 }[sp.rarity];
     if (tier >= 2) this.fx.confetti(o.pos.x, o.pos.y + 1, o.pos.z, 40 + tier * 20);
     if (!junk) this._catchTrophies(sp, o);
     Bus.emit('catch', { sp, it, by: o.by });
@@ -685,10 +740,10 @@ export class Game {
   _showCard(card) {
     const sp = FISH_BY_ID[card.sp];
     this.ui.catchCard(card);
-    const tier = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 3, giant: 3, junk: 0 }[sp.rarity];
+    const tier = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 3, giant: 3, mythical: 3, junk: 0 }[sp.rarity];
     this.audio.fanfare(tier);
     if (tier >= 1) this.player.cheerT = 2.2;
-    if (tier >= 2) this.ui.banner(sp.rarity === 'legendary' ? 'LEGENDARY!' : sp.rarity === 'giant' ? 'A GIANT!' : sp.rarity === 'epic' ? 'EPIC CATCH!' : 'RARE CATCH!', sp.name, 'star', 2.5);
+    if (tier >= 2) this.ui.banner(sp.rarity === 'mythical' ? 'MYTHICAL!' : sp.rarity === 'legendary' ? 'LEGENDARY!' : sp.rarity === 'giant' ? 'A GIANT!' : sp.rarity === 'epic' ? 'EPIC CATCH!' : 'RARE CATCH!', sp.name, 'star', 2.5);
   }
 
   _creatureLanded(c, from) {
@@ -746,6 +801,38 @@ export class Game {
 
   _onPickup(it, P) {
     const sp = FISH_BY_ID[it.sp];
+    // off somebody else's deck: was anyone looking?
+    if (it.shipOf) { this.ships.onPickup(it, P); it.shipOf = null; }
+    const s = this.state.s;
+    if (sp.beh === 'baitsack') {
+      const pool = BAITS.filter(B => !B.shop && B.id !== 'explosive'), a = pick(pool), b2 = pick(pool), n = 6 + Math.floor(Math.random() * 8);
+      this.state.addBait(a.id, n); this.state.addBait(b2.id, 4);
+      this.loot.remove(it); P.held = null;
+      this.tell(P.id, `The sack goes into your bait tin: ${n} ${a.name} and 4 ${b2.name}.`, 'good');
+      this._saveDirty = true; return;
+    }
+    if (sp.beh === 'mats') {
+      s.mats = s.mats || {};
+      const w = 4 + Math.floor(Math.random() * 6), i = Math.random() < 0.6 ? 1 + Math.floor(Math.random() * 2) : 0, g = Math.random() < 0.3 ? 1 : 0;
+      s.mats.wood = (s.mats.wood || 0) + w; if (i) s.mats.iron = (s.mats.iron || 0) + i; if (g) s.mats.glass = (s.mats.glass || 0) + g;
+      this.loot.remove(it); P.held = null;
+      this.tell(P.id, `Supplies: ${w} wood${i ? ', ' + i + ' iron' : ''}${g ? ', a pane of glass' : ''}. In your pack (M).`, 'good');
+      this._saveDirty = true; return;
+    }
+    if (sp.beh === 'chart') {
+      this.loot.remove(it); P.held = null;
+      const a = Math.random() * Math.PI * 2, x = P.pos.x + Math.cos(a) * 900, z = P.pos.z + Math.sin(a) * 900;
+      const n = this.isles.reveal(x, z, 700) + this.isles.reveal(P.pos.x, P.pos.z, 500);
+      this.tell(P.id, n ? 'A surveyor\'s chart. You copy it onto yours - a whole stretch of sea is charted now.' : 'A surveyor\'s chart of water you already know.', 'good');
+      this._saveDirty = true; return;
+    }
+    if (sp.beh === 'weapon') {
+      const T = TOOL_BY_ID[sp.weapon];
+      this.loot.remove(it); P.held = null;
+      if (T && !s.tools[T.id]) { s.tools[T.id] = true; this.tell(P.id, `${T.name} - it is yours now. It is in your inventory (TAB) and on your hotbar.`, 'good'); }
+      else if (T) { this.state.earn(Math.round(T.price * 0.15), 'weapon'); this.tell(P.id, `You already have a ${T.name}. This one is worth ${Math.round(T.price * 0.15)} coins as scrap.`, 'info'); }
+      this._saveDirty = true; return;
+    }
     if (sp.beh === 'bottle') {
       const text = this.state.nextBottle();
       this.loot.remove(it); P.held = null;
@@ -930,6 +1017,7 @@ export class Game {
 
   passOut(P, why) {
     if (P !== this.player || this.passing) return;
+    if (this.ships?.pirateEngaged(P, this.myId())) return this._captured('beaten');
     this.passing = true;
     this.fishing.cancel(true);
     this.dropHeld(P, true);
@@ -1011,7 +1099,8 @@ export class Game {
   }
   _canSell(it, at = null) {
     const m = at || this.world.settlement.anchors.market.pos;
-    if (it.held) return true;
+    if (it.held || it.state === 'bag') return true;
+    if (it.fly) return false;
     if (it.boat && this.boatAtMarket(m)) return true;
     return m && it.pos.distanceTo(m) < 9 + (it.r || 0);
   }
@@ -1022,6 +1111,7 @@ export class Game {
       if (!sp || sp.beh === 'chest' || sp.beh === 'strongbox' || (sp.beh === 'mimic' && !it.opened)) continue;
       if (it.fav && !withFavs) continue;
       if (it.held && by && it.held !== by) continue;       // never sell a fish out of a crewmate's hands
+      if (it.state === 'bag' && it.bagOf !== (by || this.player.id)) continue;   // or out of their bag
       if (sp.beast && !withBeasts) continue;               // a sea beast is only ever sold on purpose
       if (this._canSell(it, at)) out.push(it);
     }
@@ -1057,13 +1147,13 @@ export class Game {
     const S = this.state, s = S.s;
     const ok = (price) => { if (!S.spend(price)) { this.tell(from, 'Not enough coins.', 'bad'); return false; } this.audio.buy(); return true; };
     const k = c.k, id = c.id;
-    if (k === 'rod') { const R = ROD_BY_ID[id]; if (R && !s.rods.includes(id) && ok(R.price)) { s.rods.push(id); s.rod = id; this._rodChanged(); } }
+    if (k === 'rod') { const R = ROD_BY_ID[id]; if (R && !s.rods.includes(id) && ok(R.price)) { s.rods.push(id); if (!c.quiet) this.tell(from, R.name + ' - it is in your inventory (TAB) and on your hotbar.', 'good'); } }
     else if (k === 'equipRod') { if (s.rods.includes(id)) { s.rod = id; this._rodChanged(); } }
     else if (k === 'bait') { const B = BAIT_BY_ID[id]; if (B && ok(B.price * B.pack)) S.addBait(id, B.pack); }
     else if (k === 'setBait') { if ((s.baits[id] || 0) > 0) s.bait = id; }
-    else if (k === 'tool') { const T = TOOL_BY_ID[id]; if (T && !s.tools[id] && ok(T.price)) { s.tools[id] = true; this.tell(from, T.name + ' - hotbar slot ' + T.slot, 'good'); } }
+    else if (k === 'tool') { const T = TOOL_BY_ID[id]; if (T && !s.tools[id] && ok(Math.round(T.price * clamp(c.pm || 1, 1, 2)))) { s.tools[id] = true; this.tell(from, T.name + ' - it is in your inventory (TAB) and on your hotbar.', 'good'); } }
     else if (k === 'gear') { const Gd = GEAR_BY_ID[id]; if (Gd && !s.gear[id] && ok(Gd.price)) s.gear[id] = true; }
-    else if (k === 'hull') { const H = HULL_BY_ID[id]; s.boatPlans = s.boatPlans || []; if (H && !s.boatPlans.includes(id) && ok(planPrice(H))) { s.boatPlans.push(id); this.tell(from, `The ${H.name}'s plans are in your Blueprint Book (=). Lay them out at the water's edge and build her.`, 'good'); } }
+    else if (k === 'hull') { const H = HULL_BY_ID[id]; s.boatPlans = s.boatPlans || []; if (H && !s.boatPlans.includes(id) && ok(planPrice(H))) { s.boatPlans.push(id); this.tell(from, `The ${H.name}'s plans are in your Blueprint Book${this.kh('plans')}. Lay them out at the water's edge and build her.`, 'good'); } }
     else if (k === 'useHull') { if (s.hulls.includes(id)) { s.boat.hull = id; s.boat.built = true; this._boatChanged(); } }
     else if (k === 'part') { const P = PART_BY_ID[id]; const lv = s.boat.parts[id] || 0; if (P && lv < partCap(P, HULL_BY_ID[s.boat.hull] || {}) && ok(P.prices[lv + 1])) { s.boat.parts[id] = lv + 1; this._boatChanged(); } }
     else if (k === 'paint') { const P = PAINT_BY_ID[id]; if (P && !s.paints.includes(id) && ok(P.price)) { s.paints.push(id); s.boat.paint = id; this._boatChanged(); } }
@@ -1086,7 +1176,7 @@ export class Game {
     const m = this.state.s.mats = this.state.s.mats || {};
     const short = Object.entries(c).filter(([k, n]) => (m[k] || 0) < n);
     if (short.length) {
-      if ((this._shortT || 0) < this.world.time) { this._shortT = this.world.time + 3; this.tell(from, 'You need ' + this.costText(c) + ' for that. Chop some wood (0) - any island will do.', 'warn'); }
+      if ((this._shortT || 0) < this.world.time) { this._shortT = this.world.time + 3; this.tell(from, 'You need ' + this.costText(c) + ' for that. Chop some wood' + this.kh('axe') + ' - any island will do.', 'warn'); }
       return false;
     }
     for (const [k, n] of Object.entries(c)) m[k] -= n;
@@ -1131,7 +1221,7 @@ export class Game {
       case 1: return { icon: 'rod', title: 'YOUR FIRST FISH', text: 'Walk down to your dock, right outside your hut. Hold left mouse to cast, click when the bobber goes under, then hold to reel.' };
       case 2: return { icon: 'sell', title: 'SELL IT', text: 'Pim\'s fish stall is right next to your hut. Carry your fish over (F), talk to Pim (E) and sell it.' };
       case 3: return s.boat.built === false
-        ? { icon: 'boat', title: 'BUILD YOUR BOAT', text: `Chop wood (0) and break stone (-) - the Rowboat takes ${this._planNeed()}. Then open the Blueprint Book (=), lay the Rowboat out at the water's edge, and build it piece by piece (G, then E).` }
+        ? { icon: 'boat', title: 'BUILD YOUR BOAT', text: `Chop wood${this.kh('axe')} and break stone${this.kh('pick')} - the Rowboat takes ${this._planNeed()}. Then open the Blueprint Book${this.kh('plans')}, lay the Rowboat out at the water's edge, and build it piece by piece (G, then E).` }
         : { icon: 'boat', title: 'TAKE THE BOAT OUT', text: 'Your boat is tied up at the water. Step aboard and press E at the helm.' };
       case 4: return { icon: 'crown', title: 'THE GUILD', text: 'Visit the Guild Hall up the hill and study the great map with Guildmaster Odessa.' };
       case 5: return { icon: 'eye', title: 'THE FIRST CLUE', text: 'Something has been chewing the little pier on Mirror Lake. Go and have a look (E).' };
@@ -1182,7 +1272,9 @@ export class Game {
     this.fishing.update(dt, I, blocked || P.stunT > 0, fishingActive && P.stunT <= 0);
     this.tools.update(dt, I, blocked || P.stunT > 0);
     this._heldControls(blocked);
-    this._interact(blocked);
+    // looking at something in a shop: E is for buying it, nothing else
+    if (this.showroom.update(dt, I, blocked || P.stunT > 0)) this.ui.prompt(null);
+    else this._interact(blocked);
 
     // host simulation
     const host = this.isHost;
@@ -1219,6 +1311,8 @@ export class Game {
     this.events.update(dt, host);
     this.edge.update(dt, host);
     this.deep.update(dt, host);
+    this.ships.update(dt, host);
+    this.pirateIsle.update(dt, host);
     this.gather.update(dt, host);
     this.build.update(dt, I, blocked);
     this.intro.update(dt, I);
@@ -1382,6 +1476,7 @@ export class Game {
     if (b) {
       s.boatPos = { x: +b.pos.x.toFixed(2), z: +b.pos.z.toFixed(2), h: +b.heading.toFixed(3), docked: b.docked && !b.stolen, hp: Math.round(b.hp) };
       s.boatCargo = this.loot.saveOnBoat(b).slice(0, 60);
+      s.bag = this.loot.saveBag(this.player.id);
     }
     this.state.save();
   }
@@ -1399,7 +1494,11 @@ export class Game {
     if (I.pressedRaw('KeyJ') && !I.blocked && !combo) this.ui.isOpen && this.ui.screen === 'journal' ? this.ui.close() : this.ui.open('journal');
     // M: what is in your pack (there is no map in your pocket - it hangs on the wall of your hut)
     if (I.pressedRaw('KeyM') && !I.blocked && !combo) { this.ui.showMats = !this.ui.showMats; this.audio.click(); }
-    if ((I.pressedRaw('KeyI') || I.pressedRaw('Tab')) && !I.blocked) this.ui.isOpen && this.ui.screen === 'catch' ? this.ui.close() : this.ui.open('catch');
+    // TAB (or I): the inventory, and TAB again closes it
+    if (I.pressedRaw('KeyI') || I.pressedRaw('Tab')) {
+      if (this.ui.screen === 'inv') this.ui.close();
+      else if (!I.blocked && !this.ui.talkEl) this.ui.open('inv', {});
+    }
     if (blocked) return;
     if (I.pressed('KeyB')) this.ui.open('bait');
     // right-click a fish in your hands to make it a favourite (favourites are never sold)
@@ -1409,16 +1508,47 @@ export class Game {
       if (it) { const on = !it.fav; this.act({ t: 'fav', id: it.id, on }); it.fav = on; this.ui.toast(it.fav ? catchName(FISH_BY_ID[it.sp], it.v) + ' is a favourite. It will never be sold.' : 'No longer a favourite.', it.fav ? 'good' : 'info'); this.audio.tone(it.fav ? 1320 : 660, 0.12, 'triangle', 0.08); }
     }
     // hotbar
-    // taking a tool out puts whatever material you were carrying back in the pack
-    const pick = id => { if (!s.tools[id]) { this.ui.toast((TOOL_BY_ID[id]?.name || 'That') + ' - buy it at Melvin\'s.', 'warn'); return; } if (this.fishing.state === 'fight') return; this.build.held = null; this.vm.heldMat = null; P.tool = id; this.vm.setTool(id); this.audio.click(); };
-    if (!combo) for (const T of TOOLS) if (I.pressed(T.key || 'Digit' + T.slot)) pick(T.id);
+    // the hotbar: 1-9 and 0 pick a slot; the same key again puts it away; the wheel steps through what is there
+    const H = this.state.hot;
+    if (!combo) for (let i = 0; i < H.slots.length; i++) if (I.pressed(i === 9 ? 'Digit0' : 'Digit' + (i + 1))) this.hotSelect(i, true);
     if (I.mouse.wheel && this.fishing.state !== 'fight' && P.mode !== 'drive') {
-      const owned = TOOLS.filter(T => s.tools[T.id]);
-      const i = owned.findIndex(T => T.id === P.tool);
-      const n = owned[(i + (I.mouse.wheel > 0 ? 1 : -1) + owned.length) % owned.length];
-      if (n) { this.build.held = null; this.vm.heldMat = null; P.tool = n.id; this.vm.setTool(n.id); }
+      const full = H.slots.map((k, i) => k ? i : -1).filter(i => i >= 0);
+      if (full.length) {
+        const cur = full.indexOf(this.hotIndex());
+        const n = full[((cur < 0 ? (I.mouse.wheel > 0 ? -1 : 0) : cur) + (I.mouse.wheel > 0 ? 1 : -1) + full.length) % full.length];
+        this.hotSelect(n, false);
+      }
     }
   }
+  /** What the player has in their hands right now, as a hotbar key ('rod:<id>', a tool id, or null). */
+  hotKeyNow() {
+    const t = this.player.tool;
+    if (!t || t === 'none') return null;
+    return t === 'rod' ? 'rod:' + this.state.s.rod : t;
+  }
+  hotIndex() { const k = this.hotKeyNow(); return k ? this.state.hot.slots.indexOf(k) : -1; }
+  /** Take out what is in hotbar slot i (or put it away if it is already out and `toggle`). */
+  hotSelect(i, toggle = false) {
+    const P = this.player, s = this.state.s, k = this.state.hot.slots[i];
+    if (this.fishing.state === 'fight') return;
+    this.build.held = null; this.vm.heldMat = null;       // a tool out means the material goes back in the pack
+    if (!k || (toggle && this.hotKeyNow() === k)) {
+      if (P.tool === 'rod') this.fishing.cancel(true);
+      P.tool = 'none'; this.vm.setTool('none'); this.audio.click();
+      return;
+    }
+    if (P.tool === 'rod' && !k.startsWith('rod:')) this.fishing.cancel(true);
+    if (k.startsWith('rod:')) {
+      const id = k.slice(4);
+      if (s.rod !== id) { this.fishing.cancel(true); this.act({ t: 'buy', k: 'equipRod', id }); if (!this.isHost) { s.rod = id; this._rodChanged(); } }
+      P.tool = 'rod'; this.vm.setTool('rod');
+    } else { P.tool = k; this.vm.setTool(k); }
+    this.audio.click();
+  }
+  /** The key that takes out a tool, for hints ('5'), or null if it is not on the hotbar. */
+  hotKeyFor(key) { const i = this.state.hot.slots.indexOf(key); return i < 0 ? null : String((i + 1) % 10); }
+  /** " (3)" when that tool is on hotbar key 3 - for hints - or nothing. */
+  kh(key) { const k = this.hotKeyFor(key); return k ? ' (' + k + ')' : ''; }
 
   _heldControls(blocked) {
     const I = this.input, P = this.player;
@@ -1474,11 +1604,37 @@ export class Game {
       opt.push({ label: 'Climb out', run: () => { if (!P.tryClimb()) UI.toast('Nothing to climb onto here.', 'info'); } });
     }
     else {
+      // locked in a pirate's cage: the bars, when nobody is looking
+      const PI = this.pirateIsle, ci = PI?.ok ? PI.cageAt(P.pos) : -1;
+      if (ci >= 0 && !PI.doorOpen[ci]) {
+        const g = PI.watched(P.pos, 9);
+        opt.push({ label: g ? 'A guard is watching - wait for him to turn away' : 'Force the bars (hold E)', icon: 'cage', run: () => { this._barsT = 0; },
+          hold: dt => {
+            if (PI.watched(P.pos, 9)) { this._barsT = 0; return; }
+            this._barsT = (this._barsT || 0) + dt; this.addShake(0.02);
+            if (Math.random() < dt * 3) this.audio.thunk?.();
+            if (this._barsT > 3.2) { this._barsT = 0; PI._door(ci, true); this.audio.crack?.(); this.ui.toast('The bars give. You are out - keep your head down and get to the stash.', 'good'); }
+          } });
+      }
+      // other people's boats: their crates, their crew, a pirate's bridge on your rail
+      const SH = this.ships;
+      if (SH && SH.list.size && P.mode === 'walk') {
+        const me = this.myId();
+        const br = SH.bridgeAt(P.pos, 1.6) || SH.bridgeAt(look, 1.2);
+        if (br) opt.push({ label: 'Kick the boarding bridge free (hold E)', icon: 'skull', run: () => { this._kickT = 0; }, hold: dt => { this._kickT = (this._kickT || 0) + dt; this.addShake(0.05); if (this._kickT > 1.1) { this._kickT = 0; this.act({ t: 'kickBridge', id: br.S.id, n: 999 }); this.audio.crack?.(); } } });
+        const down = SH.crewNear(P.pos, 1.9).find(h => (h.C.st === 'down' || h.C.bound) && h.C.on);
+        if (down) opt.push(down.C.bound ? { label: 'Throw them over the side', icon: 'wave', run: () => { this.vm.play('throw'); this.act({ t: 'crewTie', id: down.C.id, k: 'throw' }); } }
+          : { label: 'Tie them up', icon: 'hands', run: () => { this.vm.play('hit'); this.act({ t: 'crewTie', id: down.C.id, k: 'tie' }); } });
+        const cg = SH.cargoNear(P);
+        if (cg) opt.push({ label: `Break open the ${cg.cg.kind}` + (cg.S.K.derelict ? '' : ' (their cargo)'), icon: cg.cg.kind === 'chest' ? 'chest' : 'box', run: () => { this.vm.play('swing'); this.audio.crack?.(); this.act({ t: 'crate', ship: cg.S.id, i: cg.cg.i }); } });
+        const talk = !P.held && SH.crewNear(P.pos, 3.2).find(h => h.C.st !== 'down' && !h.C.bound && h.C.st !== 'swim' && !h.C.ship.hostile.has(me) && h.C.ship.K.mood !== 'hostile' && h.C.ship.K.mood !== 'none');
+        if (talk) opt.push({ label: 'Talk to the ' + talk.C.ship.K.name.toLowerCase() + ' crew', icon: 'people', run: () => this._crewTalk(talk.C) });
+      }
       // a kraken arm over the rail comes before everything else
       const arm = this.great.armNear(P.pos);
       if (arm) {
         if (P.tool === 'axe') opt.push({ label: 'CHOP THE TENTACLE!', icon: 'axe', run: () => this._chop(arm) });
-        else opt.push({ label: 'Get your axe out (0) and chop it!', icon: 'axe', run: () => { if (this.fishing.state === 'fight') this.fishing.cancel(); P.tool = 'axe'; this.vm.setTool('axe'); } });
+        else opt.push({ label: 'Get your axe out' + this.kh('axe') + ' and chop it!', icon: 'axe', run: () => { if (this.fishing.state === 'fight') this.fishing.cancel(); P.tool = 'axe'; this.vm.setTool('axe'); } });
       }
       const it = P.held ? this.loot.get(P.held) : null;
       if (it) {
@@ -1609,6 +1765,11 @@ export class Game {
       const cs = this.world.secrets.cacheNear(P.pos) || this.world.secrets.cacheNear(look);
       if (cs) opt.unshift({ label: cs.D.cache + (this.cacheFull(cs.id) ? '' : ' (you have had yours)'), icon: cs.D.icon, run: () => { this.act({ t: 'plunder', id: cs.id }); this.vm.play('throw'); } });
     }
+    // a fish in your hands and nothing better to do with it: into the bag
+    if (!opt.length && P.held && P.mode === 'walk') {
+      const it = this.loot.get(P.held);
+      if (it && !bagRefuses(it)) opt.push({ label: 'Put the ' + FISH_BY_ID[it.sp].name + ' in your bag', icon: 'box', run: () => this.act({ t: 'bagPut', id: it.id }) });
+    }
     const o = opt[0];
     // nothing to press E for: tell them what the axe, pick or book would do here
     let tip = null;
@@ -1626,7 +1787,7 @@ export class Game {
       b.breaks.forEach(x => { const d = Math.hypot(x.x - L.x, x.z - L.z); if (d < bd) { bd = d; best = { c: x.paid ? null : this.breakCost(x), what: 'broken ' + x.kind }; } });
       if (best) {
         const m = s.mats || {}, have = !best.c || Object.entries(best.c).every(([k, n]) => (m[k] || 0) >= n);
-        tip = `<span class="key">${P.tool === 'hammer' ? 'LMB' : '5'}</span>${ic('hammer')} ${P.tool === 'hammer' ? 'Hold to repair the' : 'Hammer out (5) to repair the'} ${best.what}${best.c ? `  -  ${this.costText(best.c)} <span style="opacity:.75">(${have ? 'you have it' : 'you need more: chop some wood'})</span>` : ''}`;
+        tip = `<span class="key">${P.tool === 'hammer' ? 'LMB' : this.hotKeyFor('hammer') || 'TAB'}</span>${ic('hammer')} ${P.tool === 'hammer' ? 'Hold to repair the' : 'Hammer out' + this.kh('hammer') + ' to repair the'} ${best.what}${best.c ? `  -  ${this.costText(best.c)} <span style="opacity:.75">(${have ? 'you have it' : 'you need more: chop some wood'})</span>` : ''}`;
       }
     }
     UI.prompt(o ? `${key}${ic(o.icon || 'hands')} ${o.label}` : tip);
@@ -1681,6 +1842,8 @@ export class Game {
 
   _useX(X) {
     const s = this.state.s;
+    if (X.kind === 'pirateStash') return this._stash();
+    if (X.kind === 'pirateHoard') return this.act({ t: 'hoard' });
     if (X.kind === 'guildmap') { this.ui.open('guild'); if (s.tut === 4) this._tut(5); }
     else if (X.kind === 'bed') { if (this.tod > 0.72 || this.tod < 0.2) this.act({ t: 'sleep' }); else this.ui.toast('It is too early to sleep. Go fishing.', 'info'); }
     else if (X.kind === 'journal') this.ui.open('journal');
@@ -1717,14 +1880,21 @@ export class Game {
     const d = n.def, role = d.role;
     this.audio.tone(220 + Math.random() * 80, 0.12, 'triangle', 0.06);
     if (this.state.s.tut === 0 && d.id === 'gus') this._tut(1);
+    if (d.id === 'gus' && this.state.s.flags.kit === false) this.act({ t: 'kit' });
     n.talking = 5;
     if (role === 'seller') return this._sellerMenu(n, pick(d.say.hello));
     if (role === 'vigil') return this._vigilTalk(n);
     const line = this.npcs.talk(n);
     const opts = [];
-    if (role === 'tackle') opts.push({ label: 'Show me the bait and gear', icon: 'rod', cb: () => this.ui.open('tackle', { shop: 'home' }) });
-    if (role === 'outfitter') opts.push({ label: 'Show me what you sell', icon: 'chest', cb: () => this.ui.open('tackle', { shop: d.shop }) });
-    if (role === 'boatyard') opts.push({ label: 'Let me see the boats', icon: 'boat', cb: () => this.ui.open('boatyard', { yard: d.yard || 'home' }) });
+    if (role === 'tackle' || role === 'outfitter') {
+      const shop = d.shop || 'home';
+      opts.push({ label: 'Where are the rods and the bait?', icon: 'rod', cb: () => this.ui.dialogue(n, 'Right there on the racks and the shelves. Go and have a look - pick one up with your eyes and hold on to it (hold E). The price is on everything.', [{ label: 'Thanks', bye: true }]) });
+      if (GEAR.some(g => (g.shop || 'home') === shop)) opts.push({ label: 'What have you got behind the counter?', icon: 'chest', cb: () => this.ui.open('tackle', { shop }) });
+    }
+    if (role === 'boatyard') {
+      opts.push({ label: 'I want to build a boat', icon: 'plans', cb: () => this.ui.dialogue(n, 'Then have a look at the plans on my tables. Every boat I know how to draw is out there with a little model of her on top. Buy the plans, cut your timber and build her at the water yourself.', [{ label: 'Thanks', bye: true }]) });
+      opts.push({ label: 'Upgrades, paint and repairs', icon: 'wrench', cb: () => this.ui.open('boatyard', { yard: d.yard || 'home' }) });
+    }
     if (role === 'guild') opts.push({ label: 'The Guild Map, please', icon: 'crown', cb: () => { this.ui.open('guild'); if (this.state.s.tut === 4) this._tut(5); } });
     if (d.id === 'gus') {
       const f = this.state.s.flags;
@@ -1750,7 +1920,7 @@ export class Game {
       if (!T) return this.ui.dialogue(n, GUS_INTRO.bye, bye.map(o => ({ ...o, bye: false, cb: () => this.ui.closeTalk() })));
       // the last question is the last thing you say: its follow-up is folded into his answer
       const last = k === order.length - 1;
-      return [{ label: T.q, icon: 'ear', cb: () => say(last && T.more ? [...T.say, ...T.more.say] : T.say, last ? null : T.more, k) }];
+      return [{ label: T.q, icon: 'ear', cb: () => { if (last) this.act({ t: 'kit' }); say(last && T.more ? [...T.say, ...T.more.say] : T.say, last ? null : T.more, k); } }];
     };
     const say = (lines, more, k) => {
       n.talking = 6;
@@ -1793,9 +1963,9 @@ export class Game {
     const opts = [
       { label: 'Sell all fish', icon: 'sell', cb: () => this._dSellAll(n) },
       { label: 'Sell the fish I\'m holding', icon: 'fish', cb: () => this._dSellHeld(n) },
-      { label: 'View fishing rods', icon: 'rod', cb: () => this._dRods(n) },
     ];
-    if (d.extra) opts.push({ label: d.extra.label, icon: d.extra.icon, cb: () => this.ui.open(d.extra.arg, { shop: d.shop }) });
+    if (RODS.some(R => R.shop === d.shop && R.price > 0)) opts.push({ label: 'Do you sell rods?', icon: 'rod', cb: () => this._sellerMenu(n, pick(say.rods) + ' They are on the rack - go and look, and hold E on the one you want.') });
+    if (d.extra && GEAR.some(g => g.shop === d.shop)) opts.push({ label: d.extra.label, icon: d.extra.icon, cb: () => this.ui.open(d.extra.arg, { shop: d.shop }) });
     // a sea beast at their feet: they want it, and they say so
     for (const x of this.sellable(n.pos, false, this.player.id, true).filter(x => FISH_BY_ID[x.sp].beast).slice(0, 2)) {
       const v = this.loot.value(x), nm = FISH_BY_ID[x.sp].name;
@@ -1855,6 +2025,88 @@ export class Game {
     opts.push({ label: 'Back', icon: 'arrow', cb: () => this._sellerMenu(n, pick(say.hello)) });
     const tail = next ? '  Stronger rods than these? ' + SHOPS[next.shop].seller + '.' : '';
     this.ui.dialogue(n, (line || pick(say.rods)) + tail, opts);
+  }
+  /* ---- captured by pirates ---- */
+  /** The pirates have you: black, the voyage, and a cage on Blackflag Isle. Local player. */
+  _captured(why) {
+    if (this.passing || !this.pirateIsle?.ok) return;
+    this.passing = true;
+    const P = this.player;
+    this.fishing.cancel(true);
+    this.dropHeld(P, true);
+    this.ui.closeTalk?.(); if (this.ui.isOpen) this.ui.close();
+    P.boundT = 0;
+    this.ui.fade(true, why === 'guards' ? 'A club, the sand coming up to meet you, and a door slamming.' : 'Rough hands. A sack over your head. Laughing, all round you.');
+    this.audio.thunk?.();
+    setTimeout(() => this.ui.fade(true, 'The creak of a hull. Somebody singing, badly. Hours of it. Then sand under your knees.'), why === 'guards' ? 1600 : 3000);
+    setTimeout(() => {
+      // your gear goes into their stash: nothing on the hotbar, nothing in your hands
+      this.state.confiscate();
+      P.tool = 'none'; this.vm.setTool('none');
+      this.pirateIsle.imprison(P);
+      P.hp = 100; P.breath = P.maxBreath; P.mode = 'walk';
+      this.act({ t: 'captive', on: true });
+      this.world.prebuild(P.pos.x, P.pos.z);
+      this.ui.fade(false);
+      this.ui.banner('CAPTURED', 'A wooden cage on an island no chart shows. Your gear is gone. Force the bars when the guard is not looking (hold E), get your things back out of their stash up in the camp, and get to your boat at their dock.', 'cage', 7);
+      this.audio.eventSting?.();
+      this.passing = false;
+    }, why === 'guards' ? 3200 : 6400);
+  }
+  /** Host: a player has been brought in (or has got away). Their boat goes with them to the pirates' dock. */
+  _hostCaptive(from, on) {
+    const PI = this.pirateIsle;
+    const was = PI.captives[from];
+    PI.captives[from] = on;
+    if (!on) { if (was) this.award('escaped', from); return; }
+    const b = this.boats[0], berth = PI.P?.berth;
+    if (b && berth && !b.absent && (b.driver === from || !this.allPlayers().some(Q => Q.boat === b && !PI.captives[Q.id]))) {
+      for (const Q of this.allPlayers()) if (Q.boat === b) Q.detach?.();
+      b.driver = null; b.autopilot = null; b.stowAnchor?.();
+      b.mooring = berth; const t = b.mooringTarget();
+      b.pos.set(t.x, 0, t.z); b.heading = t.h; b.vel.set(0, 0); b.docked = true; b.sinking = 0; b.water = Math.min(b.water, 0.3);
+      b._updateMatrix();
+      // they help themselves to what was on the deck
+      for (const it of [...this.loot.items.values()]) if (it.boat === b && it.state !== 'cooler' && Math.random() < 0.6) this.loot.remove(it);
+    }
+    this._saveDirty = true;
+  }
+  /** The stash chest in the pirates' storehouse: your things back. */
+  _stash() {
+    if (!this.state.captive) { this.ui.toast('Knives, rope, somebody else\'s boots. Nothing of yours.', 'info'); return; }
+    if (this.pirateIsle.watched(this.player.pos, 8)) { this.ui.toast('A guard is looking right at you.', 'bad'); return; }
+    this.state.release();
+    this.act({ t: 'captive', on: false });
+    this.audio.pickup?.(); this.audio.fanfare?.(1);
+    this.ui.banner('YOUR GEAR', 'Everything they took, back where it belongs. Now get down to the dock.', 'chest', 4);
+  }
+  /** The hoard in the vault: once each, for whoever gets that far. */
+  _hoard(from) {
+    const P = this.playerById(from) || this.player;
+    if (this.claimed('pirate:hoard', from)) { this.tell(from, 'You have had your share. The rest is theirs - for now.', 'info'); return; }
+    this.claim('pirate:hoard', from);
+    const n = 3000 + Math.floor(Math.random() * 3000);
+    this.state.earn(n, 'hoard');
+    this.fx.coins(P.pos.x, P.pos.y + 1.4, P.pos.z, 40); this.audio.fanfare?.(3);
+    const s = this.state.s;
+    if (!s.tools.blunder) { s.tools.blunder = true; this.tell(from, `The pirates' hoard: ${fmtInt(n)} coins - and a Brine Blunderbuss off the pile.`, 'good'); }
+    else this.tell(from, `The pirates' hoard: ${fmtInt(n)} coins.`, 'good');
+    this.award?.('pirates', from);
+    this._saveDirty = true;
+  }
+  /** Who I am to the host (the id my actions arrive under). */
+  myId() { return this.isHost ? this.player.id : (this.net?.selfId || this.player.id); }
+  /** A word with somebody else's crew. */
+  _crewTalk(C) {
+    const K = C.ship.K, say = K.say;
+    const n = { def: { full: K.name + ' - ' + C.role[0].toUpperCase() + C.role.slice(1), say: { bye: ['Fair winds.', 'Mind how you go.', 'Off with you, then.'] } }, talking: 5, pos: this.ships.crewPos(C) };
+    const hello = pick(say.hello || ['...']);
+    const opts = [];
+    if (say.tip) opts.push({ label: 'Any advice out here?', icon: 'ear', cb: () => this.ui.dialogue(n, pick(say.tip), [{ label: 'Thanks.', bye: true }]) });
+    if (K.charts) opts.push({ label: 'Could I copy your chart?', icon: 'map', cb: () => { const P = this.player; const k = this.isles.reveal(P.pos.x, P.pos.z, 1100); this.ui.dialogue(n, k ? 'Go on, then. Hold it up to the light - there. That is everything we have surveyed round here.' : 'You have already got all of it, by the look of yours.', [{ label: 'Much obliged.', bye: true }]); this._saveDirty = true; } });
+    opts.push({ label: 'Just passing.', bye: true });
+    if (!this.isHost) this.act({ t: 'crewTalk', id: C.id, line: hello }); else this.ships._say(C, hello);
+    this.ui.dialogue(n, hello, opts);
   }
   _vigilTalk(n) {
     const line = this.npcs.talk(n);
@@ -2030,7 +2282,7 @@ export class Game {
   /* ================= bus: reactions ================= */
   _bus() {
     Bus.on('boat:sink', ({ boat }) => {
-      if (!this.isHost) return;
+      if (!this.isHost || boat.npc) return;
       this.state.s.stats.sunk++;
       for (const P of this.allPlayers()) if (P.boat === boat) {
         if (P === this.player) { P.detach(); P.mode = 'swim'; P.vel.set((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3); }
@@ -2044,7 +2296,7 @@ export class Game {
       this.state.spend(Math.min(fee, this.state.s.money));
       this._everyone({ t: 'radio', text: `Radio: Marge here. Towed your boat home. That will be ${fee} coins, thank you very much.` });
     });
-    Bus.on('boat:fire', () => { if (this.isHost) this.state.s.stats.fires++; });
+    Bus.on('boat:fire', ({ boat }) => { if (this.isHost && !boat?.npc) this.state.s.stats.fires++; });
     Bus.on('boat:break', ({ boat, b }) => { if (this.player.boat === boat) this.ui.toast({ rail: 'A section of rail just snapped - careful near the edge!', wheel: 'The wheel is jammed - she will barely turn. Hammer it!', engine: 'The engine is smashed - half power. Hammer it!', mount: 'The harpoon gun is jammed!' }[b.kind], 'bad'); });
     Bus.on('boat:leak', ({ boat }) => { if (this.player.boat === boat) this.ui.toast('The hull cracked - a leak! Use the hammer on it.', 'bad'); });
     Bus.on('boat:crash', ({ boat, force }) => {
@@ -2081,7 +2333,7 @@ export class Game {
   worldSnapshot() {
     return {
       tod: +this.tod.toFixed(4), day: this.state.s.day, wt: +this.world.time.toFixed(2),
-      boats: this.boats.map(b => b.snapshot()), loot: this.loot.snapshot(), cr: this.creatures.snapshot(), ev: this.events.snapshot(), gr: this.great.snapshot(), bs: this.beasts.snapshot(), oc: this.ocean.snapshot(),
+      boats: this.boats.map(b => b.snapshot()), sh: this.ships.snapshot(), pg: this.pirateIsle.snapshot(), loot: this.loot.snapshot(), cr: this.creatures.snapshot(), ev: this.events.snapshot(), gr: this.great.snapshot(), bs: this.beasts.snapshot(), oc: this.ocean.snapshot(),
       traps: [...this.tools.traps.values()].map(({ mesh, ...o }) => o), holes: [...this.tools.holes.values()].map(({ mesh, ...o }) => o),
       holders: this.boats.map(b => (b.holders || []).map(h => +(h.bite > 0))),
       ed: this.edge.snapshot(), mp: this.gather.snapshot(),
@@ -2091,7 +2343,9 @@ export class Game {
     if (!this.running || !this.creatures) return;
     this.tod = w.tod;
     this.world.time += (w.wt - this.world.time) * 0.2;
-    for (const s of w.boats) { const b = this.boatById(s.id); if (b) b.applySnapshot(s, dt); }
+    for (const s of w.boats) { const b = this.boats.find(x => x.id === s.id); if (b) b.applySnapshot(s, dt); }
+    if (w.sh) this.ships.applySnapshot(w.sh, dt);
+    if (w.pg) this.pirateIsle.applySnapshot(w.pg);
     this.loot.applySnapshot(w.loot);
     this.creatures.applySnapshot(w.cr, dt);
     this.events.applySnapshot(w.ev);
@@ -2138,6 +2392,11 @@ export class Game {
     switch (e.t) {
       case 'toast': this.ui.toast(e.text, e.kind); break;
       case 'radio': this.ui.radio(e.text); break;
+      case 'ship': this.ships.onEvent(e); break;
+      case 'gunfx': { const o = new THREE.Vector3(...e.o); this.fx.sparks(o.x, o.y, o.z, 8, 0xffd070); this.fx.smoke(o.x, o.y, o.z, 0xc8c0b0); this.audio.noise?.(e.p ? 0.3 : 0.16, 0.4 * Math.max(0, 1 - o.distanceTo(this.player.pos) / 150), 'lowpass', 1200, 1, 0.3); break; }
+      case 'captured': this._captured(e.why); break;
+      case 'bind': this.player.boundT = e.dur; this.ui.banner('TIED UP', 'A pirate has tied your hands. Struggle free - hammer E - or wait for a crewmate to cut you loose.', 'rope', 3); break;
+      case 'unbind': this.player.boundT = 0; this.ui.toast('Free!', 'good'); break;
       case 'banner': this.ui.banner(e.title, e.sub, e.icon); break;
       case 'secret': { const D = SECRET_BY_ID[e.id]; if (D) { this.ui.banner(D.name.toUpperCase(), D.found, D.icon, 6); this.audio.eventSting('zone'); this.audio.fanfare(2); } break; }
       case 'card': this._showCard(e.card); break;
@@ -2214,7 +2473,7 @@ export class Game {
       }
       case 'krakenGlimpse': this.audio.groan(0.6); this.addShake(0.2); break;
       case 'krakenAttack': {
-        this.ui.banner('THE BOAT IS BEING ATTACKED', e.first ? 'Something has grabbed the boat. Get your axe out (0) and chop the arms - walk up and press E!' : 'IT IS BACK. Axe out - chop the arms!', 'tentacle', 5);
+        this.ui.banner('THE BOAT IS BEING ATTACKED', e.first ? 'Something has grabbed the boat. Get your axe out' + this.kh('axe') + ' and chop the arms - walk up and press E!' : 'IT IS BACK. Axe out - chop the arms!', 'tentacle', 5);
         this.audio.shriek(0.8); this.addShake(1); this.audio.crash();
         this.chat.system('Something has grabbed the boat!');
         break;
@@ -2301,6 +2560,24 @@ export class Game {
       case 'trophyPick': if (this.ui.data.slot != null) this.act({ t: 'trophyPick', slot: this.ui.data.slot, sp: arg }); break;
       case 'talkMore': { const n = this.npcs.byId(arg); if (n) this._talk(n); break; }
       case 'favToggle': { const it = this.loot.get(arg); if (it) { const on = !it.fav; this.act({ t: 'fav', id: it.id, on }); it.fav = on; this.audio.tone(it.fav ? 1320 : 660, 0.12, 'triangle', 0.08); } break; }
+      // the inventory
+      case 'bagTake': this.act({ t: 'bagTake', id: arg }); if (!this.isHost) this.player.held = arg; this.ui.close(); break;
+      case 'bagPut': this.act({ t: 'bagPut', id: arg }); break;
+      case 'hotOn': { const H = this.state.hot, i = H.slots.indexOf(null); if (i >= 0 && !H.slots.includes(arg)) H.slots[i] = arg; else if (i < 0) this.ui.toast('The hotbar is full. Drag something off it first.', 'warn'); this._saveDirty = true; this.ui.hotbar(); break; }
+      case 'hotOff': { const H = this.state.hot, i = H.slots.indexOf(arg); if (i >= 0) H.slots[i] = null; if (this.hotKeyNow() === arg) { this.player.tool = 'none'; this.vm.setTool('none'); } this._saveDirty = true; this.ui.hotbar(); break; }
+      case 'invUse': {
+        // take it out: onto the hotbar if it is not there yet, then into your hands
+        const H = this.state.hot;
+        let i = H.slots.indexOf(arg);
+        if (i < 0) { i = H.slots.indexOf(null); if (i >= 0) H.slots[i] = arg; }
+        if (i >= 0) this.hotSelect(i, false);
+        else if (arg.startsWith('rod:')) { this.act({ t: 'buy', k: 'equipRod', id: arg.slice(4) }); this.player.tool = 'rod'; this.vm.setTool('rod'); }
+        else { this.player.tool = arg; this.vm.setTool(arg); }
+        this.ui.close();
+        break;
+      }
+      case 'invBait': buy('setBait', arg); if (!this.isHost) this.state.s.bait = arg; break;
+      case 'invMat': this.ui.close(); this.player.tool = 'none'; this.vm.setTool('none'); this.build.cycleHeld(arg); break;
       case 'adm': {
         // split on the first colon only: teleport ids like isle:whisper have one of their own
         const str = String(arg), ci = str.indexOf(':');

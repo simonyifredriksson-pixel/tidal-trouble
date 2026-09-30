@@ -16,8 +16,8 @@
           `solid` gives it a collider. */
 
 export const MATS = [
-  { id: 'wood', name: 'Wood', col: 0x8a5a36, icon: 'log', from: 'Chop trees with the axe (0). Fallen logs and stumps give a little too.' },
-  { id: 'stone', name: 'Stone', col: 0x8e8e88, icon: 'stone', from: 'Break rocks with the pickaxe (-).' },
+  { id: 'wood', name: 'Wood', col: 0x8a5a36, icon: 'log', from: 'Chop trees with the axe. Fallen logs and stumps give a little too.' },
+  { id: 'stone', name: 'Stone', col: 0x8e8e88, icon: 'stone', from: 'Break rocks with the pickaxe.' },
   { id: 'fibre', name: 'Fibre', col: 0x9ab04a, icon: 'fibre', from: 'Cut bushes, ferns, reeds and mushrooms with the axe.' },
   { id: 'crystal', name: 'Crystal', col: 0x9ae8f0, icon: 'crystal', from: 'Chip it off the crystal spires of the Crystal Reef with the pickaxe.' },
   { id: 'glass', name: 'Glass', col: 0xcfefff, icon: 'glass', from: 'Melt 3 stone and 1 fibre into 2 panes at a campfire or a workbench.' },

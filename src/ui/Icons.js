@@ -134,6 +134,17 @@ const I = {
   dock: [P('M2 26 L46 26 L46 32 L2 32Z', W1), P('M2 32 L46 32 L46 34 L2 34Z', W3), P('M10 34 L14 34 L14 44 L10 44Z', W2), P('M34 34 L38 34 L38 44 L34 44Z', W2), P('M2 40 Q14 36 24 42 Q36 46 46 40 L46 46 L2 46Z', B2)],
   hut: [P('M4 22 L24 6 L44 22Z', W3), P('M4 22 L24 6 L24 22Z', W2), P('M8 22 L40 22 L40 42 L8 42Z', W1), P('M8 22 L24 22 L24 42 L8 42Z', W2), P('M19 30 L29 30 L29 42 L19 42Z', K2), P('M4 42 L44 42 L44 46 L4 46Z', M2)],
   build: [P('M6 42 L14 34 L18 38 L10 46Z', W2), P('M14 34 L34 14 L38 18 L18 38Z', W1), P('M30 6 L44 10 L40 22 L32 18 L34 14Z', M2), P('M30 6 L44 10 L42 14 L33 11Z', M1), P('M4 30 L16 30 L16 34 L4 34Z', 'none')],
+  // weapons
+  pistol: [P('M6 30 L14 22 L20 24 L14 34 L8 38Z', W2), P('M6 30 L14 22 L15 25 L8 33Z', W1), P('M14 22 L42 14 L43 18 L16 26Z', K1), P('M14 22 L42 14 L42 16 L15 24Z', M2),
+    P('M18 26 L24 24 L26 30 L22 32Z', K2), P('M8 38 L14 34 L15 39 L10 42Z', G2), P('M20 18 L24 16 L26 21 L22 22Z', K2)],
+  blunder: [P('M4 36 L16 26 L22 30 L10 40Z', W2), P('M4 36 L16 26 L17 29 L6 38Z', W1), P('M16 26 L36 14 L38 18 L18 30Z', G2), P('M16 26 L36 14 L36 16 L17 28Z', G1),
+    P('M34 10 L44 6 L46 18 L38 20Z', G2), P('M34 10 L44 6 L44 9 L36 12Z', G1), P('M38 20 L46 18 L44 21Z', G3)],
+  cutlass: [P('M10 38 L36 8 L40 6 L38 11 L13 41Z', M1), P('M13 41 L38 11 L40 12 L15 43Z', M2), P('M6 34 L16 40 L14 44 L4 38Z', G2), P('M6 44 L12 38 L14 40 L8 46Z', W3),
+    P('M16 34 Q8 42 12 46', 'none'), P('M4 38 L6 34 L8 36Z', G1)],
+  pin: [P('M8 42 L30 20 L34 24 L12 46Z', W2), P('M8 42 L30 20 L31 22 L10 44Z', W1), P('M28 16 L36 8 L44 16 L36 24Z', W2), P('M28 16 L36 8 L38 10 L30 18Z', W1), P('M36 24 L44 16 L43 20 L38 25Z', W3)],
+  cannon: [P('M6 24 L34 14 L38 24 L10 32Z', K1), P('M6 24 L34 14 L35 17 L8 27Z', K2), P('M34 12 L42 10 L44 24 L38 26Z', K2), P('M10 32 L30 26 L32 38 L12 42Z', W2), P('M14 36 A6 6 0 1 0 14.01 36Z', W3), P('M28 34 A5 5 0 1 0 28.01 34Z', W3)],
+  cage: [P('M8 10 L40 10 L40 14 L8 14Z', W2), P('M8 40 L40 40 L40 44 L8 44Z', W3), P('M10 14 L13 14 L13 40 L10 40Z', W1), P('M18 14 L21 14 L21 40 L18 40Z', W1), P('M26 14 L29 14 L29 40 L26 40Z', W1), P('M34 14 L37 14 L37 40 L34 40Z', W1), P('M20 24 L28 24 L28 30 L20 30Z', G2)],
+  key: [P('M6 22 A9 9 0 1 0 6.01 22Z', G2), P('M10 22 A4 4 0 1 0 10.01 22Z', K2), P('M20 20 L44 20 L44 25 L20 25Z', G2), P('M20 20 L44 20 L44 22 L20 22Z', G1), P('M36 25 L40 25 L40 31 L36 31Z', G3), P('M30 25 L33 25 L33 29 L30 29Z', G3)],
 };
 
 export function ic(name, cls = '') {
@@ -143,7 +154,7 @@ export function ic(name, cls = '') {
 export const ICON_NAMES = Object.keys(I);
 
 /* Which icon stands for what. */
-export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe', pick: 'pick', plans: 'plans' };
+export const TOOL_ICON = { rod: 'rod', harpoon: 'harpoon', net: 'net', trap: 'trap', hammer: 'hammer', bucket: 'bucket', camera: 'camera', grapple: 'grapple', auger: 'auger', axe: 'axe', pick: 'pick', plans: 'plans', pistol: 'pistol', blunder: 'blunder', cutlass: 'cutlass', pin: 'pin' };
 export const EVENT_ICON = { storm: 'storm', migration: 'school', giant: 'fin', thief: 'mask', whirlpool: 'whirl', meteor: 'meteor' };
 export const REGION_ICON = { home: 'pine', frost: 'mountain', tropic: 'palm', open: 'wave', black: 'abyss', reach: 'light',
   whisper: 'pine', sunscar: 'volcano', skywatch: 'cliff', crystal: 'crystal', frostfall: 'mountain', dread: 'swamp', ironwreck: 'wreck', lost: 'ghost',

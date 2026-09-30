@@ -208,6 +208,26 @@ export class Character {
       hb.color(hc).blob(0.25, 0.2, 0.25, 0, 0.14, 0, 8, 4, 0.12);
     } else if (L.hat === 'hood') {
       hb.color(hc).blob(0.25, 0.27, 0.25, 0, 0.05, -0.03, 8, 4);
+    } else if (L.hat === 'tricorn') {
+      // a pirate's three-cornered hat: a crown, and a brim turned up into three points
+      hb.color(hc).cyl(0.2, 0.225, 0.14, 0.3, 8, true);
+      for (let k = 0; k < 3; k++) {
+        const a = k / 3 * Math.PI * 2 + Math.PI / 2, b2 = a + Math.PI * 2 / 3;
+        hb.color(shadeHex(hc, 0.9)).card([Math.cos(a) * 0.36, 0.2, Math.sin(a) * 0.36], [Math.cos(b2) * 0.36, 0.2, Math.sin(b2) * 0.36], [Math.cos((a + b2) / 2) * 0.2, 0.3, Math.sin((a + b2) / 2) * 0.2]);
+        hb.color(shadeHex(hc, 0.75)).card([Math.cos(a) * 0.36, 0.2, Math.sin(a) * 0.36], [Math.cos(b2) * 0.36, 0.2, Math.sin(b2) * 0.36], [Math.cos((a + b2) / 2) * 0.23, 0.14, Math.sin((a + b2) / 2) * 0.23]);
+      }
+      hb.color(0xd8c070).box(0.06, 0.05, 0.02, 0, 0.24, 0.34);
+      if (L.skullHat) { hb.color(0xf0ece0).blob(0.035, 0.035, 0.012, 0, 0.26, 0.345, 5, 3); }
+    } else if (L.hat === 'bandana') {
+      hb.color(hc).lathe([[0.226, 0.1], [0.228, 0.2], [0.2, 0.28], [0.12, 0.33], [0, 0.345]], 10);
+      hb.color(shadeHex(hc, 0.8)).blob(0.06, 0.05, 0.05, 0.02, 0.14, -0.23, 5, 3);
+      hb.color(hc).card([0.02, 0.14, -0.24], [0.1, -0.05, -0.28], [-0.02, -0.02, -0.26]);
+      hb.color(0xf0ece0); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; hb.blob(0.014, 0.014, 0.006, Math.sin(a) * 0.2, 0.22, Math.cos(a) * 0.2, 4, 2); }
+    }
+    // an eye patch on a string
+    if (L.patch) {
+      hb.color(0x1a1a1a).blob(0.05, 0.045, 0.015, 0.08, 0.07, 0.215, 6, 3);
+      hb.color(0x1a1a1a).beam([-0.2, 0.14, 0.05], [0.03, 0.11, 0.21], 0.01, 0.01); hb.beam([0.13, 0.08, 0.2], [0.2, 0.03, 0.02], 0.01, 0.01);
     }
     this.headMesh = mesh(hb);
     this.head.add(this.headMesh);

@@ -64,6 +64,16 @@ export function carryPose(it, pos, eye, yaw, pitch, world) {
   return { pos: p, yaw: yaw + Math.PI / 2, roll: sp?.beast ? 0 : Math.PI / 2, style: st };
 }
 const inHold = (b, L) => { const H = b.hull.hold; return !!H && L.y > H.floor - 0.4 && L.y < b.deck && Math.abs(L.x) < H.hw && L.z > H.z0 && L.z < H.z1; };
+/* The bag: what you catch goes straight into it - anything you could carry in your hands.
+   The odd ones keep their moment on the deck (a bomb, a puffer, an eel, a chest, a message in a bottle). */
+export const BAG_CAP = 30, BAG_KG = 40;
+const BAG_NOT = new Set(['bomb', 'puffer', 'mimic', 'chest', 'bottle', 'map', 'coins', 'page', 'salvage', 'strongbox', 'eel', 'sting', 'slap', 'baitsack', 'mats', 'chart', 'weapon']);
+export function bagRefuses(it) {
+  const sp = FISH_BY_ID[it.sp];
+  if (!sp || sp.beast || BAG_NOT.has(sp.beh)) return 'odd';
+  if (it.kg > BAG_KG) return 'big';
+  return null;
+}
 
 export class Loot {
   constructor(game) {
@@ -160,10 +170,38 @@ export class Loot {
     return n;
   }
 
+  /** What is in this player's bag. */
+  bagOf(pid) {
+    const out = [];
+    for (const it of this.items.values()) if (it.state === 'bag' && it.bagOf === pid) out.push(it);
+    return out;
+  }
+  /** Into the bag (host). `fly` makes it arc up to the player first. Returns null or why not. */
+  toBag(it, pid, fly = false) {
+    const why = bagRefuses(it);
+    if (why) return why;
+    if (this.bagOf(pid).length >= BAG_CAP) return 'full';
+    if (it.held) { const P = this.game.playerById(it.held); if (P && P.held === it.id) P.held = null; }
+    it.held = null; it.boat = null;
+    if (fly) { it.fly = { pid, t: 0, from: it.pos.clone() }; return null; }
+    it.state = 'bag'; it.bagOf = pid; it.mesh.visible = false; it.pos.y = -500;
+    return null;
+  }
+  /** Out of the bag and into your hands (host). */
+  fromBag(it, pid) {
+    if (!it || it.state !== 'bag' || it.bagOf !== pid) return false;
+    const P = this.game.playerById(pid);
+    if (!P || P.held) return false;
+    it.state = 'free'; it.bagOf = null; it.mesh.visible = true;
+    it.pos.copy(P.pos).add(_v.set(0, 1.2, 0)); it.vel.set(0, 0, 0);
+    it.held = pid; P.held = it.id;
+    return true;
+  }
+
   nearest(pos, r = 2.5, filter = null) {
     let best = null, bd = r;
     for (const it of this.items.values()) {
-      if (it.held || it.state === 'cooler') continue;
+      if (it.held || it.state === 'cooler' || it.state === 'bag' || it.fly) continue;
       if (filter && !filter(it)) continue;
       const d = it.pos.distanceTo(pos) - it.r * 0.5;
       if (d < bd) { bd = d; best = it; }
@@ -221,13 +259,17 @@ export class Loot {
     for (const it of [...this.items.values()]) {
       it.t += dt;
       it.shockT = Math.max(0, it.shockT - dt);
+      // the bag is wet and dark: in there a fish lives as long as it would in a cooler
+      const kept = it.state === 'cooler' || it.state === 'bag';
       if (host && it.alive) {
-        if (it.state === 'cooler') it.cool -= dt; else it.air -= dt;
-        if (it.air <= 0 || it.cool <= 0) this.kill(it, it.state === 'cooler' ? 'cooler' : 'air');
+        if (kept) it.cool -= dt; else it.air -= dt;
+        if (it.air <= 0 || it.cool <= 0) this.kill(it, kept ? it.state : 'air');
       }
       this._star(it);
+      if (it.fly) { if (host) this._fly(it, dt); else this._pose(it); continue; }
+      if (it.crewCarry) { it.mesh.visible = true; continue; }     // in a pirate's arms (Ships moves it)
       if (it.held) { this._held(it); continue; }
-      if (it.state === 'cooler') { it.mesh.visible = false; continue; }
+      if (kept) { it.mesh.visible = false; continue; }
       it.mesh.visible = true;
       if (!host) { this._pose(it); continue; }
       if (it.boat) this._simBoat(it, dt);
@@ -235,6 +277,25 @@ export class Loot {
       this._behave(it, dt);
       if (this.items.has(it.id)) this._pose(it);
     }
+  }
+
+  /** A catch on its way into someone's bag: a quick arc up to them, shrinking as it goes. */
+  _fly(it, dt) {
+    const F = it.fly, P = this.game.playerById(F.pid);
+    F.t += dt / 0.55;
+    if (!P || F.t >= 1) {
+      it.fly = null;
+      if (P) { it.state = 'bag'; it.bagOf = F.pid; it.mesh.visible = false; it.pos.y = -500; it.mesh.scale.setScalar(it.baseScale); this.game.audio?.pickup?.(); }
+      return;
+    }
+    const k = F.t * F.t * (3 - 2 * F.t);
+    const to = _w.copy(P.pos).setY(P.pos.y + 1.1);
+    it.pos.lerpVectors(F.from, to, k);
+    it.pos.y += Math.sin(k * Math.PI) * 1.4;
+    it.yaw += dt * 9; it.roll = Math.PI / 2;
+    it.mesh.visible = true;
+    this._pose(it);
+    it.mesh.scale.setScalar(it.baseScale * (1 - k * 0.85));
   }
 
   _held(it) {
@@ -424,21 +485,24 @@ export class Loot {
     const out = [];
     for (const it of this.items.values()) {
       out.push([it.id, it.sp, +it.kg.toFixed(2), Math.round(it.cm), +it.pos.x.toFixed(2), +it.pos.y.toFixed(2), +it.pos.z.toFixed(2), +it.yaw.toFixed(2), +it.roll.toFixed(2),
-        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone, it.fav ? 1 : 0, it.alive ? 1 : 0, Math.round(it.state === 'cooler' ? it.cool : it.air)]);
+        it.boat ? it.boat.id : 0, it.held || 0, it.state === 'cooler' ? 1 : it.state === 'bag' ? 2 : 0, it.opened ? 1 : 0, +it.puff.toFixed(2), it.fuse > 0 ? 1 : 0, it.stunned ? 1 : 0, it.v || 0, +it.mult.toFixed(2), it.zone, it.fav ? 1 : 0, it.alive ? 1 : 0, Math.round(it.state === 'cooler' || it.state === 'bag' ? it.cool : it.air), it.bagOf || (it.fly ? it.fly.pid : 0), it.fly ? 1 : 0]);
     }
     return out;
   }
   applySnapshot(arr) {
     const seen = new Set();
     for (const a of arr) {
-      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone, fav, alive, left] = a;
+      const [id, sp, kg, cm, x, y, z, yaw, roll, boatId, held, cool, opened, puff, fuse, stunned, v, mult, zone, fav, alive, left, bagOf, flying] = a;
       seen.add(id);
       let it = this.items.get(id);
       if (!it) it = this.spawn({ id, sp, kg, cm, pos: _v.set(x, y, z), flop: 0, v: v || null, mult: mult || 1, zone: zone || 0 });
       if (!it) continue;
       it.pos.lerp(_w.set(x, y, z), 0.5);
       it.yaw = yaw; it.roll = roll; it.boat = boatId ? this.game.boatById(boatId) : null;
-      it.held = held || null; it.state = cool ? 'cooler' : 'free'; it.puff = puff; it.stunned = !!stunned; it.fav = !!fav;
+      it.held = held || null; it.state = cool === 2 ? 'bag' : cool ? 'cooler' : 'free'; it.puff = puff; it.stunned = !!stunned; it.fav = !!fav;
+      it.bagOf = cool === 2 ? bagOf : null;
+      it.fly = flying ? (it.fly || { pid: bagOf, t: 0, from: it.pos.clone() }) : null;
+      if (it.fly) { it.fly.t = Math.min(0.95, it.fly.t + 0.05); it.mesh.scale.setScalar(it.baseScale * (1 - it.fly.t * 0.8)); }
       it.alive = !!alive; if (cool) it.cool = left; else it.air = left;
       if (!!opened !== it.opened) { it.opened = !!opened; this._mesh(it); }
       if (fuse && Math.random() < 0.5) this.game.fx.sparks(x, y + 0.2, z, 1, 0xffd24a);
@@ -457,6 +521,18 @@ export class Loot {
       it.boat = boat; it.local.set(o.x, Math.max(o.y, boat.deck + 0.05), o.z); it.vel.set(0, 0, 0);
       if (o.c) { it.state = 'cooler'; it.mesh.visible = false; }
       it.roll = Math.PI / 2;
+    }
+  }
+
+  /** The host player's bag, for the save. */
+  saveBag(pid) {
+    return this.bagOf(pid).map(it => ({ sp: it.sp, kg: it.kg, cm: it.cm, m: it.mult, v: it.v, zn: it.zone, f: it.fav ? 1 : 0, d: it.dried ? 1 : 0, a: it.alive ? 1 : 0, cl: Math.round(it.cool) }));
+  }
+  loadBag(pid, list) {
+    for (const o of list || []) {
+      const it = this.spawn({ sp: o.sp, kg: o.kg, cm: o.cm, pos: _v.set(0, -500, 0), flop: 0, mult: o.m, v: o.v, zone: o.zn, fav: !!o.f, dried: !!o.d, alive: !!o.a, cool: o.cl });
+      if (!it) continue;
+      it.state = 'bag'; it.bagOf = pid; it.mesh.visible = false;
     }
   }
 

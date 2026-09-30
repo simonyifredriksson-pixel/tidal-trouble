@@ -90,12 +90,19 @@ export function speciesWeights(ctx) {
     // rarity leans rarer with every zone, but beyond the Abyss it flattens out
     // (the far species are already rare and valuable in their own right)
     const zr = z <= 4 ? z : 4 + (z - 4) * 0.35;
-    const rs = { common: 1 - 0.14 * zr, uncommon: 1 + 0.3 * zr, rare: 1 + 0.65 * zr, epic: 1 + 1.1 * zr, legendary: 1 + 1.5 * zr, junk: 1 - 0.1 * zr }[f.rarity] ?? 1;
+    const rs = { common: 1 - 0.14 * zr, uncommon: 1 + 0.3 * zr, rare: 1 + 0.65 * zr, epic: 1 + 1.1 * zr, legendary: 1 + 1.5 * zr, mythical: 1, junk: 1 - 0.1 * zr }[f.rarity] ?? 1;
     w *= Math.max(0.25, rs);
     list.push({ f, w: w * aff * tm });
   }
+  // a mythical fish is exactly one bite in four hundred wherever it lives, whatever else is biting
+  const myth = list.filter(e => e.f.rarity === 'mythical');
+  if (myth.length) {
+    const rest = list.reduce((a, e) => a + (e.f.rarity === 'mythical' ? 0 : e.w), 0);
+    for (const e of myth) e.w = rest * MYTHIC_CHANCE / (1 - MYTHIC_CHANCE) / myth.length;
+  }
   return list;
 }
+export const MYTHIC_CHANCE = 0.0025;
 
 export function rollCatch(sp, r = Math.random, luck = 0, zone = 0) {
   const s = rollSize(r, luck + zone * 0.3);
@@ -386,7 +393,7 @@ export class Fishing {
     const sizeF = c.size ?? 0.5;
     const F = sp.fight;
     const rod = this.rod;
-    const TIER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, giant: 5, junk: 0 };
+    const TIER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, giant: 5, mythical: 5, junk: 0 };
     let tier = sp.lev ? 6 : TIER[sp.rarity] ?? 0;
     const zone = c.zone || 0;
     // how hard it fights, against how much the rod can hold

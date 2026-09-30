@@ -123,6 +123,11 @@ function stretch(H, W, L) {
 stretch(HULLS.find(h => h.id === 'expedition'), 3.4, 9.8);
 for (const H of HULLS) { H.anchor = H.anchor || ANCHOR_AT[H.id] || [0, H.hl * 0.7]; H.windage = H.windage ?? (H.engine === 'sail' ? 1.6 : 1); }
 export const HULL_BY_ID = Object.fromEntries(HULLS.map(h => [h.id, h]));
+/* The pirates' own ship: the Wanderer's frame, faster, meaner, a raised stern and gun ports.
+   Never for sale, never in a yard, never in HULLS - only ever under a black flag. */
+HULL_BY_ID.galley = { ...HULL_BY_ID.wayfarer, id: 'galley', name: 'Pirate Galley', tier: 9, price: 0, yard: null, npc: true,
+  speed: 16, accel: 3.2, turn: 0.6, hp: 1900, mass: 17000, hold: null, windage: 1.2,
+  blurb: 'Black sails, a skull the size of a door, and six guns.' };
 
 /* Parts: a level per boat, carried over when you buy a new hull (capped). */
 export const PARTS = [
@@ -186,6 +191,15 @@ export const PAINTS = [
   { id: 'bubblegum', name: 'Bubblegum', price: 600, hull: 0xf08ab8, trim: 0xffffff },
 ];
 export const PAINT_BY_ID = Object.fromEntries(PAINTS.map(p => [p.id, p]));
+// colours only other people's boats wear
+Object.assign(PAINT_BY_ID, {
+  rust: { id: 'rust', name: 'Rust', price: 0, hull: 0x7a4a2e, trim: 0xb8a890, npc: true },
+  royal: { id: 'royal', name: 'Royal', price: 0, hull: 0xf2eee2, trim: 0xc8a040, npc: true },
+  navy: { id: 'navy', name: 'Navy', price: 0, hull: 0x22305a, trim: 0xd8d0b8, npc: true },
+  weathered: { id: 'weathered', name: 'Weathered', price: 0, hull: 0x6a6a64, trim: 0x8a8478, npc: true },
+  slate: { id: 'slate', name: 'Slate', price: 0, hull: 0x3e4650, trim: 0xc8b048, npc: true },
+  pirate: { id: 'pirate', name: 'Black Gull', price: 0, hull: 0x1a1614, trim: 0x7a1e1a, npc: true },
+});
 
 export const DECOR = [
   { id: 'flag', name: 'Guild Pennant', price: 100, blurb: 'A little flag on a pole. Very official.' },

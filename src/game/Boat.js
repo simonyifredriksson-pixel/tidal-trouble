@@ -222,7 +222,7 @@ export class Boat {
 
   /* ---------------- simulation (host) ---------------- */
   /** Not built yet (a new castaway has only the plans): not in the water, not boardable. */
-  get absent() { return this.game.state?.s?.boat?.built === false; }
+  get absent() { return !this.npc && this.game.state?.s?.boat?.built === false; }
   simulate(dt, world) {
     if (this.absent) { this.group.visible = false; return; }
     this.group.visible = true;
@@ -589,7 +589,8 @@ export class Boat {
     this.pitch += dt * 0.12;
     this.roll += dt * 0.08;
     this._updateMatrix();
-    if (this.sinking > 7) this.respawn(true);
+    // somebody else's boat just goes down; yours is towed home by Marge
+    if (this.sinking > 7 && !this.npc) this.respawn(true);
   }
 
   respawn(towed = false) {

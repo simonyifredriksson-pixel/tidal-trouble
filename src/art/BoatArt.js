@@ -208,10 +208,12 @@ export function buildBoat(cfg) {
       for (const [y0, y1, w] of [[tall * 0.44, tall * 0.76, 3.2], [tall * 0.8, tall * 0.98, 2.4]]) {
         for (let k = 0; k < 6; k++) {
           const xa = -w + k * w / 3, xb = xa + w / 3, bulge = 0.5;
-          sg.color(k % 2 ? 0xf2ead4 : 0xe6dcc0).card([xa, y1, 0], [xb, y1, 0], [xb, y0, bulge * (1 - Math.abs(k - 2.5) / 3)], [xa, y0, bulge * (1 - Math.abs(k - 2.5) / 3)]);
+          // the pirates' sails are black, and torn at the foot
+          const blk = H.id === 'galley', y0k = blk && k % 2 ? y0 + 0.5 : y0;
+          sg.color(blk ? (k % 2 ? 0x1c1816 : 0x262120) : k % 2 ? 0xf2ead4 : 0xe6dcc0).card([xa, y1, 0], [xb, y1, 0], [xb, y0k, bulge * (1 - Math.abs(k - 2.5) / 3)], [xa, y0, bulge * (1 - Math.abs(k - 2.5) / 3)]);
         }
       }
-      if (mz > 0) sg.color(0xa83a2a).card([-0.8, tall * 0.62, 0.3], [0.8, tall * 0.62, 0.3], [0, tall * 0.54, 0.34]);
+      if (mz > 0 && H.id !== 'galley') sg.color(0xa83a2a).card([-0.8, tall * 0.62, 0.3], [0.8, tall * 0.62, 0.3], [0, tall * 0.54, 0.34]);
       const sail = new THREE.Mesh(sg.build(), MAT.solidDS);
       sail.position.set(mx, D, mz + 0.2); sail.castShadow = true;
       group.add(sail); parts.sails.push(sail);
@@ -219,11 +221,14 @@ export function buildBoat(cfg) {
     // a raised quarterdeck rail and the stern wheel on its pedestal
     b.color(0x5a3e28).box(0.2, 1.1, 0.2, 0, D + 0.55, H.helm[2] - 0.1);
     // the hatch down to the hold: a dark opening with a raised coaming
-    const Hd = H.hold, [hx, hz] = Hd.hatch;
-    b.color(0x100c08).box(Hd.hatchHW * 2, 0.02, Hd.hatchHD * 2, hx, D + 0.012, hz);
-    b.color(0x4a3222);
-    for (const sx of [-1, 1]) b.box(0.12, 0.18, Hd.hatchHD * 2 + 0.24, hx + sx * (Hd.hatchHW + 0.06), D + 0.09, hz);
-    for (const sz of [-1, 1]) b.box(Hd.hatchHW * 2 + 0.24, 0.18, 0.12, hx, D + 0.09, hz + sz * (Hd.hatchHD + 0.06));
+    const Hd = H.hold;
+    if (Hd) {
+      const [hx, hz] = Hd.hatch;
+      b.color(0x100c08).box(Hd.hatchHW * 2, 0.02, Hd.hatchHD * 2, hx, D + 0.012, hz);
+      b.color(0x4a3222);
+      for (const sx of [-1, 1]) b.box(0.12, 0.18, Hd.hatchHD * 2 + 0.24, hx + sx * (Hd.hatchHW + 0.06), D + 0.09, hz);
+      for (const sz of [-1, 1]) b.box(Hd.hatchHW * 2 + 0.24, 0.18, 0.12, hx, D + 0.09, hz + sz * (Hd.hatchHD + 0.06));
+    }
     // bowsprit
     b.color(0x6a4a2e).tube([0, S[12].g - 0.2, S[12].z - 0.4], [0, S[12].g + 0.9, S[12].z + 3.2], 0.16, 0.08, 6);
     const prop = new THREE.Group(); engine.add(prop); parts.prop = prop;

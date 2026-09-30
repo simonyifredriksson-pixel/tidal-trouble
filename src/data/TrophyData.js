@@ -36,13 +36,15 @@ T.push(
 );
 // every epic and legendary species, mounted (the journal is the collection for the rest)
 for (const f of FISH) {
-  if (!['epic', 'legendary'].includes(f.rarity) || f.junk || f.beh === 'mimic' || f.beh === 'chest') continue;
-  T.push({ id: 'sp:' + f.id, name: f.name, size: 'S', tier: { epic: 2, legendary: 3 }[f.rarity], model: 'fish', sp: f.id, text: f.blurb });
+  if (!['epic', 'legendary', 'mythical'].includes(f.rarity) || f.junk || f.beh === 'mimic' || f.beh === 'chest') continue;
+  T.push({ id: 'sp:' + f.id, name: f.name, size: 'S', tier: { epic: 2, legendary: 3, mythical: 3 }[f.rarity], rank: f.rarity === 'mythical' ? 2 : 0, model: 'fish', sp: f.id, text: f.blurb });
 }
 // the eleven shard-bearers as skulls; the Tidemother as a statue
 for (const L of LEVIATHANS) T.push({ id: 'lev:' + L.id, name: L.name, size: L.final ? 'L' : 'S', tier: 4, rank: 3, model: L.final ? 'levstatue' : 'skull', lev: L.id, text: L.story });
 // the creatures at the top of the food chain
 T.push({ id: 'strongbox', name: 'The X on the Chart', size: 'S', tier: 2, model: 'strongbox', text: 'You followed an old chart out to sea and pulled up what someone buried there.' });
+T.push({ id: 'pirates', name: 'The Pirates\' Hoard', size: 'S', tier: 3, model: 'hoard', text: 'You walked into the pirates\' own vault on Blackflag Isle and walked out with a share of their gold.' });
+T.push({ id: 'escaped', name: 'Out of the Cage', size: 'S', tier: 2, model: 'lantern', text: 'Captured by pirates, locked in a cage on an island no chart shows - and you got out, got your gear back and sailed home.' });
 for (const b of BEASTS) T.push({ id: 'beast:' + b.id, name: b.name, size: 'L', tier: 4, model: 'beast', beast: b.id, text: b.blurb });
 T.push({ id: 'kraken', name: 'The Kraken', size: 'L', tier: 4, rank: 2, model: 'kraken', text: 'You fought it off your boat with an axe, and then you caught it.' });
 for (const g of GREAT) T.push({ id: 'great:' + g.id, name: g.name, size: 'L', tier: 4, rank: 2, model: 'great', great: g.id, text: g.blurb });

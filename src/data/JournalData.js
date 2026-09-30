@@ -49,7 +49,7 @@ export const SECTIONS = [
 ];
 
 /** Every entry of a section: special creatures first, then fish by rarity. */
-const ORDER = { legendary: 0, giant: 1, epic: 2, rare: 3, uncommon: 4, common: 5, junk: 6 };
+const ORDER = { mythical: -1, legendary: 0, giant: 1, epic: 2, rare: 3, uncommon: 4, common: 5, junk: 6 };
 export function sectionEntries(S) {
   const out = [];
   for (const c of S.creatures || []) out.push({ type: c.kind, id: c.id, key: c.kind + ':' + c.id });

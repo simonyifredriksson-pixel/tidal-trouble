@@ -616,3 +616,6 @@ export function buildIslands(S) {
   S.isle = S.isle || {};
   for (const f of [whisper, sunscar, skywatch, crystal, frostfall, dread, ironwreck, lost, thunder, tide, crown, abyssal, vigilYard, islets]) f(S);
 }
+
+/* the shared pieces, for islands built in their own files (PirateIsland.js) */
+export { dock, stand, sign, light, houses };

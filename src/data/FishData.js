@@ -22,6 +22,7 @@ import { FAR_ZMIN } from './FishKit.js';
 import { FAR1 } from './FishFar1.js';
 import { FAR2 } from './FishFar2.js';
 import { FAR3 } from './FishFar3.js';
+import { PIRATE_FISH } from './FishPirate.js';
 import { ZONES } from '../world/MapData.js';
 
 export const RARITY = {
@@ -32,6 +33,8 @@ export const RARITY = {
   legendary: { id: 'legendary', name: 'Legendary', css: '#f2b33a', w: 0.8 },
   giant:     { id: 'giant',     name: 'Giant',     css: '#ff7a4a', w: 0 },
   junk:      { id: 'junk',      name: 'Junk',      css: '#a09a8a', w: 0 },
+  // one in four hundred bites where it lives (see Fishing.speciesWeights)
+  mythical:  { id: 'mythical',  name: 'Mythical',  css: '#ff6ad0', w: 0.01 },
 };
 
 const A = (o) => Object.assign({ h: 0.26, w: 0.12, back: 0x5a7a4a, belly: 0xd8d0a8, fin: 0x4a6a3a, pat: 'none', patCol: 0x2a3a2a, tail: 'fork', extras: [] }, o);
@@ -289,7 +292,7 @@ export const GIANTS = [
     blurb: 'Its lure is the size of a lantern. So is each tooth.' },
 ];
 
-FISH.push(...MORE_FISH, ...FAR1, ...FAR2, ...FAR3);
+FISH.push(...MORE_FISH, ...FAR1, ...FAR2, ...FAR3, ...PIRATE_FISH);
 
 // the deep-water regulars follow you all the way out to Vigil's End
 for (const f of FISH) if (['cod', 'mackerel', 'tuna', 'halibut', 'marlin', 'swordfish', 'oarfish', 'angler', 'viper', 'gulper', 'coelacanth', 'sharkfish', 'mimic', 'chest'].includes(f.id) && Array.isArray(f.where)) f.where.push('reach');
@@ -343,7 +346,7 @@ export const zoneSizeBoost = z => ZONES[ZI(z)].size;
 
 /** How hard a fish fights on the bar (compared against a rod's rating).
     One rule everywhere: bigger, rarer, pricier and stranger fish fight harder. */
-const RARITY_FIGHT = { common: 0, uncommon: 0.05, rare: 0.12, epic: 0.22, legendary: 0.34, giant: 0.25, junk: 0 };
+const RARITY_FIGHT = { common: 0, uncommon: 0.05, rare: 0.12, epic: 0.22, legendary: 0.34, giant: 0.25, mythical: 0.5, junk: 0 };
 export function fightOf(f, kg, variant = null) {
   const F = f.fight;
   let v = 0.45 + F.power * 0.33 + Math.log10(Math.max(0.05, kg) + 1) * 0.32;

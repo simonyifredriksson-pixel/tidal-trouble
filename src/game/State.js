@@ -43,8 +43,15 @@ export function freshSave() {
     mats: {}, felled: {}, builds: [],
     boatPlans: ['dinghy'],
     claims: {},                            // secret rewards claimed: reward id -> { player key: day }                 // boat blueprints you own (the rowboat's are Old Gus's gift)
+    // the hotbar: ten slots, each empty or holding something you own ('rod:<id>' or a tool id);
+    // `seen` is everything that has been offered to it once, so an item you take off stays off
+    hotbar: { slots: new Array(HOT_N).fill(null), seen: [] },
+    bag: [],                               // the fish in your bag (host player), saved like the boat's cargo
   };
 }
+export const HOT_N = 10;
+/** The order things go onto the hotbar when you get them. */
+const HOT_ORDER = ['rod', 'axe', 'pick', 'hammer', 'bucket', 'plans'];
 /* The islands everyone already knows about (their shops can be named from the start). */
 export const KNOWN_SHOPS = new Set(['home', 'tropic', 'frost', 'open', 'reach']);
 
@@ -77,8 +84,21 @@ export class State {
     while (s.cabin.yard.length < 12) s.cabin.yard.push(null);
     s.stats = Object.assign(f.stats, s.stats || {});
     if (!ROD_BY_ID[s.rod]) s.rod = 'basic';
-    if (!s.rods.includes('basic')) s.rods.unshift('basic');
-    s.tools.axe = true; s.tools.pick = true; s.tools.plans = true;
+    // a castaway who has not yet met Old Gus owns nothing at all (flags.kit === false)
+    if (s.flags?.kit !== false) {
+      if (!s.rods.includes('basic')) s.rods.unshift('basic');
+      s.tools.axe = true; s.tools.pick = true; s.tools.plans = true;
+    }
+    if (!s.hotbar || !Array.isArray(s.hotbar.slots)) {
+      // a save from before the hotbar: the rod in your hands first, then the tools you had
+      s.hotbar = { slots: new Array(HOT_N).fill(null), seen: [] };
+      this._fillHotbar(s.hotbar, ['rod:' + s.rod]);
+      s.hotbar.seen = this.equippables();
+    }
+    while (s.hotbar.slots.length < HOT_N) s.hotbar.slots.push(null);
+    s.bag = s.bag || [];
+    // quit the game while a prisoner, and you are still one
+    this.captive = s.captive ? { slots: s.captive.slice() } : null;
     s.mats = s.mats || {}; s.felled = s.felled || {}; s.builds = s.builds || [];
     s.boatPlans = s.boatPlans || [...new Set(['dinghy', ...(s.hulls || [])])];
     s.claims = s.claims || {};
@@ -90,6 +110,57 @@ export class State {
     s.great = s.great || {}; s.kraken = Object.assign(f.kraken, s.kraken || {}); s.heard = s.heard || {};
     s.found = s.found || {}; s.chart = s.chart || ''; s.notes = s.notes || {}; s.farthest = s.farthest || 0; s.salvaged = s.salvaged || {};
   }
+  /* ---------------- the hotbar ---------------- */
+  /** Everything you own that you can hold in your hands and use. */
+  equippables() {
+    const s = this.s, out = [];
+    for (const R of RODS) if (s.rods.includes(R.id)) out.push('rod:' + R.id);
+    const tools = TOOLS.filter(T => T.id !== 'rod' && s.tools[T.id]).map(T => T.id);
+    tools.sort((a, b) => (HOT_ORDER.indexOf(a) + 1 || 99) - (HOT_ORDER.indexOf(b) + 1 || 99));
+    return out.concat(tools);
+  }
+  /** Your hotbar. The host's lives in the save; a guest's is their own, for as long as they are in the room. */
+  get hot() {
+    if (this.remote) return (this._hot = this._hot || { slots: new Array(HOT_N).fill(null), seen: [] });
+    return this.s.hotbar;
+  }
+  _fillHotbar(H, first = []) {
+    const own = this.equippables();
+    for (const k of [...first, ...own]) if (own.includes(k) && !H.slots.includes(k)) { const i = H.slots.indexOf(null); if (i >= 0) H.slots[i] = k; }
+  }
+  /** Captured: everything comes off the hotbar into the pirates' stash (it is still yours - you have to go and get it). */
+  confiscate() {
+    if (this.captive) return;
+    const H = this.hot;
+    this.captive = { slots: H.slots.slice() };
+    H.slots = H.slots.map(() => null);
+    if (!this.remote) this.s.captive = this.captive.slots;
+  }
+  /** Out of the stash chest: the hotbar exactly as it was. */
+  release() {
+    if (!this.captive) return;
+    const H = this.hot;
+    H.slots = this.captive.slots.slice();
+    this.captive = null;
+    if (!this.remote) delete this.s.captive;
+  }
+  /** Keep the hotbar honest: what you no longer own comes off, what you have just got goes on (once). */
+  fixHotbar() {
+    if (this.captive) return false;          // in a pirate's cage, with nothing
+    const H = this.hot, own = this.equippables(), set = new Set(own);
+    let changed = false;
+    H.slots = H.slots.map(k => { if (k && !set.has(k)) { changed = true; return null; } return k; });
+    H.seen = H.seen.filter(k => set.has(k));
+    for (const k of own) {
+      if (H.seen.includes(k)) continue;
+      H.seen.push(k); changed = true;
+      if (!H.slots.includes(k)) { const i = H.slots.indexOf(null); if (i >= 0) H.slots[i] = k; }
+    }
+    return changed;
+  }
+  /** The slot something is in (0-9), or -1. */
+  hotSlot(key) { return this.hot.slots.indexOf(key); }
+
   /** Can the game name the place a shop is on? (the far islands only once you have been there) */
   knowsShop(id) { return KNOWN_SHOPS.has(id || 'home') || !!this.s.found[id]; }
 

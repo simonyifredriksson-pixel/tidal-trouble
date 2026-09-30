@@ -200,7 +200,7 @@ export class Gather {
       this.hand = T;
       if (!T) {
         const other = this.target(P, tool === 'axe' ? 'pick' : 'axe');
-        if (other && now - (this._hintT || -99) > 4) { this._hintT = now; G.ui.toast(tool === 'axe' ? 'That needs the pickaxe (-).' : 'That needs the axe (0).', 'info'); }
+        if (other && now - (this._hintT || -99) > 4) { this._hintT = now; G.ui.toast(tool === 'axe' ? 'That needs the pickaxe' + G.kh('pick') + '.' : 'That needs the axe' + G.kh('axe') + '.', 'info'); }
         return;
       }
       const f = P.flatForward(new THREE.Vector3());

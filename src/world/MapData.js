@@ -33,6 +33,8 @@ export const distHome = (x, z) => Math.hypot(x - HOME_CENTRE.x, z - HOME_CENTRE.
 
 /* Vigil's End: the last island, right at the rim of the world. */
 export const VIGIL = { x: 4950, z: 4950 };
+/* Blackflag Isle: where the pirates live, out in the grey water south of the bay. Hidden from every chart. */
+export const PIRATE_ISLE = { x: 1500, z: -4000 };
 
 /* Regions. `style` decides how the land is coloured and what grows on it,
    `band` marks the open-water regions that fill the gaps between islands. */
@@ -62,6 +64,8 @@ export const REGIONS = {
   outer:   { id: 'outer',   name: 'The Outer Ocean', x: 0, z: 0, r: 0, color: 0x1e4a70, band: true, blurb: 'Grey water, heavy swell, currents that do not stop. The fish out here are bigger than your boat.' },
   extreme: { id: 'extreme', name: 'Extreme Waters',  x: 0, z: 0, r: 0, color: 0x14304a, band: true, blurb: 'Hardly anyone sails this far. Storms, black water and things nobody has named.' },
   reach:   { id: 'reach',   name: "Vigil's End",    x: VIGIL.x, z: VIGIL.z, r: 700, color: 0x6a7078, style: 'reach', blurb: 'The last island before the edge of the sea. Fog, rocks and six old fishermen waiting for something.' },
+  // on no chart: the pirates' island (see PirateIsland.js)
+  pirate:  { id: 'pirate',  name: 'Blackflag Isle', x: PIRATE_ISLE.x, z: PIRATE_ISLE.z, r: 520, color: 0x3a3228, style: 'tropic', hidden: true, blurb: 'An island no chart shows. A skull the size of a church over the harbour, cages on the beach, and a lake in the middle that the pirates will not swim in.' },
 };
 export const REGION_LIST = Object.values(REGIONS);
 const ISLAND_REGIONS = REGION_LIST.filter(R => !R.band);
@@ -151,6 +155,11 @@ export const ISLANDS = [
   { id: 'vstackB', x: V.x - 85, z: V.z + 80, r: 9, h: 18, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
   { id: 'vstackC', x: V.x + 95, z: V.z + 95, r: 13, h: 26, rise: 0.18, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
   { id: 'vstackD', x: V.x + 45, z: V.z + 145, r: 8, h: 15, rise: 0.2, shape: 0.6, hill: 2, ridge: 0, warp: 0.3, wf: 0.05, slope: 0.9, region: 'reach' },
+
+  /* ===== BLACKFLAG ISLE: a hilly island with a lake in its crown, a harbour on the north shore and the skull rock off it ===== */
+  { id: 'blackflag', x: PIRATE_ISLE.x, z: PIRATE_ISLE.z, r: 205, h: 26, rise: 0.6, shape: 1.25, hill: 7, ridge: 5, warp: 0.16, wf: 0.008, slope: 0.12, region: 'pirate' },
+  { id: 'skullrock', x: PIRATE_ISLE.x + 150, z: PIRATE_ISLE.z + 250, r: 22, h: 30, rise: 0.25, shape: 0.6, hill: 2, ridge: 0, warp: 0.1, wf: 0.03, slope: 0.7, region: 'pirate' },
+  { id: 'blackflagB', x: PIRATE_ISLE.x - 230, z: PIRATE_ISLE.z + 120, r: 40, h: 8, rise: 0.5, shape: 1, hill: 2, ridge: 0, warp: 0.25, wf: 0.03, slope: 0.12, region: 'pirate' },
 ];
 
 /* The open sea is never empty: small islets, sea stacks and sandbars are
@@ -176,7 +185,7 @@ function makeIslets() {
   }
   return out;
 }
-export const ISLETS = makeIslets();
+export const ISLETS = makeIslets().filter(I => Math.hypot(I.x - PIRATE_ISLE.x, I.z - PIRATE_ISLE.z) > 900);
 ISLANDS.push(...ISLETS);
 
 /* Lakes are carved out of land down to `depth` below sea level. They share
@@ -197,6 +206,8 @@ export const LAKES = [
   { id: 'glacier', name: 'Glacier Lake', x: -400, z: -3800, r: 105, depth: 18, region: 'frostfall', ice: true, zone: 6 },
   // Dreadmire's black pool at the heart of the channels
   { id: 'mirepool', name: 'The Mirepool', x: -2950, z: 2650, r: 70, depth: 7, region: 'dread', sea: true },
+  // Blackflag Isle's lake, the Drowned Bell: the twelve fish of FishPirate live nowhere else
+  { id: 'drownedbell', name: 'The Drowned Bell', x: PIRATE_ISLE.x - 20, z: PIRATE_ISLE.z - 30, r: 52, depth: 11, region: 'pirate', zone: 6 },
 ];
 
 /* Flat pads, blended into the land (settlements, outposts). */
@@ -213,6 +224,9 @@ export const PADS = [
   { id: 'vlanding', x: V.x - 60, z: V.z - 55, r: 26, y: 1.3 },
   { id: 'vterrace', x: V.x - 40, z: V.z - 37, r: 17, y: 7.5 },
   { id: 'vhut', x: V.x - 19, z: V.z - 20, r: 16, y: 14.5 },
+  // Blackflag Isle: the camp on the north slope, and the beach below it by the harbour
+  { id: 'piratecamp', x: PIRATE_ISLE.x + 20, z: PIRATE_ISLE.z + 110, r: 40, y: 4.2 },
+  { id: 'piratebeach', x: PIRATE_ISLE.x + 25, z: PIRATE_ISLE.z + 175, r: 22, y: 1.4 },
   // the new islands' settlements
   { id: 'whisperCamp', x: -2010, z: -1400, r: 24, y: 1.6 },
   { id: 'sunscarTown', x: 2700, z: -535, r: 24, y: 1.5 },
@@ -346,6 +360,7 @@ export const FOG_SPOTS = [
   { x: -4100, z: -1300, r0: 300, r1: 800, s: 0.85 },           // the Lost Shores never clear
   { x: -3000, z: 2700, r0: 250, r1: 750, s: 0.75 },            // Dreadmire
   { x: -2050, z: -1650, r0: 120, r1: 420, s: 0.35 },           // the woods at dusk
+  { x: PIRATE_ISLE.x, z: PIRATE_ISLE.z, r0: 350, r1: 750, s: 0.55 }, // a fog bank that hides Blackflag Isle
 ];
 export function fogAt(x, z) {
   let f = Math.max(mistAt(x, z), 0.5 * smoothstep(WORLD.edge - 700, WORLD.edge, distHome(x, z)));

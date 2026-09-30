@@ -15,7 +15,7 @@ import * as THREE from '../../lib/three.module.js';
 import { MeshBuilder } from '../art/Geo.js';
 import { MAT } from '../art/Materials.js';
 import { buildRod, buildBobber } from '../art/RodArt.js';
-import { ROD_BY_ID } from '../data/GearData.js';
+import { ROD_BY_ID, TOOL_BY_ID } from '../data/GearData.js';
 import { pickSpecies, rollCatch } from './Fishing.js';
 import { zoneAt } from '../world/MapData.js';
 import { FISH_BY_ID } from '../data/FishData.js';
@@ -95,11 +95,77 @@ export class Tools {
     else if (tool === 'bucket' && click && this.cool <= 0) this._bucket();
     else if (tool === 'hammer' && hold) this._hammer(dt);
     else if (tool === 'auger' && hold) this._auger(dt);
+    else if (TOOL_BY_ID[tool]?.kind === 'weapon' && click && this.cool <= 0) this._weapon(TOOL_BY_ID[tool]);
     else this.augerT = 0;
 
     this._spears(dt);
     this._grappleStep(dt);
     this._drawHolders(dt);
+  }
+
+  /* ---------------- weapons ----------------
+     Melee (the pin, the cutlass): a swing, then whatever is in front of you
+     within reach takes it - a crewman, their rail, a boarding bridge.
+     Guns (the flintlock, the blunderbuss): a shot down the middle of the
+     screen - the first crewman or hull on the line, a cone of shot for the
+     blunderbuss - then a reload. The host decides what it did (Ships). */
+  _weapon(T) {
+    const G = this.game, P = G.player;
+    this.cool = T.rate || 1;
+    const cam = G.camera, o = cam.getWorldPosition(new THREE.Vector3()), d = cam.getWorldDirection(new THREE.Vector3());
+    const SH = G.ships;
+    if (T.melee) {
+      G.vm.play('swing'); G.audio.swoosh?.();
+      setTimeout(() => {
+        const front = P.pos.clone().add(new THREE.Vector3(0, 1.1, 0)).addScaledVector(d, T.reach * 0.55);
+        const hits = SH ? SH.crewNear(front, T.reach * 0.7) : [];
+        if (hits.length) { const h = hits[0]; G.act({ t: 'strike', w: T.id, crew: h.C.id, at: h.q.toArray() }); G.audio.thunk?.(); G.fx.sparks(h.q.x, h.q.y + 1.2, h.q.z, 6, 0xfff0c0); G.addShake(0.12); return; }
+        const br = SH?.bridgeAt(front, 1.2);
+        if (br) { G.act({ t: 'strike', w: T.id, bridge: br.S.id }); G.audio.thunk?.(); G.fx.chips?.(front.x, front.y, front.z, 0x6a4a2e, 8, 0, 0); return; }
+        const sh = SH?.rayShip(o, d, T.reach + 0.6);
+        if (sh && P.boat !== sh.S.boat) { G.act({ t: 'strike', w: T.id, ship: sh.S.id, at: sh.p.toArray() }); G.audio.thunk?.(); G.fx.chips?.(sh.p.x, sh.p.y, sh.p.z, 0x6a4a2e, 6, 0, 0); }
+      }, 170);
+      return;
+    }
+    // a gun: flash, smoke, and a line of shot
+    G.vm.play('hit');
+    const muzzle = G.vm.handWorld(cam, new THREE.Vector3()).addScaledVector(d, 0.5);
+    G.fx.sparks(muzzle.x, muzzle.y, muzzle.z, 10, 0xffd070); G.fx.smoke(muzzle.x, muzzle.y, muzzle.z, 0xc8c0b0);
+    G.audio.noise?.(T.pellets ? 0.3 : 0.16, T.pellets ? 0.6 : 0.4, 'lowpass', T.pellets ? 900 : 1600, 1, 0.3);
+    G.audio.tone?.(T.pellets ? 60 : 95, 0.16, 'square', 0.12, 0.002, 0.4);
+    G.addShake(T.pellets ? 0.35 : 0.18);
+    const n = T.pellets || 1;
+    const struck = new Map();
+    let shipHit = null, far = T.range;
+    for (let k = 0; k < n; k++) {
+      const dd = d.clone();
+      if (n > 1) { dd.x += (Math.random() - 0.5) * 0.14; dd.y += (Math.random() - 0.5) * 0.1; dd.z += (Math.random() - 0.5) * 0.14; dd.normalize(); }
+      const ch = SH?.rayCrew(o, dd, T.range);
+      const sh = SH?.rayShip(o, dd, ch ? ch.t : T.range);
+      // your own boat does not count
+      const ship = sh && P.boat !== sh.S.boat ? sh : null;
+      if (ch && (!ship || ch.t < ship.t)) { struck.set(ch.C.id, (struck.get(ch.C.id) || 0) + 1); far = Math.min(far, ch.t); }
+      else if (ship) { shipHit = shipHit || ship; far = Math.min(far, ship.t); }
+      else {
+        const end = o.clone().addScaledVector(dd, T.range);
+        const sea = G.world.sea(end.x, end.z);
+        if (end.y < sea + 1) G.fx.splash(end.x, sea, end.z, 0.25);
+      }
+      if (k === 0) this._tracer(muzzle, o.clone().addScaledVector(dd, ch ? ch.t : ship ? ship.t : T.range * 0.6));
+    }
+    for (const [cid, k] of struck) G.act({ t: 'strike', w: T.id, crew: cid, mult: k });
+    if (shipHit) { G.act({ t: 'strike', w: T.id, ship: shipHit.S.id, at: shipHit.p.toArray(), mult: n }); G.fx.chips?.(shipHit.p.x, shipHit.p.y, shipHit.p.z, 0x6a4a2e, 10, 0, 0); }
+    const br = SH?.bridgeAt(o.clone().addScaledVector(d, Math.min(far, 12)), 1.4);
+    if (br && !struck.size) G.act({ t: 'strike', w: T.id, bridge: br.S.id, mult: n });
+    G.net?.sendEvent({ t: 'gunfx', o: muzzle.toArray().map(v => +v.toFixed(2)), p: T.pellets ? 1 : 0 });
+  }
+  _tracer(a, b) {
+    const G = this.game;
+    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xfff0b0, transparent: true, opacity: 0.85 }));
+    G.scene.add(l);
+    let t = 0; const f = () => { t += 1 / 60; l.material.opacity = 0.85 * (1 - t / 0.16); if (t < 0.16) requestAnimationFrame(f); else { G.scene.remove(l); g.dispose(); } };
+    requestAnimationFrame(f);
   }
 
   /* ---------------- harpoon ---------------- */

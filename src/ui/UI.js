@@ -31,6 +31,7 @@ import { SECRETS } from '../data/SecretData.js';
 import { TROPHIES } from '../data/TrophyData.js';
 import { heightAt } from '../world/Terrain.js';
 import { worldMapCanvas, mapView, fogCanvas } from './MapArt.js';
+import { invHTML } from './InvScreen.js';
 import { escapeHTML as esc, fmtInt, fmtKg, fmtCm, clamp } from '../core/Util.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -65,6 +66,10 @@ export class UI {
       this.game.uiAct('favToggle', row.dataset.fav);
       this.render();
     });
+    // the inventory: drag something onto a hotbar slot (or a slot off the bar)
+    $('#screens').addEventListener('pointerdown', e => this._dragStart(e));
+    addEventListener('pointermove', e => this._dragMove(e));
+    addEventListener('pointerup', e => this._dragEnd(e));
     $('#title').addEventListener('click', e => this._click(e));
     this.root.addEventListener('click', e => { if (e.target.closest('.talk')) this._click(e); });
   }
@@ -100,6 +105,7 @@ export class UI {
       <div class="vignette"></div><div class="underwater"></div><div class="hurtflash"></div><div class="flash"></div>
       <div class="cross"><i></i><i></i><i></i><i></i></div>
       <div class="prompt hide"><span class="chip"></span></div>
+      <div class="buyprompt hide"><div class="bpn"></div><div class="bpp"></div><div class="bph"><span class="bpring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="bg"/><circle cx="18" cy="18" r="15" class="fg"/></svg><span class="key">E</span></span><span class="bpt"></span></div><div class="bps"></div></div>
       <div class="clickplay hide"><span class="chip">${ic('mouse')} Click to look around</span></div>
       <div class="topleft">
         <div class="objective hide"><span class="chip"><span class="oi"></span><span><b></b><span class="ot"></span></span></span></div>
@@ -160,21 +166,39 @@ export class UI {
 
   showHUD(on) { this.hud.classList.toggle('hidden', !on); }
 
+  /** What goes in a hotbar slot or an inventory tile: a rod's own picture, or the tool's mark. */
+  hotIcon(k) {
+    if (!k) return '';
+    if (k.startsWith('rod:')) return `<img class="hrod" src="${rodThumb(k.slice(4))}" alt="">`;
+    return ic(TOOL_ICON[k] || 'hands');
+  }
+  hotName(k) {
+    if (!k) return '';
+    if (k.startsWith('rod:')) return ROD_BY_ID[k.slice(4)]?.name || 'Rod';
+    return TOOL_BY_ID[k]?.name || k;
+  }
+  /** Ten clean slots. An empty one is just an empty slot; what you own sits where you put it. */
   hotbar() {
-    const G = this.game, s = G.state.s;
+    const G = this.game, H = G.state.hot, cur = G.hotKeyNow();
     const hb = this.el('.hotbar');
-    hb.innerHTML = TOOLS.map(T => {
-      const own = !!s.tools[T.id];
-      const on = G.player.tool === T.id;
-      return `<div class="slot ${on ? 'on' : ''} ${own ? '' : 'locked'}"><span class="n">${T.slot}</span>${ic(TOOL_ICON[T.id])}</div>`;
-    }).join('');
-    this._hotKey = s.tools && JSON.stringify([s.tools, G.player.tool]);
+    hb.innerHTML = H.slots.map((k, i) => k
+      ? `<div class="slot full ${k === cur ? 'on' : ''}" data-slot="${i}"><span class="n">${(i + 1) % 10}</span>${this.hotIcon(k)}</div>`
+      : `<div class="slot empty" data-slot="${i}"></div>`).join('');
+    this._hotKey = JSON.stringify([H.slots, cur]);
   }
 
   update(dt) {
     const G = this.game, s = G.state.s, P = G.player;
     this.t += dt;
-    if (JSON.stringify([s.tools, P.tool]) !== this._hotKey) this.hotbar();
+    // what you own and what is on the hotbar stay in step (a new rod or tool goes on by itself)
+    this._fixT = (this._fixT || 0) - dt;
+    if (this._fixT <= 0) {
+      this._fixT = 0.25;
+      G.state.fixHotbar();
+      const k = G.hotKeyNow();
+      if (k && !G.state.equippables().includes(k)) { P.tool = 'none'; G.vm.setTool('none'); }
+    }
+    if (JSON.stringify([G.state.hot.slots, G.hotKeyNow()]) !== this._hotKey) this.hotbar();
     // fishing widgets every frame
     const F = G.fishing.hud();
     const fu = this.el('.tension');
@@ -237,7 +261,7 @@ export class UI {
     this.el('.baitchip').innerHTML = P.tool === 'rod' ? `${ic(bait.icon || s.bait)} ${bait.name} x${s.baits[s.bait] || 0} <span class="key">B</span>` : '';
     this.el('.baitchip').classList.toggle('hide', P.tool !== 'rod');
     const hIt = P.held ? G.loot.get(P.held) : null;
-    this.el('.hand-label').textContent = hIt ? (FISH_BY_ID[hIt.sp]?.name || '') + lifeText(hIt, FISH_BY_ID[hIt.sp]) : s.upg?.[P.tool] ? (P.tool === 'axe' ? 'Iron Axe' : 'Iron Pickaxe') : TOOL_BY_ID[P.tool]?.name || '';
+    this.el('.hand-label').textContent = hIt ? (FISH_BY_ID[hIt.sp]?.name || '') + lifeText(hIt, FISH_BY_ID[hIt.sp]) : s.upg?.[P.tool] ? (P.tool === 'axe' ? 'Iron Axe' : 'Iron Pickaxe') : this.hotName(G.hotKeyNow());
     this.el('.hand-label').classList.toggle('dying', !!hIt && hIt.alive && hIt.state !== 'cooler' && hIt.air < 60);
     // boat
     const b = P.boat;
@@ -355,6 +379,26 @@ export class UI {
     p.classList.remove('hide');
     if (p._h !== html) { p.querySelector('.chip').innerHTML = html; p._h = html; }
   }
+  /** The shop card by the crosshair: NAME / price / HOLD E TO PURCHASE, with the ring filling while E is held. */
+  buyPrompt(o) {
+    const p = this.el('.buyprompt');
+    if (!o) { if (!p.classList.contains('hide')) p.classList.add('hide'); this._bpKey = null; return; }
+    p.classList.remove('hide');
+    const poor = !o.owned && this.game.state.s.money < o.price;
+    const key = JSON.stringify([o.name, o.price, o.owned, o.sub, o.msg && o.msg.text, poor]);
+    if (key !== this._bpKey) {
+      this._bpKey = key;
+      p.querySelector('.bpn').textContent = o.name.toUpperCase();
+      p.querySelector('.bpp').innerHTML = o.owned ? 'OWNED' : o.price > 0 ? `${ic('coin')}<b>${fmtInt(o.price)}</b>` : '<b>FREE</b>';
+      p.querySelector('.bpp').classList.toggle('poor', poor);
+      p.querySelector('.bpt').textContent = o.msg ? o.msg.text : o.owned ? 'ALREADY YOURS' : 'HOLD E TO PURCHASE';
+      p.querySelector('.bph').className = 'bph' + (o.msg ? ' ' + o.msg.kind : '') + (o.owned ? ' owned' : '');
+      p.querySelector('.bps').textContent = o.sub || '';
+    }
+    const fg = p.querySelector('.fg');
+    fg.style.strokeDashoffset = (94.25 * (1 - (o.hold || 0))).toFixed(1);
+    p.classList.toggle('holding', (o.hold || 0) > 0.01);
+  }
 
   toast(text, kind = 'info') {
     const box = this.el('.toasts');
@@ -405,7 +449,10 @@ export class UI {
       <div class="ztag" style="color:${ZONES[c.zone || 0].css}">${esc(ZONES[c.zone || 0].name)}  -  depth x${ZONES[c.zone || 0].value}</div>
       <h3>${esc(catchName(sp, c.v))}${c.isNew ? '<span class="new">NEW</span>' : c.record ? '<span class="new" style="background:#3a8a3a">RECORD</span>' : ''}</h3>
       <div class="meta"><span>${ic('fish')} <b>${fmtKg(c.kg)}</b></span><span><b>${fmtCm(c.cm)}</b></span><span>${ic('coin')} <b>${fmtInt(c.value)}</b></span></div>
-      ${c.alive === false ? '<div class="life dead">Dead - it can still be sold</div>' : c.alive ? '<div class="life">ALIVE - five minutes to get it into a cooler or an aquarium</div>' : ''}
+      ${c.bag === 'in' ? `<div class="life bag">${ic('box')} INTO YOUR BAG${c.alive ? ' - alive, and it stays alive in there' : ''}  <span class="key">TAB</span></div>`
+        : c.bag === 'big' ? '<div class="life">Too big for your bag - it is on the deck. A cooler or a tank will keep it alive.</div>'
+        : c.bag === 'full' ? '<div class="life dead">Your bag is full - it is on the deck. Sell some fish.</div>'
+        : c.alive === false ? '<div class="life dead">Dead - it can still be sold</div>' : c.alive ? '<div class="life">ALIVE - five minutes to get it into a cooler or an aquarium</div>' : ''}
       <div class="blurb">${esc(sp.blurb || '')}</div>`;
     el.classList.add('on');
     clearTimeout(this._ccT);
@@ -626,11 +673,63 @@ export class UI {
     }
   }
 
+  /* ---------- drag and drop (inventory <-> hotbar) ---------- */
+  _dragStart(e) {
+    if (this.screen !== 'inv' || e.button !== 0) return;
+    const el = e.target.closest('[data-drag]');
+    if (!el) return;
+    this._drag = { key: el.dataset.drag, from: el.dataset.from != null ? +el.dataset.from : null, x: e.clientX, y: e.clientY, el, ghost: null };
+  }
+  _dragMove(e) {
+    const D = this._drag;
+    if (!D) return;
+    if (!D.ghost) {
+      if (Math.hypot(e.clientX - D.x, e.clientY - D.y) < 6) return;
+      const g = document.createElement('div');
+      g.className = 'dragghost';
+      g.innerHTML = this.hotIcon(D.key);
+      document.body.appendChild(g);
+      D.ghost = g;
+      D.el.classList.add('dragging');
+      $('#screens').classList.add('dragmode');
+    }
+    D.ghost.style.left = e.clientX + 'px'; D.ghost.style.top = e.clientY + 'px';
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-hslot]');
+    for (const s of document.querySelectorAll('.ihot .slot')) s.classList.toggle('over', s === over);
+  }
+  _dragEnd(e) {
+    const D = this._drag;
+    this._drag = null;
+    if (!D || !D.ghost) return;
+    D.ghost.remove();
+    $('#screens').classList.remove('dragmode');
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-hslot]');
+    const H = this.game.state.hot;
+    if (over) {
+      const to = +over.dataset.hslot, was = H.slots.indexOf(D.key);
+      const prev = H.slots[to];
+      H.slots[to] = D.key;
+      if (was >= 0 && was !== to) H.slots[was] = prev || null;       // two slots swap
+      if (!H.seen.includes(D.key)) H.seen.push(D.key);
+      this.game.audio.place?.(true);
+    } else if (D.from != null) {
+      H.slots[D.from] = null;                                          // dragged off the bar
+      this.game.audio.click();
+    }
+    this._noClick = performance.now();
+    this.game._saveDirty = true;
+    this.hotbar();
+    if (this.screen) this.render();
+  }
+
   _click(e) {
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
+    if (this._noClick && performance.now() - this._noClick < 250) return;   // the end of a drag, not a click
     const act = el.dataset.act;
     this.game.audio.click();
+    if (act === 'invSel') { this.data.sel = el.dataset.arg; return this.render(); }
+    if (act === 'invCat') { this.data.cat = el.dataset.arg; this.data.sel = null; return this.render(); }
     if (act === 'close') return this.close();
     if (act === 'closeTalk') return this.closeTalk();
     if (act === 'tab') { this.tab[this.screen] = el.dataset.arg; this.data.sel = null; return this.render(); }
@@ -666,6 +765,9 @@ export class UI {
     return { cur, html: `<div class="tabs">${list.map(([id, label, icon]) => `<button class="tab ${cur === id ? 'on' : ''}" data-act="tab" data-arg="${id}">${icon ? ic(icon) : ''}${esc(label)}</button>`).join('')}</div>` };
   }
   _wrap(inner, cls = '') { return `<div class="frame ${cls}"><div class="panel">${inner}</div></div>`; }
+
+  /* ---------- the inventory (TAB) ---------- */
+  _inv(d) { return invHTML(this, d || {}); }
 
   /* ---------- pause ---------- */
   _pause() {
@@ -733,59 +835,31 @@ export class UI {
   _tackle() {
     const G = this.game, s = G.state.s;
     const shop = this.data?.shop || 'home';
-    const t = this._tabs([['rods', 'Rods', 'rod'], ['bait', 'Bait', 'worm'], ['tools', 'Equipment', 'harpoon'], ['gear', 'Gear', 'diving']], 'rods');
-    const here = (item, kind) => soldAt(item, shop, kind);
-    const sold = (item, kind) => `<span class="soldby">${ic('map')}${esc(kind === 'rod' ? 'Sold by ' + this._soldWhere(item.shop, true) : 'Sold at ' + this._soldWhere(shopOf(item)))}</span>`;
-    // what this shop stocks comes first, everything else after it
-    const order = (list, kind) => [...list].sort((a, b) => (here(b, kind) ? 1 : 0) - (here(a, kind) ? 1 : 0));
-    let body = '';
-    if (t.cur === 'rods') {
-      const cur = ROD_BY_ID[s.rod];
-      // only the rods this shop actually sells
-      body = `<div class="grid">${order(RODS, 'rod').filter(R => here(R, 'rod')).map(R => {
-        const own = s.rods.includes(R.id), eq = s.rod === R.id;
-        const bar = (label, v, max, base) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></div><span class="${v > base ? 'up' : v < base ? 'down' : ''}">${v >= 1000 ? 'any' : v}</span></div>`;
-        return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${rodThumb(R.id)}" alt="">
-          <h3>${esc(R.name)}</h3><p>${esc(R.blurb)}</p>
-          ${bar('Strength', R.rating, 3.75, cur.rating)}${bar('Control', R.control, 2.3, cur.control)}${bar('Line (m)', R.line, 320, cur.line)}
-          <p style="margin:4px 0 6px"><b>Best for:</b> ${esc(ZONES[Math.min(MAX_ZONE, [0, 1, 2, 4, 6, 7][R.tier] ?? 4)].name)}${R.tier >= 5 ? ' and leviathans' : ''}</p>
-          <div class="row">${own ? (eq ? '<span class="price">Equipped</span>' : `<button class="btn" data-act="equipRod" data-arg="${R.id}">Equip</button>`) : here(R, 'rod') ? `<span class="price">${ic('coin')}${fmtInt(R.price)}</span><button class="btn gold" data-act="buyRod" data-arg="${R.id}" ${s.money < R.price ? 'disabled' : ''}>Buy</button>` : `<span class="price">${ic('coin')}${fmtInt(R.price)}</span>${sold(R, 'rod')}`}</div></div>`;
-      }).join('')}</div>`;
-    } else if (t.cur === 'bait') {
-      body = `<div class="grid">${order(BAITS, 'bait').map(B => `<div class="card ${s.bait === B.id ? 'equipped' : ''}"><h3>${ic(B.icon || B.id)}${esc(B.name)}</h3><p>${esc(B.blurb)}</p>
-        <div class="row"><span>You have <b>${s.baits[B.id] || 0}</b></span><span class="price">${ic('coin')}${B.price * B.pack} / ${B.pack}</span></div>
-        <div class="row" style="margin-top:6px">${here(B, 'bait') ? `<button class="btn gold" data-act="buyBait" data-arg="${B.id}" ${s.money < B.price * B.pack ? 'disabled' : ''}>Buy ${B.pack}</button>` : sold(B, 'bait')}
-        <button class="btn" data-act="setBait" data-arg="${B.id}" ${(s.baits[B.id] || 0) > 0 ? '' : 'disabled'}>Use</button></div></div>`).join('')}</div>`;
-    } else if (t.cur === 'tools') {
-      body = `<div class="grid">${order(TOOLS.filter(T => T.price > 0), 'tool').map(T => {
-        const own = !!s.tools[T.id];
-        return `<div class="card ${own ? 'owned' : ''}"><h3>${ic(TOOL_ICON[T.id])}${esc(T.name)}</h3><p>${esc(T.blurb)}</p>
-          <div class="row">${own ? `<span class="price">Owned  -  slot ${T.slot}</span>` : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span>${here(T, 'tool') ? `<button class="btn gold" data-act="buyTool" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>` : sold(T, 'tool')}`}</div></div>`;
-      }).join('')}</div>`;
-    } else {
-      body = `<div class="grid">${order(GEAR, 'gear').map(T => {
-        const own = !!s.gear[T.id];
-        const icon = T.icon || { diving: 'diving', sonar: 'sonar', lucky: 'lucky', gloves: 'gloves' }[T.id];
-        return `<div class="card ${own ? 'owned' : ''}"><h3>${ic(icon)}${esc(T.name)}</h3><p>${esc(T.blurb)}</p>
-          <div class="row">${own ? '<span class="price">Owned</span>' : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span>${here(T, 'gear') ? `<button class="btn gold" data-act="buyGear" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>` : sold(T, 'gear')}`}</div></div>`;
-      }).join('')}</div>`;
-    }
+    // rods, bait and tools are out on the shelves (Showroom); what is left over the counter is the equipment -
+    // and only what this shop really sells: nothing from anywhere else is ever shown
+    const list = GEAR.filter(T => soldAt(T, shop, 'gear'));
+    const body = list.length ? `<div class="grid">${list.map(T => {
+      const own = !!s.gear[T.id];
+      const icon = T.icon || { diving: 'diving', sonar: 'sonar', lucky: 'lucky', gloves: 'gloves' }[T.id];
+      return `<div class="card ${own ? 'owned' : ''}"><div class="cic">${ic(icon)}</div><h3>${esc(T.name)}</h3><p>${esc(T.blurb)}</p>
+        <div class="row">${own ? '<span class="price owned">In your inventory</span>' : `<span class="price">${ic('coin')}${fmtInt(T.price)}</span><button class="btn gold" data-act="buyGear" data-arg="${T.id}" ${s.money < T.price ? 'disabled' : ''}>Buy</button>`}</div></div>`;
+    }).join('')}</div>` : `<div class="empty">Nothing under the counter here. Everything is out on the racks and the shelves - walk up to what you want, look at it and hold E.</div>`;
     const shopName = SHOPS[shop]?.outfit || "Melvin's Bait & Tackle";
-    return this._wrap(`${this._head('rod', shopName, t.cur === 'rods' ? 'Every island sells the rods for its own water. The farther you sail, the better they get.' : shop === 'home' ? 'Everything is on sale. Nothing is refundable.' : 'Some of this you will not find anywhere else in the sea.')}${t.html}<div class="sbody">${body}</div>`, 'shop shop-tackle');
+    return this._wrap(`${this._head('diving', shopName, 'Equipment from behind the counter. The rods, the bait and the tools are out on display - look at one and hold E.')}<div class="sbody">${body}</div>`, 'shop shop-tackle');
   }
 
   /* ---------- boatyard (Marge) ---------- */
   _boatyard() {
     const G = this.game, s = G.state.s;
     const yard = this.data?.yard || 'home';
-    const t = this._tabs([['hulls', 'Boats', 'boat'], ['parts', 'Upgrades', 'wrench'], ['paint', 'Paint', 'paint'], ['decor', 'Decorations', 'flag'], ['repair', 'Repairs', 'hammer']], 'hulls');
+    const t = this._tabs([['hulls', 'Your Boats', 'boat'], ['parts', 'Upgrades', 'wrench'], ['paint', 'Paint', 'paint'], ['decor', 'Decorations', 'flag'], ['repair', 'Repairs', 'hammer']], 'hulls');
     const cur = boatStats(s.boat);
     const yardName = y => YARDS[y] || 'a shipwright';
     const yardWhere = y => this.game.state.knowsShop(y) ? yardName(y) + ' in ' + (SHOPS[y]?.place || 'Driftwood Bay') : 'a shipwright on an island you have not found yet';
     let body = '';
     if (t.cur === 'hulls') {
-      // a showcase: the yard's boat plans down the side, the one you are looking at large
-      const list = [...HULLS].filter(H => H.yard === yard || s.boatPlans?.includes(H.id) || s.hulls.includes(H.id)).sort((a, b) => ((b.yard === yard) - (a.yard === yard)) || (a.price - b.price));
+      // the boats you have built, to switch between; the plans themselves are out on the drafting tables
+      const list = [...HULLS].filter(H => s.hulls.includes(H.id)).sort((a, b) => a.price - b.price);
       const sel = HULL_BY_ID[this.data.hull] && list.includes(HULL_BY_ID[this.data.hull]) ? HULL_BY_ID[this.data.hull] : list[0];
       if (sel) {
         const H = sel, st = boatStats({ ...s.boat, hull: H.id });
@@ -795,7 +869,7 @@ export class UI {
         const need = Object.entries(cost).map(([k, n]) => `<span class="cost ${(m[k] || 0) >= n ? 'ok' : ''}">${ic(MAT_BY_ID[k].icon)}${n} ${esc(MAT_BY_ID[k].name)}</span>`).join('');
         const action = eq ? '<span class="tagline">This is your boat</span>'
           : built ? `<button class="btn gold big" data-act="useHull" data-arg="${H.id}">${ic('boat')} Sail this one</button>`
-          : planned ? `<span class="tagline">The plans are in your Blueprint Book (=). Build her at the water's edge.</span>`
+          : planned ? `<span class="tagline">The plans are in your Blueprint Book${this.game.kh('plans')}. Build her at the water's edge.</span>`
           : here ? `<button class="btn gold big" data-act="buyHull" data-arg="${H.id}" ${s.money < planPrice(H) ? 'disabled' : ''}>${ic('plans')} Buy the blueprint  -  ${ic('coin')}${fmtInt(planPrice(H))}</button>`
           : `<span class="soldby">${ic('map')}Plans drawn by ${esc(yardWhere(H.yard))}</span>`;
         const side = list.map(B => `<button class="yitem ${B === H ? 'on' : ''}" data-act="pickHull" data-arg="${B.id}"><img src="${boatThumb({ hull: B.id, parts: {}, paint: s.boat.paint, decor: [] })}" alt=""><span><b>${esc(B.name)}</b><small>${s.hulls.includes(B.id) ? 'Built' : s.boatPlans?.includes(B.id) ? 'Plans owned' : ic('coin') + fmtInt(planPrice(B))}</small></span></button>`).join('');
@@ -805,28 +879,11 @@ export class UI {
             <div class="sstats">${stat('Speed', st.speed * 1.94, 50, Math.round(st.speed * 1.94) + ' kn')}${stat('Durability', st.hp, 3200, fmtInt(st.hp))}${stat('Storage', st.cargoKg, 16000, fmtInt(st.cargoKg) + ' kg')}${stat('Stability', st.stability * 100, 100, Math.round(st.stability * 100) + '%')}${stat('Storms', st.waves, 7, st.waves.toFixed(1) + ' m waves')}</div>
             <h4>To build her</h4><div class="costs">${need}</div>
             <div class="yact">${action}</div></div></div>`;
-      } else body = '<div class="empty">This yard has no plans for sale.</div>';
-    }
-    else if (t.cur === 'hullsOld') {
-      // the boats built here first, then the rest of the sea's
-      const list = [...HULLS].sort((a, b) => ((b.yard === yard) - (a.yard === yard)) || (a.price - b.price));
-      body = `<div class="grid">${list.map(H => {
-        const own = s.hulls.includes(H.id), eq = s.boat.hull === H.id, here = H.yard === yard;
-        const st = boatStats({ ...s.boat, hull: H.id });
-        // lower is better for repair difficulty, so its bar and colours run the other way
-        const bar = (label, v, max, base, unit = '', lowGood = false, show = null) => `<div class="statrow"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, (lowGood ? (max - v) : v) / max * 100)}%"></i></div><span class="${(lowGood ? v < base : v > base) ? 'up' : (lowGood ? v > base : v < base) ? 'down' : ''}">${show ?? Math.round(v) + unit}</span></div>`;
-        const pct = v => Math.round(v * 100);
-        return `<div class="card ${own ? 'owned' : ''} ${eq ? 'equipped' : ''}"><img class="thumb" src="${boatThumb({ hull: H.id, parts: s.boat.parts, paint: s.boat.paint, decor: [] })}" alt="">
-          <h3>${esc(H.name)}</h3><p>${esc(H.blurb)}</p>
-          ${bar('Speed', st.speed * 1.94, 50, cur.speed * 1.94, 'kn')}${bar('Acceleration', st.accel, 9, cur.accel, '', false, st.accel.toFixed(1))}${bar('Turning', st.turn, 1.4, cur.turn, '', false, st.turn.toFixed(2))}
-          ${bar('Stability', pct(st.stability), 100, pct(cur.stability), '%')}${bar('Storage', st.cargoKg, 16000, cur.cargoKg, 'kg')}${bar('Durability', st.hp, 3200, cur.hp)}
-          ${bar('Storm resistance', st.waves * 10, 70, cur.waves * 10, '', false, st.waves.toFixed(1) + ' m')}${bar('Fishing space', st.space, 90, cur.space, ' m2', false, st.space + ' m2, ' + st.slots + ' rods')}
-          ${bar('Equipment capacity', st.cap, 4, cur.cap, '', false, 'level ' + st.cap)}${bar('Repair difficulty', st.repair, 2, cur.repair, '', true, 'x' + st.repair.toFixed(1))}${bar('Deep water', pct(st.deep), 100, pct(cur.deep), '%')}
-          <div class="row">${own ? (eq ? '<span class="price">Your boat</span>' : `<button class="btn" data-act="useHull" data-arg="${H.id}">Switch to this</button>`) : `<span class="price">${ic('coin')}${fmtInt(H.price)}</span>${here ? `<button class="btn gold" data-act="buyHull" data-arg="${H.id}" ${s.money < H.price ? 'disabled' : ''}>Buy</button>` : `<span class="soldby">${ic('map')}Built by ${esc(yardWhere(H.yard))}</span>`}`}</div></div>`;
-      }).join('')}</div>`;
+      } else body = '<div class="empty">You have not built a boat yet. The plans are out on the drafting tables - look at one and hold E to buy them, then build her yourself at the water\'s edge.</div>';
     } else if (t.cur === 'parts') {
       const H = HULL_BY_ID[s.boat.hull];
-      body = `<div class="grid">${PARTS.map(P => {
+      // only the upgrades this yard fits: nothing that has to be done somewhere else is shown
+      body = `<div class="grid">${PARTS.filter(P => { const w = partYard(P, Math.min(P.max, (s.boat.parts[P.id] || 0) + 1)); return !w || w === yard; }).map(P => {
         const lv = s.boat.parts[P.id] || 0;
         const cap = partCap(P, H);
         const na = (P.id === 'mount' && !H.mount) || (P.id === 'rod' && H.lightningRod);
@@ -915,7 +972,7 @@ export class UI {
     // the fish list, grouped the way the journal groups them; choices survive a re-render
     const sel = this._adm = this._adm || { fish: 'bass', v: '', area: SECTIONS[0].id };
     const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
-    const RORD = { legendary: 0, giant: 1, epic: 2, rare: 3, uncommon: 4, common: 5, junk: 6 };
+    const RORD = { mythical: -1, legendary: 0, giant: 1, epic: 2, rare: 3, uncommon: 4, common: 5, junk: 6 };
     const groups = SECTIONS.filter(S => S.id !== 'beasts').map(S => {
       const fish = sectionEntries(S).filter(e => e.type === 'fish').map(e => FISH_BY_ID[e.id]).sort((a, b) => (RORD[a.rarity] - RORD[b.rarity]) || a.name.localeCompare(b.name));
       return `<optgroup label="${esc(S.name)} (${fish.length})">${fish.map(f => opt(f.id, `${f.name} - ${f.rarity}`, sel.fish)).join('')}</optgroup>`;
